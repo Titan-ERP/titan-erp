@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright (c) 2015-Present Webkul Software Pvt. Ltd. (<https://webkul.com/>) -->
+<!-- See LICENSE file for full copyright and licensing details. -->
+<!-- "License URL : <https://store.webkul.com/license.html/>" -->
+<odoo>
+	<data>
+		<menuitem id="dealership_root_menu" name="Dealership"/>
+			<menuitem id="dealership_category"
+								parent="dealership_root_menu"
+								name="Dealer"
+								sequence="2" />
+				<menuitem id="dealership_application_menu"
+									parent="dealership_category"
+									name="Application"
+									action="dealership_application_action"
+									sequence="1" />
+				<menuitem id="dealership_application_menu_done_state"
+									parent="dealership_category"
+									name="Dealers"
+									action="dealership_application_action_done_state"
+									sequence="2" />
+				<menuitem id="application_history_menu"
+									parent="dealership_category"
+									name="History"
+									action="application_history_action"
+									sequence="3" />
+
+
+
+
+			<menuitem id="dealership_config"
+								parent="dealership_root_menu"
+								name="Configuration"
+								sequence="3" />
+				<menuitem id="dealership_res_config_menu"
+									parent="dealership_config"
+									name="Settings"
+									action="action_dealership_configuration"
+									groups="base.group_system"
+									sequence="1" />
+				<menuitem id="dealership_plan_menu"
+									parent="dealership_config"
+									name="Plan"
+									action="dealership_plan_action"
+									sequence="2" />
+				<menuitem id="dealership_contract_menu"
+									parent="dealership_config"
+									name="Contract"
+									action="dealership_contract_action"
+									sequence="3" />
+				<menuitem id="dealership_business_type_menu"
+									parent="dealership_config"
+									name="Business Type"
+									action="dealership_business_type_action"
+									sequence="4" />
+
+				<menuitem id="dealership_faq"
+									parent="dealership_config"
+									name="FAQ's"
+									sequence="5" />
+						<menuitem id="dealership_faq_category_menu"
+											parent="dealership_faq"
+											name="Category"
+											action="application_faq_category_action"
+											sequence="1" />
+						<menuitem id="dealership_faq_solution_menu"
+											parent="dealership_faq"
+											name="FAQ"
+											action="application_faq_line_action"
+											sequence="2" />
+
+
+		<menuitem
+				name="Dashboard"
+				id="menu_dealer_dashboard"
+				parent="dealership_root_menu"
+				action="action_dealer_dashboard"
+				sequence="1" />
+
+	</data>
+</odoo>
