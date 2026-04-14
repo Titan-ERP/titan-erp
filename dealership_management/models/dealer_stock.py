@@ -26,9 +26,8 @@ class DealerStock(models.Model):
             if self.product_id.type != 'service':
                 for order in self.order_ids:
                     for picking in order.picking_ids.filtered(lambda x: x.state != 'done'):
-                        moves = picking.move_ids_without_package.filtered(lambda x: x.product_id.id == record.product_id.id)
-                        for move in moves:
-                            qty += move.product_uom_qty
+                        moves = picking.move_line_ids.filtered(lambda x: x.product_id.id == record.product_id.id)
+                        qty += sum(moves.mapped('quantity'))
             record.ordered_qty = qty
 
     def _compute_delivered_qty(self):
@@ -37,7 +36,7 @@ class DealerStock(models.Model):
                 qty = 0
                 for order in self.order_ids:
                     for picking in order.picking_ids.filtered(lambda x: x.state == 'done'):
-                        moves = picking.move_ids_without_package.filtered(lambda x: x.product_id.id == record.product_id.id)
+                        moves = picking.move_line_ids.filtered(lambda x: x.product_id.id == record.product_id.id)
                         for move in moves:
                             qty += move.quantity_done
             else:
