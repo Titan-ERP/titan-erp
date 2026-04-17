@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright (c) 2015-Present Webkul Software Pvt. Ltd. (<https://webkul.com/>) -->
+<!-- See LICENSE file for full copyright and licensing details. -->
+<!-- "License URL : <https://store.webkul.com/license.html/>" -->
+<odoo>
+  <data>
+    <template id="wk_dealership_assets_frontend" inherit_id="website.assets_frontend"
+      name="Dealership">
+      <xpath expr="script[1]" position="after">
+        <t t-set="active_locator" t-value="request.website.allow_dealer_locator" />
+        <t t-if="active_locator">
+          <t t-set="google_map_api_key"
+            t-value="request.env['ir.config_parameter'].sudo().get_param('dealership_management.google_map_api_key')" />
+          <t t-if="google_map_api_key">
+            <script type="text/javascript"
+              t-attf-src="https://maps.googleapis.com/maps/api/js?key=#{google_map_api_key}&amp;libraries=places" />
+          </t>
+          <t t-else="">
+            <script type="text/javascript" src="https://maps.google.com/maps/api/js" />
+          </t>
+        </t>
+      </xpath>
+    </template>
+  </data>
+</odoo>

@@ -1,0 +1,278 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright (c) 2015-Present Webkul Software Pvt. Ltd. (<https://webkul.com/>) -->
+<!-- See LICENSE file for full copyright and licensing details. -->
+<!-- "License URL : <https://store.webkul.com/license.html/>" -->
+<templates id="template" xml:space="preserve">
+  <t t-name="dealership_management.dealer_bropdown_button">
+    <div t-att-class="'btn-group ' + class_append">
+      <button class="btn btn-secondary btn-sm dropdown-toggle" t-on-change="_getUpdatedChartData" t-att-data-chart='data_chart' t-att-data-selector="data_selector" t-att-data-call="data_call" t-att-data-value="data_value" t-att-data-type="data_type" type="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+        <t t-esc="header_text" />
+      </button>
+      <div class="dropdown-menu">
+        <t t-foreach="items" t-as="item" t-key="item.name">
+          <a class="dropdown-item" t-att-data-value="item.value" href="#" t-esc="item.name" t-on-click="_updateChartData"/>
+        </t>
+      </div>
+    </div>
+  </t>
+
+  <t t-name="dealership_management.dealer_backend_dashboard">
+    <div class="bg-white dealer_backend_dashboard">
+      <t t-set="month_data" t-value="[{'name': '1 Month', 'value': '1'}, {'name': '2 Months', 'value': '2'}, {'name': '3 Months', 'value': '3'}, {'name': '6 Month', 'value': '6'}, {'name': '1 Year', 'value': '12'}]" />
+      <t t-set="limit_data" t-value="[{'name': 'Top 5', 'value': '5'}, {'name': 'Top 10', 'value': '10'}, {'name': 'Top 20', 'value': '20'}]" />
+      <div class="header">
+        <h2 class="text-dark">Home</h2>
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb">
+            <li class="breadcrumb-item">Dealership</li>
+            <li class="breadcrumb-item active" aria-current="page">Home</li>
+          </ol>
+        </nav>
+      </div>
+      <section class="content mt-2">
+        <div class="top_tags row">
+          <t t-foreach="dataset.top_header_stats" t-as="item" t-key="item.id">
+            <div class="col-md-3 col-sm-4 col-12 mb-2 con">
+              <div class="d-flex item align-items-center" t-att-action="item.id" t-on-click="_openRecords">
+                <span class="me-4 icon">
+                  <img t-att-src="'/dealership_management/static/src/icons/'+item.img" />
+                </span>
+                <div>
+                  <h4 class="mb-0" t-esc="item.value" />
+                  <p class="mb-0 mt-2" t-esc="item.name" />
+                </div>
+              </div>
+            </div>
+          </t>
+        </div>
+
+        <div class="row">
+          <div class="col-12 mt-4">
+            <div class="card top_products_dealer">
+              <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                  <h5>Leads Stat</h5>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="row">
+                  <div class="col-12 col-md-8">
+                    <div class="card">
+                      <canvas id="ctx_top_leads" height="300px" t-ref="topleads"/>
+                    </div>
+                  </div>
+                  <div class="col-12 col-md-4">
+                    <div class="card p-0 border-0">
+                      <div class="conversion h-100 d-flex justify-content-between flex-wrap">
+                        <div class="w-100 sp">
+                          <p class="text-dark mb-2">Total Leads</p>
+                          <h2 class="mb-0 text-dark" t-esc="dataset.side_lead_stat.total" />
+                        </div>
+                        <div class="w-100 sp mt-4">
+                          <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                              <p class="text-success mb-2">Assigned Leads</p>
+                              <h2 class="mb-0 text-dark" t-esc="dataset.side_lead_stat.assigned" />
+                            </div>
+                            <button class="view-leads btn btn-primary" t-on-click="_getLeadsPage">View <i class="fa fa-long-arrow-right" /></button>
+                          </div>
+                        </div>
+                        <div class="w-100 sp mt-4">
+                          <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                              <p class="text-danger mb-2">Unassigned Leads</p>
+                              <h2 class="mb-0 text-dark" t-esc="dataset.side_lead_stat.unassigned" />
+                            </div>
+                            <button class="view-leads btn btn-primary" data-assigned="True" t-on-click="_getLeadsPage">View <i class="fa fa-long-arrow-right" /></button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-6 mt-4">
+            <div class="card top_products_dealer">
+              <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                  <h5>Sales Stat</h5>
+                  <div class="d-flex">
+                    <t t-call="dealership_management.dealer_bropdown_button">
+                      <t t-set="class_append" t-value="'me-2'"/>
+                      <t t-set="header_text" t-value="'1 Month'"/>
+                      <t t-set="items" t-value="month_data"/>
+                      <t t-set="data_value" t-value="'1'"/>
+                      <t t-set="data_type" t-value="'time_period'"/>
+                      <t t-set="data_call" t-value="'top_products_stat'"/>
+                      <t t-set="data_selector" t-value="'ctx_top_products'"/>
+                      <t t-set="data_chart" t-value="'bar'"/>
+                    </t>
+                    <t t-call="dealership_management.dealer_bropdown_button">
+                      <t t-set="header_text" t-value="'Top 5'"/>
+                      <t t-set="items" t-value="limit_data"/>
+                      <t t-set="data_value" t-value="'5'"/>
+                      <t t-set="data_type" t-value="'limit'"/>
+                      <t t-set="data_call" t-value="'top_products_stat'"/>
+                      <t t-set="data_selector" t-value="'ctx_top_products'"/>
+                      <t t-set="data_chart" t-value="'bar'"/>
+                    </t>
+                  </div>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="d-flex justify-content-end w-100 mb-4">
+                  <div class="btn-group toggler" role="group">
+                    <button class="toggle-chart active" t-on-click="_changeChartData" data-value="ctx_top_products" data-type="bar" data-load="registration_stat" data-toggle="1" data-call="top_products_stat">Product</button>
+                    <button class="toggle-chart" t-on-click="_changeChartData" data-value="ctx_top_dealer" data-type="bar" data-load="registration_stat" data-toggle="1" data-call="top_dealer_stat">Dealers</button>
+                  </div>
+                </div>
+                <canvas id="ctx_top_products" t-ref="topProducts" />
+                <canvas id="ctx_top_dealer" class="d-none" />
+              </div>
+            </div>
+          </div>
+          <div class="col-12 col-md-6 mt-4">
+            <div class="card recent_registration">
+              <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                  <h5>Recent Registration</h5>
+                  <div class="d-flex">
+                    <t t-call="dealership_management.dealer_bropdown_button">
+                      <t t-set="header_text" t-value="'1 Month'"/>
+                      <t t-set="items" t-value="month_data"/>
+                      <t t-set="data_value" t-value="'1'"/>
+                      <t t-set="data_type" t-value="'time_period'"/>
+                      <t t-set="data_call" t-value="'total_registration_stat'"/>
+                      <t t-set="data_selector" t-value="'ctx_registration'"/>
+                      <t t-set="data_chart" t-value="'doughnut'"/>
+                    </t>
+                  </div>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="d-flex justify-content-end w-100 mb-4">
+                  <div class="btn-group" role="group" aria-label="Basic example">
+                    <button class="change-chart" t-on-click="_changeChartType" data-value="ctx_registration" data-type="line" data-load="total_registration_stat" ><span /></button>
+                    <button class="change-chart dg" t-on-click="_changeChartType" data-value="ctx_registration" data-type="doughnut" data-load="total_registration_stat" ><span /></button>
+                  </div>
+                </div>
+                <canvas id="ctx_registration" t-ref="ctxregistration">Registration</canvas>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-4 mt-4">
+            <div class="card recent_registration">
+              <div class="card-header">
+                <h5>Plan Filter</h5>
+              </div>
+              <div class="card-body">
+                <canvas id="ctx_plan_filter" t-ref="planfilter"/>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-4 mt-4">
+            <div class="card recent_registration">
+              <div class="card-header">
+                <h5>Contract Deals States</h5>
+              </div>
+              <div class="card-body">
+                <canvas id="ctx_contract_state" t-ref="contractstate"/>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-4 mt-4">
+            <div class="card recent_registration">
+              <div class="card-header">
+                <h5>Conversion</h5>
+              </div>
+              <div class="card-body">
+                <div class="conversion h-100 d-flex justify-content-between flex-wrap">
+                  <div class="w-100 sp">
+                    <p class="text-dark mb-4">Total Dealers</p>
+                    <h2 class="mb-0 text-dark" t-esc="dataset.dealer_conversion.application" />
+                  </div>
+                  <div class="w-100 bg-color mt-4">
+                    <p class="text-white mb-4">Conversion</p>
+                    <h2 class="mb-0 text-white" t-esc="dataset.dealer_conversion.conversion" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-6 mt-4">
+            <div class="card top_products_dealer">
+              <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                  <h5>Sales</h5>
+                  <div class="d-flex">
+                    <t t-call="dealership_management.dealer_bropdown_button">
+                      <t t-set="header_text" t-value="'1 Month'"/>
+                      <t t-set="items" t-value="month_data"/>
+                      <t t-set="data_value" t-value="'1'"/>
+                      <t t-set="data_type" t-value="'time_period'"/>
+                      <t t-set="data_call" t-value="'total_sale_stat'"/>
+                      <t t-set="data_selector" t-value="'ctx_sales_state'"/>
+                      <t t-set="data_chart" t-value="'doughnut'"/>
+                    </t>
+                  </div>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="d-flex justify-content-end w-100 mb-4">
+                  <div class="btn-group" role="group">
+                    <button class="change-chart" t-on-click="_changeChartType" data-value="ctx_sales_state" data-load="total_sale_stat" data-type="line" ><span /></button>
+                    <button class="change-chart dg" t-on-click="_changeChartType" data-value="ctx_sales_state" data-load="total_sale_stat" data-type="doughnut" ><span /></button>
+                  </div>
+                </div>
+                <canvas id="ctx_sales_state" t-ref="salesstate"/>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-6 mt-4">
+            <div class="card top_products_dealer">
+              <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                  <h5>Country</h5>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="w-100 mb-4 d-flex justify-content-end">
+                  <div class="btn-group locator" role="group" >
+                    <div class="btn-group first" role="group">
+                      <button id="country" type="button" class="btn active btn-secondary dropdown-toggle" t-on-change="_getUpdatedChartData" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        Country
+                      </button>
+                      <div class="dropdown-menu" aria-labelledby="country">
+                        <t t-foreach="dataset.location.countries" t-as="c" t-key="c.id">
+                          <a class="dropdown-item country" t-on-click="_updateMapData" t-att-data-value="c.id" href="#" t-esc="c.name" />
+                        </t>
+                      </div>
+                    </div>
+                    <div class="btn-group second" role="group">
+                      <button id="state" type="button" class="btn btn-secondary dropdown-toggle" t-on-change="_getUpdatedChartData" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false" t-ref="state">
+                        State
+                      </button>
+                      <div class="dropdown-menu" aria-labelledby="state">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <p class="alert not-found mt-2 mb-2 alert-danger d-none">No Dealer Founds.</p>
+                <p class="alert api_missing mt-2 mb-2 alert-danger d-none">No Query Founds for this category</p>
+                <div id="g_map" t-ref="gmap"/>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </t>
+</templates>

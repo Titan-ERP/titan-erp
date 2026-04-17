@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright (c) 2015-Present Webkul Software Pvt. Ltd. (<https://webkul.com/>) -->
+<!-- See LICENSE file for full copyright and licensing details. -->
+<!-- "License URL : <https://store.webkul.com/license.html/>" -->
+<odoo>
+  <data>
+
+    <record id="dealer_res_config_settings_view_form" model="ir.ui.view">
+      <field name="name">dealer.res.config.settings.view.form.inherit.website</field>
+      <field name="model">res.config.settings</field>
+      <field name="priority" eval="21"/>
+      <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+      <field name="arch" type="xml">
+        <xpath expr="//form" position="inside">
+          <app data-string="Dealership" string="Dealership" name="dealership_management" groups="website.group_website_designer">
+            <block title="Select the Website to Configure" name="dealer_selection_website" groups="website.group_website_designer">
+                <setting id="website" string="Website" help="Settings on this page will apply to this website">
+                    <field name="website_id" required="True"/>
+                </setting>
+            </block>
+            <block title="Dealer Sign Up Form" name="dealer_selection_settings" groups="website.group_website_designer">
+                <setting id="tabs" help="Hide tabs from the website dealer sign up form">
+                  <div class="text-muted">
+                      Hide tabs from the website dealer sign up form
+                  </div>
+                  <group>
+                    <field name="hide_advertisement_tab" />
+                    <field name="hide_site_location_tab" />
+                    <field name="hide_investment_tab" />
+                  </group>
+                </setting>
+                <setting id="banner" help="Set dealership sing up form top banner">
+                    <field name="sign_up_banner" widget="image" class="float-left oe_avatar" />
+                </setting>
+                <setting id="allow_application" help="Default rules of dealers for accept applications">
+                    <field name="allow_dealer_application" widget="selection" />
+                    <br />
+                    <button type="object" name="open_template_dealer" string="Default Access Rules" icon="fa-arrow-right" class="btn-link mt-2"/>
+                </setting>
+                <setting id="banner" help="Allow user to sign up as a new Dealer">
+                    <field name="allow_user_signup" />
+                    <field name="signup_closed_description" invisible="allow_user_signup == True"/>
+                </setting>
+            </block>
+            <block title="Dealer Locator" name="dealer_selection_settings" groups="website.group_website_designer">
+                <setting id="locator" help="Allow user to find dealers and show locations">
+                    <field name="allow_dealer_locator" />
+                </setting>
+                <setting id="app" help="For display dealer locations to user on website set Google Map API Key." invisible="allow_dealer_locator == False">
+                    <field name='google_map_api_key' />
+                </setting>
+            </block>
+            <block title="Others" name="dealer_selection_settings" groups="website.group_website_designer">
+                <setting id="locator" help="Notify user before days to expire the contract.">
+                    <field name='before_notify' /><span>Days</span>
+                </setting>
+            </block>
+          </app>
+        </xpath>
+      </field>
+    </record>
+
+    <record id="action_dealership_configuration" model="ir.actions.act_window">
+      <field name="name">Settings</field>
+      <field name="type">ir.actions.act_window</field>
+      <field name="res_model">res.config.settings</field>
+      <field name="view_mode">form</field>
+      <field name="target">current</field>
+      <field name="context">{'module' : 'dealership_management'}</field>
+    </record>
+
+  </data>
+</odoo>
