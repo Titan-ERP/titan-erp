@@ -1,0 +1,167 @@
+// =============================================================================
+// TITAN THEME — Bootstrap Overrides
+// Loaded in web.assets_frontend AFTER Bootstrap has been compiled.
+// Use this file for component-level tweaks that couldn't be handled
+// via primary_variables.scss (e.g., forcing styles Bootstrap hardcodes).
+// =============================================================================
+
+// ---------------------------------------------------------------------------
+// SELECTION
+// ---------------------------------------------------------------------------
+
+::selection {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+// ---------------------------------------------------------------------------
+// SCROLLBAR (Webkit)
+// ---------------------------------------------------------------------------
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #111;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #666;
+}
+
+// ---------------------------------------------------------------------------
+// FOCUS RING — Accessible but styled
+// ---------------------------------------------------------------------------
+
+:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.5);
+    outline-offset: 3px;
+}
+
+// ---------------------------------------------------------------------------
+// BUTTON OVERRIDES
+// Force consistent pill-less, sharp-but-soft button styles
+// ---------------------------------------------------------------------------
+
+.btn {
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 0.8125rem;  // 13px — Tesla-style compact label
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+}
+
+// Primary button: white fill, dark text
+.btn-primary {
+    background-color: #FFFFFF;
+    border-color: #FFFFFF;
+    color: #1B1319;
+
+    &:hover,
+    &:focus {
+        background-color: #E0E0E0;
+        border-color: #E0E0E0;
+        color: #1B1319;
+    }
+
+    &:active {
+        background-color: #CCCCCC;
+        border-color: #CCCCCC;
+    }
+}
+
+// Secondary button: transparent, white outline
+.btn-secondary {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.5);
+    color: #FFFFFF;
+
+    &:hover,
+    &:focus {
+        background-color: rgba(255, 255, 255, 0.15);
+        border-color: #FFFFFF;
+        color: #FFFFFF;
+    }
+}
+
+// Outline variants
+.btn-outline-primary {
+    border-color: #FFFFFF;
+    color: #FFFFFF;
+
+    &:hover {
+        background-color: #FFFFFF;
+        color: #1B1319;
+    }
+}
+
+.btn-outline-secondary {
+    border-color: rgba(255, 255, 255, 0.4);
+    color: rgba(255, 255, 255, 0.7);
+
+    &:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+        border-color: #FFFFFF;
+        color: #FFFFFF;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// CARD OVERRIDES
+// ---------------------------------------------------------------------------
+
+.card {
+    background-color: #242024;
+    border-color: #333033;
+    color: #FFFFFF;
+
+    .card-title {
+        color: #FFFFFF;
+    }
+
+    .card-text {
+        color: #AAAAAA;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// NAVBAR OVERRIDES
+// ---------------------------------------------------------------------------
+
+.navbar {
+    // Transparent navbar that becomes solid on scroll (JS handles class toggle)
+    &.navbar-scrolled {
+        background-color: rgba(#1B1319, 0.95) !important;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// FORM CONTROLS — Dark inputs
+// ---------------------------------------------------------------------------
+
+.form-control,
+.form-select {
+    background-color: #242024;
+    border-color: #444;
+    color: #FFFFFF;
+
+    &::placeholder {
+        color: #666;
+    }
+
+    &:focus {
+        background-color: #2a282a;
+        border-color: rgba(255, 255, 255, 0.4);
+        color: #FFFFFF;
+        box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.08);
+    }
+}
