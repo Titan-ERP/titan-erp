@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        titan_theme/views/snippets/snippets.xml
+        Registers custom reusable snippets in the Odoo Website Builder snippet panel.
+
+        SNIPPET CATEGORIES:
+        - s_snippet_group: groups snippets under a named heading in the panel.
+
+        Available snippet slots (inherit_id targets):
+        - website.snippets → xpath //div[@id='snippet_structure'] for layout sections
+        - website.snippets → xpath //div[@id='snippet_content'] for content blocks
+        - website.snippets → xpath //div[@id='snippet_feature'] for features
+        - website.snippets → xpath //div[@id='snippet_effect'] for animated
+
+        All snippets use o_snippet_thumbnail for the panel preview image.
+    -->
+
+    <!-- =====================================================================
+         SNIPPET 1: Titan Hero Section
+         Full-screen hero with dark overlay, H1, subtext, and two CTAs.
+         Add to "Structure" group in builder panel.
+         ===================================================================== -->
+    <template id="s_titan_hero" name="Titan Hero">
+        <section class="s_cover o_full_screen_height titan-hero"
+                 data-snippet="s_titan_hero"
+                 style="background-color: #1B1319;">
+            <!-- Background image placeholder — replace via Website Builder image picker -->
+            <div class="o_we_bg_filter" style="background-color: rgba(0,0,0,0.45);"></div>
+            <div class="container">
+                <div class="row align-items-center justify-content-center">
+                    <div class="col-12 col-lg-9 text-center titan-hero__content">
+                        <h1 class="titan-hero__title">
+                            Your Equipment Headline
+                        </h1>
+                        <p class="lead titan-hero__subtitle">
+                            A one-line value statement for your product or brand.
+                        </p>
+                        <div class="titan-hero__ctas d-flex gap-3 justify-content-center flex-wrap mt-4">
+                            <a href="/shop" class="btn btn-titan-primary btn-lg">Order Now</a>
+                            <a href="/contactus" class="btn btn-titan-secondary btn-lg">Learn More</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </template>
+
+    <!-- =====================================================================
+         SNIPPET 2: Titan Product Card Grid
+         Two-column product/equipment card grid (Tesla vehicle-card style).
+         ===================================================================== -->
+    <template id="s_titan_products" name="Titan Product Grid">
+        <section class="titan-products" data-snippet="s_titan_products">
+            <div class="titan-product-grid">
+
+                <!-- Card 1 -->
+                <div class="titan-product-card">
+                    <img class="titan-product-card__image"
+                         src="/titan_theme/static/src/img/product_placeholder.svg"
+                         alt="Equipment product image"
+                         loading="lazy"/>
+                    <div class="titan-product-card__content">
+                        <div>
+                            <h3 class="titan-product-card__name">Product Name</h3>
+                            <p class="titan-product-card__tagline">Starting at $X,XXX</p>
+                        </div>
+                        <div class="titan-product-card__ctas">
+                            <a href="/shop" class="btn btn-titan-primary">Order</a>
+                            <a href="#" class="btn btn-titan-secondary">Learn More</a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="titan-product-card">
+                    <img class="titan-product-card__image"
+                         src="/titan_theme/static/src/img/product_placeholder.svg"
+                         alt="Equipment product image"
+                         loading="lazy"/>
+                    <div class="titan-product-card__content">
+                        <div>
+                            <h3 class="titan-product-card__name">Product Name</h3>
+                            <p class="titan-product-card__tagline">Starting at $X,XXX</p>
+                        </div>
+                        <div class="titan-product-card__ctas">
+                            <a href="/shop" class="btn btn-titan-primary">Order</a>
+                            <a href="#" class="btn btn-titan-secondary">Learn More</a>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+    </template>
+
+    <!-- =====================================================================
+         SNIPPET 3: Titan Stats Band
+         Horizontal row of large numbers with labels.
+         ===================================================================== -->
+    <template id="s_titan_stats" name="Titan Stats Band">
+        <section class="titan-stats" data-snippet="s_titan_stats">
+            <div class="container">
+                <div class="titan-stats__grid">
+                    <div class="titan-stats__item">
+                        <span class="titan-stats__number">200+</span>
+                        <span class="titan-stats__label">Products</span>
+                    </div>
+                    <div class="titan-stats__item">
+                        <span class="titan-stats__number">50</span>
+                        <span class="titan-stats__label">States Served</span>
+                    </div>
+                    <div class="titan-stats__item">
+                        <span class="titan-stats__number">24/7</span>
+                        <span class="titan-stats__label">Support</span>
+                    </div>
+                    <div class="titan-stats__item">
+                        <span class="titan-stats__number">10k+</span>
+                        <span class="titan-stats__label">Customers</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </template>
+
+    <!-- =====================================================================
+         SNIPPET 4: Titan CTA Banner
+         Full-width call-to-action section.
+         ===================================================================== -->
+    <template id="s_titan_cta" name="Titan CTA Banner">
+        <section class="titan-cta-banner" data-snippet="s_titan_cta">
+            <div class="container">
+                <h2 class="titan-cta-banner__title">Ready to Equip Your Fleet?</h2>
+                <p class="titan-cta-banner__body">
+                    Browse our full catalog or talk to a specialist today.
+                </p>
+                <div class="d-flex gap-3 justify-content-center flex-wrap">
+                    <a href="/shop" class="btn btn-titan-primary btn-lg">Shop Now</a>
+                    <a href="/contactus" class="btn btn-titan-secondary btn-lg">Contact Us</a>
+                </div>
+            </div>
+        </section>
+    </template>
+
+    <!-- =====================================================================
+         REGISTER SNIPPETS IN WEBSITE BUILDER PANEL
+         Inherits website.snippets to add our snippets to the Structure group.
+         ===================================================================== -->
+    <template id="snippets" inherit_id="website.snippets" name="Titan Theme Snippets">
+        <xpath expr="//div[@id='snippet_structure']" position="before">
+            <div id="titan_snippets" class="o_panel">
+                <div class="o_panel_header">Titan</div>
+                <div class="o_panel_body">
+
+                    <t t-snippet="titan_theme.s_titan_hero"
+                       t-thumbnail="/titan_theme/static/src/img/thumb_hero.svg">
+                        <b>Hero</b>
+                        <span>Full-screen hero with CTAs</span>
+                    </t>
+
+                    <t t-snippet="titan_theme.s_titan_products"
+                       t-thumbnail="/titan_theme/static/src/img/thumb_products.svg">
+                        <b>Product Grid</b>
+                        <span>Two-column equipment cards</span>
+                    </t>
+
+                    <t t-snippet="titan_theme.s_titan_stats"
+                       t-thumbnail="/titan_theme/static/src/img/thumb_stats.svg">
+                        <b>Stats Band</b>
+                        <span>Key numbers / trust signals</span>
+                    </t>
+
+                    <t t-snippet="titan_theme.s_titan_cta"
+                       t-thumbnail="/titan_theme/static/src/img/thumb_cta.svg">
+                        <b>CTA Banner</b>
+                        <span>Full-width call to action</span>
+                    </t>
+
+                </div>
+            </div>
+        </xpath>
+    </template>
+
+</odoo>
