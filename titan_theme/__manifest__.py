@@ -1,20 +1,21 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Titan Theme',
-    'version': '19.0.1.0.0',
+    'version': '19.0.2.0.0',
     'category': 'Theme/Corporate',
-    'summary': 'Premium dark theme for TITAN Equipment website — Tesla-inspired landing page.',
+    'summary': 'Premium Tesla-inspired theme for TITAN Equipment — white page, dark hero, product cards.',
     'description': """
         Custom website theme for TITAN Equipment.
-        - Cinematic full-screen hero with dark overlay
-        - Inter Tight headings, Inter body
-        - Dark monochrome palette (#1B1319 background, white text)
-        - Product card sections
-        - Minimal, premium spacing
+        - White page background (Tesla-style) — photography drives the visual
+        - Cinematic full-screen hero with dark image overlay
+        - Inter Tight headings (500 weight), Inter body
+        - Tesla-pattern product cards: full-bleed image, text bottom-left, sharp corners
+        - Light grey (#F4F4F4) stats band and CTA sections
+        - Dark footer (#1B1319)
     """,
     'author': 'Titan Equipment',
     'website': 'https://titan-equip-staging-main-41626-31029343.dev.odoo.com',
-    'depends': ['website', 'web_editor'],
+    'depends': ['website'],
     'data': [
         'views/assets.xml',
         'views/snippets/snippets.xml',

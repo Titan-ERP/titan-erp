@@ -1,46 +1,49 @@
-// =============================================================================
+﻿// =============================================================================
 // TITAN THEME — Main Component Styles
-// Loaded in web.assets_frontend after Bootstrap and bootstrap_overrides.scss.
-// Contains: layout, hero, product cards, sections, typography polish.
+// Tesla-inspired: WHITE page background, dark text, hero stays dark (image+overlay).
+// Product photography carries the visual weight — like Tesla.com.
 // =============================================================================
 
 // ---------------------------------------------------------------------------
 // GOOGLE FONTS IMPORT
-// Inter + Inter Tight — weights 300/400/500/600/700
-// In production, consider self-hosting for performance.
 // ---------------------------------------------------------------------------
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap');
 
 // ---------------------------------------------------------------------------
-// CSS CUSTOM PROPERTIES (runtime tokens, usable in inline styles and JS)
+// CSS CUSTOM PROPERTIES (runtime tokens)
 // ---------------------------------------------------------------------------
 
 :root {
-    --titan-bg:             #1B1319;
-    --titan-bg-alt:         #111111;
-    --titan-surface:        #242024;
-    --titan-border:         #333033;
-    --titan-text:           #FFFFFF;
-    --titan-text-muted:     #AAAAAA;
-    --titan-accent:         #E0E0E0;
+    // Dark tokens — hero, footer, overlays only
+    --titan-dark:           #1B1319;
+    --titan-dark-alt:       #111111;
 
-    --titan-section-y:      6rem;
+    // Light page tokens
+    --titan-bg:             #FFFFFF;
+    --titan-bg-alt:         #F4F4F4;   // Tesla secondary fill
+    --titan-surface:        #F9F9F9;
+    --titan-border:         #E5E5E5;
+
+    // Text
+    --titan-text:           #171A20;   // Tesla near-black
+    --titan-text-secondary: #393C41;
+    --titan-text-muted:     #5C5E62;   // Tesla muted grey
+
+    // Spacing
+    --titan-section-y:      5rem;
     --titan-hero-min-h:     100vh;
 
-    // Smooth page-wide transition for hover states
-    --titan-transition:     0.2s ease;
+    --titan-transition:     0.15s ease;
 }
 
 // ---------------------------------------------------------------------------
-// BASE RESET / GLOBAL
+// BASE
 // ---------------------------------------------------------------------------
 
 *,
 *::before,
-*::after {
-    box-sizing: border-box;
-}
+*::after { box-sizing: border-box; }
 
 html {
     scroll-behavior: smooth;
@@ -69,34 +72,22 @@ h1, h2, h3, h4, h5, h6,
     color: var(--titan-text);
 }
 
-// Hero-scale heading
 h1, .h1 {
-    font-size: clamp(2.5rem, 6vw, 4.5rem);  // fluid: 40px → 72px
-    font-weight: 800;
-    letter-spacing: -0.03em;
-    line-height: 1.05;
+    font-size: clamp(2rem, 5vw, 2.5rem);   // 40px at standard
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
 }
 
-h2, .h2 {
-    font-size: clamp(1.75rem, 3.5vw, 2.5rem);
-}
+h2, .h2 { font-size: clamp(1.5rem, 3vw, 1.75rem); }
+h3, .h3 { font-size: clamp(1.125rem, 2vw, 1.375rem); }
 
-h3, .h3 {
-    font-size: clamp(1.25rem, 2.5vw, 1.75rem);
-}
+p { color: var(--titan-text-muted); line-height: 1.7; }
 
-p {
-    color: var(--titan-text-muted);
-    line-height: 1.7;
-}
-
-// Lead paragraph — hero subtext
-.lead,
-p.lead {
-    font-size: clamp(1rem, 1.5vw, 1.25rem);
+.lead, p.lead {
+    font-size: clamp(1rem, 1.5vw, 1.125rem);
     font-weight: 400;
-    color: rgba(255, 255, 255, 0.7);
-    letter-spacing: 0.01em;
+    color: var(--titan-text-secondary);
 }
 
 // ---------------------------------------------------------------------------
@@ -104,29 +95,15 @@ p.lead {
 // ---------------------------------------------------------------------------
 
 a {
-    color: var(--titan-accent);
+    color: var(--titan-text);
     text-decoration: none;
     transition: color var(--titan-transition);
-
-    &:hover {
-        color: #FFFFFF;
-    }
+    &:hover { color: var(--titan-text-secondary); }
 }
 
 // ---------------------------------------------------------------------------
-// SECTIONS — Default vertical rhythm
+// SECTIONS
 // ---------------------------------------------------------------------------
-
-.o_we_website_top_actions,
-section,
-.s_text_block,
-.s_image_text,
-.s_cover,
-.s_banner,
-.s_features,
-.s_comparisons {
-    // Let Odoo builder control sections; titan sections use .titan-section
-}
 
 .titan-section {
     padding-top: var(--titan-section-y);
@@ -134,25 +111,16 @@ section,
     background-color: var(--titan-bg);
 }
 
-.titan-section--alt {
-    background-color: var(--titan-bg-alt);
-}
-
-.titan-section--surface {
-    background-color: var(--titan-surface);
-}
+.titan-section--alt { background-color: var(--titan-bg-alt); }
 
 // ---------------------------------------------------------------------------
-// HERO SECTION
-// Override Odoo's .s_cover / .s_banner used for the hero block.
-// The dark overlay is layered via ::before so the background image shows through.
+// HERO — Dark, full-screen, image + overlay, centered text
+// The ONLY dark section on the page.
 // ---------------------------------------------------------------------------
 
-// Any Odoo cover/banner section that is the first section on the page acts as hero
 .o_editable .s_cover:first-child,
 .s_cover.o_full_screen_height,
 .s_banner.o_full_screen_height,
-// Also target by custom class added via Website Builder "Custom CSS Classes" field
 .titan-hero {
     position: relative;
     min-height: var(--titan-hero-min-h);
@@ -161,40 +129,31 @@ section,
     justify-content: center;
     text-align: center;
     overflow: hidden;
-    background-color: var(--titan-bg);
+    background-color: var(--titan-dark);
 
-    // Dark gradient overlay — layered on top of the background image
     &::before {
         content: '';
         position: absolute;
         inset: 0;
         background: linear-gradient(
             to bottom,
-            rgba(0, 0, 0, 0.55) 0%,
-            rgba(0, 0, 0, 0.35) 50%,
-            rgba(0, 0, 0, 0.65) 100%
+            rgba(0, 0, 0, 0.50) 0%,
+            rgba(0, 0, 0, 0.30) 40%,
+            rgba(0, 0, 0, 0.60) 100%
         );
         z-index: 1;
         pointer-events: none;
     }
 
-    // Ensure hero content sits above the overlay
     > .container,
     > .container-fluid,
-    > .o_container_small {
-        position: relative;
-        z-index: 2;
-    }
+    > .o_container_small { position: relative; z-index: 2; }
+
+    h1, h2, h3, h4, h5, h6,
+    .h1, .h2, .h3, .h4, .h5, .h6 { color: #FFFFFF; }
+    p, .lead { color: rgba(255, 255, 255, 0.75); }
 }
 
-// Hero content container
-.titan-hero__content {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 2rem 1rem;
-}
-
-// Hero title
 .titan-hero__title {
     font-size: clamp(2.5rem, 7vw, 4.5rem);
     font-weight: 800;
@@ -204,11 +163,10 @@ section,
     margin-bottom: 1.25rem;
 }
 
-// Hero subtitle
 .titan-hero__subtitle {
     font-size: clamp(1rem, 1.8vw, 1.25rem);
     font-weight: 400;
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(255, 255, 255, 0.75);
     letter-spacing: 0.01em;
     margin-bottom: 2.5rem;
     max-width: 560px;
@@ -216,86 +174,82 @@ section,
     margin-right: auto;
 }
 
-// Hero CTA button group
 .titan-hero__ctas {
     display: flex;
-    gap: 1rem;
+    gap: 0.75rem;
     justify-content: center;
     flex-wrap: wrap;
 
     .btn {
-        min-width: 180px;
-        padding: 0.875rem 2rem;
-        font-size: 0.8125rem;
-        font-weight: 600;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
+        min-width: 160px;
+        height: 40px;
+        padding: 0 1.5rem;
+        font-size: 0.875rem;
+        font-weight: 500;
         border-radius: 4px;
+        letter-spacing: 0;
+        text-transform: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
 
-    // Primary CTA: solid white
     .btn-primary,
     .btn-titan-primary {
         background-color: rgba(255, 255, 255, 0.92);
         border-color: transparent;
-        color: #1B1319;
-
-        &:hover {
-            background-color: #FFFFFF;
-            color: #111111;
-        }
+        color: #171A20;
+        &:hover { background-color: #FFFFFF; color: #111111; }
     }
 
-    // Secondary CTA: glass outline
     .btn-secondary,
     .btn-titan-secondary {
-        background-color: rgba(255, 255, 255, 0.08);
+        background-color: rgba(255, 255, 255, 0.10);
         border: 1px solid rgba(255, 255, 255, 0.45);
         color: #FFFFFF;
-
         &:hover {
-            background-color: rgba(255, 255, 255, 0.15);
+            background-color: rgba(255, 255, 255, 0.18);
             border-color: rgba(255, 255, 255, 0.75);
         }
     }
 }
 
 // ---------------------------------------------------------------------------
-// PRODUCT / VEHICLE CARD SECTION
-// Tesla-style two-column grid with full-bleed images and overlay CTAs.
+// PRODUCT CARD SECTION — Tesla vehicle card pattern
 // ---------------------------------------------------------------------------
 
 .titan-products {
-    padding-top: 0;
-    padding-bottom: 0;
-    background-color: var(--titan-bg-alt);
+    padding: 0;
+    background-color: var(--titan-bg);
 }
 
 .titan-product-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-    gap: 0; // Cards are flush / separated by border
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0;
+
+    @media (max-width: 767px) { grid-template-columns: 1fr; }
 }
 
 .titan-product-card {
     position: relative;
     overflow: hidden;
     min-height: 520px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: space-between;
-    padding: 3rem 2rem 2.5rem;
-    background-color: var(--titan-bg);
-    border: 1px solid var(--titan-border);
-    text-align: center;
-    transition: border-color var(--titan-transition);
+    background-color: #1B1319;
+    cursor: pointer;
 
-    &:hover {
-        border-color: rgba(255, 255, 255, 0.15);
+    &__eyebrow {
+        position: absolute;
+        top: 1.5rem;
+        left: 1.5rem;
+        z-index: 3;
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.85);
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
     }
 
-    // Background product image (full-bleed, centered)
     &__image {
         position: absolute;
         inset: 0;
@@ -303,54 +257,89 @@ section,
         height: 100%;
         object-fit: cover;
         object-position: center;
-        opacity: 0.7;
+        opacity: 0.9;
         transition: transform 0.5s ease, opacity 0.3s ease;
     }
 
-    &:hover &__image {
-        transform: scale(1.02);
-        opacity: 0.8;
+    &:hover &__image { transform: scale(1.02); opacity: 1; }
+
+    &__scrim {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+            to top,
+            rgba(0, 0, 0, 0.75) 0%,
+            rgba(0, 0, 0, 0.30) 40%,
+            rgba(0, 0, 0, 0.05) 70%,
+            transparent 100%
+        );
+        z-index: 2;
+        pointer-events: none;
     }
 
-    // Content overlay
     &__content {
-        position: relative;
-        z-index: 2;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        height: 100%;
-        width: 100%;
-        justify-content: space-between;
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 3;
+        padding: 1.5rem;
     }
 
     &__name {
         font-family: 'Inter Tight', sans-serif;
-        font-size: 1.5rem;
-        font-weight: 700;
+        font-size: 2.5rem;
+        font-weight: 500;
         color: #FFFFFF;
         letter-spacing: -0.01em;
-        margin-bottom: 0.5rem;
+        line-height: 1.1;
+        margin-bottom: 0.25rem;
     }
 
     &__tagline {
         font-size: 0.875rem;
-        color: rgba(255, 255, 255, 0.6);
-        margin-bottom: 0;
+        color: rgba(255, 255, 255, 0.75);
+        margin-bottom: 1rem;
     }
 
     &__ctas {
         display: flex;
-        gap: 0.75rem;
-        justify-content: center;
+        gap: 0.5rem;
         flex-wrap: wrap;
-        padding-top: 1.5rem;
+
+        .btn {
+            height: 40px;
+            min-width: 130px;
+            padding: 0 1.25rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            border-radius: 4px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-primary {
+            background-color: rgba(255, 255, 255, 0.92);
+            border-color: transparent;
+            color: #171A20;
+            &:hover { background-color: #FFFFFF; }
+        }
+
+        .btn-secondary {
+            background-color: rgba(244, 244, 244, 0.20);
+            border: 1px solid rgba(255, 255, 255, 0.40);
+            color: #FFFFFF;
+            &:hover {
+                background-color: rgba(244, 244, 244, 0.30);
+                border-color: rgba(255, 255, 255, 0.65);
+            }
+        }
     }
 }
 
 // ---------------------------------------------------------------------------
 // STATS / TRUST BAND
-// Horizontal row of 3-4 numbers — e.g. "200+ Products", "50 States", etc.
 // ---------------------------------------------------------------------------
 
 .titan-stats {
@@ -378,21 +367,21 @@ section,
 .titan-stats__number {
     font-family: 'Inter Tight', sans-serif;
     font-size: 2.5rem;
-    font-weight: 800;
-    color: #FFFFFF;
+    font-weight: 700;
+    color: var(--titan-text);
     letter-spacing: -0.03em;
     line-height: 1;
 }
 
 .titan-stats__label {
     font-size: 0.8125rem;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--titan-text-muted);
 }
 
 // ---------------------------------------------------------------------------
-// SECTION HEADING PATTERN
+// SECTION HEADING
 // ---------------------------------------------------------------------------
 
 .titan-section-heading {
@@ -401,30 +390,29 @@ section,
 
     &__eyebrow {
         font-size: 0.75rem;
-        letter-spacing: 0.12em;
+        letter-spacing: 0.10em;
         text-transform: uppercase;
         color: var(--titan-text-muted);
         margin-bottom: 0.75rem;
     }
 
     &__title {
-        font-size: clamp(1.75rem, 3vw, 2.5rem);
-        font-weight: 700;
-        color: #FFFFFF;
+        font-size: clamp(1.5rem, 3vw, 2rem);
+        font-weight: 600;
+        color: var(--titan-text);
         margin-bottom: 1rem;
     }
 
     &__body {
         font-size: 1rem;
-        color: rgba(255, 255, 255, 0.6);
+        color: var(--titan-text-muted);
         max-width: 560px;
         margin: 0 auto;
     }
 }
 
 // ---------------------------------------------------------------------------
-// CTA BANNER SECTION
-// Full-width call-to-action near the bottom of the page
+// CTA BANNER
 // ---------------------------------------------------------------------------
 
 .titan-cta-banner {
@@ -434,57 +422,59 @@ section,
     border-top: 1px solid var(--titan-border);
 
     &__title {
-        font-size: clamp(1.75rem, 3.5vw, 3rem);
-        font-weight: 800;
-        color: #FFFFFF;
-        letter-spacing: -0.03em;
+        font-size: clamp(1.5rem, 3.5vw, 2.5rem);
+        font-weight: 700;
+        color: var(--titan-text);
+        letter-spacing: -0.02em;
         margin-bottom: 1rem;
     }
 
     &__body {
-        font-size: 1.0625rem;
-        color: rgba(255, 255, 255, 0.6);
+        font-size: 1rem;
+        color: var(--titan-text-muted);
         max-width: 520px;
         margin: 0 auto 2.5rem;
+    }
+
+    .btn-primary {
+        background-color: var(--titan-text);
+        border-color: var(--titan-text);
+        color: #FFFFFF;
+        &:hover { background-color: var(--titan-text-secondary); }
     }
 }
 
 // ---------------------------------------------------------------------------
-// FOOTER
+// FOOTER — Dark
 // ---------------------------------------------------------------------------
 
 footer,
 .o_footer {
-    background-color: var(--titan-bg-alt) !important;
-    border-top: 1px solid var(--titan-border);
+    background-color: var(--titan-dark) !important;
+    border-top: none;
     color: rgba(255, 255, 255, 0.5);
     font-size: 0.875rem;
 
     a {
         color: rgba(255, 255, 255, 0.5);
-
-        &:hover {
-            color: #FFFFFF;
-        }
+        &:hover { color: #FFFFFF; }
     }
+
+    .o_footer_copyright { color: rgba(255, 255, 255, 0.35); }
 }
 
 // ---------------------------------------------------------------------------
-// ODOO WEBSITE BUILDER — Editor-mode helpers
-// Only apply inside .o_editable to avoid affecting frontend.
+// ODOO BUILDER — Editor helpers
 // ---------------------------------------------------------------------------
 
 .o_editable {
-    // Prevent the editor from hiding our hero overlay when in edit mode
     .titan-hero::before,
     .s_cover::before,
-    .s_banner::before {
-        pointer-events: none;
-    }
+    .s_banner::before { pointer-events: none; }
 }
 
 // ---------------------------------------------------------------------------
-// UTILITY CLASSES
+// UTILITY
 // ---------------------------------------------------------------------------
 
 .titan-divider {
@@ -498,4 +488,4 @@ footer,
 .text-titan-primary  { color: var(--titan-text) !important; }
 .bg-titan            { background-color: var(--titan-bg) !important; }
 .bg-titan-alt        { background-color: var(--titan-bg-alt) !important; }
-.bg-titan-surface    { background-color: var(--titan-surface) !important; }
+.bg-titan-dark       { background-color: var(--titan-dark) !important; }
