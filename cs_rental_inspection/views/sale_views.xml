@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright (C) 2024 Cyder Solutions - All Rights Reserved -->
+<odoo>
+    <!-- Inherit Rental Order Form View -->
+    <record id="view_order_form_inherit_rental_inspection" model="ir.ui.view">
+        <field name="name">sale.order.form.inherit.rental.inspection</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale_renting.rental_order_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <!-- Pickup inspections x/y stat button -->
+                <button name="action_view_pickup_inspections"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-arrow-circle-up"
+                        invisible="not is_rental_order or pickup_inspections_total == 0">
+                    <div class="o_field_widget o_stat_info">
+                        <span class="o_stat_value">
+                            <field name="pickup_progress_label"/>
+                        </span>
+                        <span class="o_stat_text">Pickups Done</span>
+                    </div>
+                </button>
+                <!-- Return inspections x/y stat button -->
+                <button name="action_view_return_inspections"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-arrow-circle-down"
+                        invisible="not is_rental_order or return_inspections_total == 0">
+                    <div class="o_field_widget o_stat_info">
+                        <span class="o_stat_value">
+                            <field name="return_progress_label"/>
+                        </span>
+                        <span class="o_stat_text">Returns Done</span>
+                    </div>
+                </button>
+            </xpath>
+            <xpath expr="//notebook" position="inside">
+                <page string="Inspections" name="inspections"
+                      invisible="not is_rental_order or not has_inspection_required">
+                    <!-- Progress summary -->
+                    <group>
+                        <group string="Pickup Progress">
+                            <field name="pickup_inspections_done" string="Completed" readonly="1"/>
+                            <field name="pickup_inspections_total" string="Total" readonly="1"/>
+                        </group>
+                        <group string="Return Progress">
+                            <field name="return_inspections_done" string="Completed" readonly="1"/>
+                            <field name="return_inspections_total" string="Total" readonly="1"/>
+                        </group>
+                    </group>
+                    <!-- Inspection list -->
+                    <field name="inspection_ids" readonly="1">
+                        <list>
+                            <field name="name"/>
+                            <field name="product_id"/>
+                            <field name="unit_label" string="Unit"/>
+                            <field name="type"/>
+                            <field name="date"/>
+                            <field name="inspector_id"/>
+                            <field name="state"
+                                   decoration-info="state == 'draft'"
+                                   decoration-warning="state == 'in_progress'"
+                                   decoration-success="state == 'done'"
+                                   decoration-danger="state == 'cancelled'"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Inherit Rental Order List View -->
+    <record id="view_rental_order_list_inherit_inspection" model="ir.ui.view">
+        <field name="name">sale.order.list.inherit.inspection</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_quotation_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='state']" position="before">
+                <field name="is_rental_order" string="Rent Order" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Action: Inspections from Rental Order -->
+    <record id="action_rental_order_inspections" model="ir.actions.act_window">
+        <field name="name">Rental Inspections</field>
+        <field name="res_model">rental.inspection</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('rental_order_id', '=', active_id)]</field>
+        <field name="context">{'default_rental_order_id': active_id}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No inspections found
+            </p>
+            <p>
+                Create pickup and return inspections for your rental orders.
+            </p>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright (C) 2024 Cyder Solutions - All Rights Reserved -->
+<odoo>
+    <!-- Inspection Form View -->
+    <record id="rental_inspection_form" model="ir.ui.view">
+        <field name="name">rental.inspection.form</field>
+        <field name="model">rental.inspection</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_start_inspection"
+                            string="Start Inspection"
+                            type="object"
+                            class="oe_highlight"
+                            invisible="state != 'draft'"/>
+                    <button name="action_complete_inspection"
+                            string="Complete"
+                            type="object"
+                            class="oe_highlight"
+                            invisible="state != 'in_progress'"/>
+                    <button name="action_cancel_inspection"
+                            string="Cancel"
+                            type="object"
+                            invisible="state not in ('draft', 'in_progress')"/>
+                    <button name="%(action_report_rental_inspection)d"
+                            string="Print Inspection"
+                            type="action"
+                            class="btn-secondary"
+                            invisible="state != 'done'"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,in_progress,done"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_rental_order"
+                                type="object"
+                                class="oe_stat_button"
+                                icon="fa-file-text-o">
+                            <field string="Rental Order" name="rental_order_id" widget="statinfo"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="rental_order_id"/>
+                            <field name="product_id"/>
+                            <field name="product_category_id"/>
+                            <field name="type"/>
+                            <field name="lot_id" readonly="type == 'return'"/>
+                        </group>
+                        <group>
+                            <field name="date"/>
+                            <field name="inspector_id"/>
+                            <field name="equipment_hours"/>
+                            <field name="hours_usage" invisible="type != 'return'" readonly="1"/>
+                            <field name="previous_inspection_id" invisible="type != 'return'"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Checklist" name="checklist">
+                            <div invisible="state != 'in_progress'" class="alert alert-info" role="alert">
+                                Click any line to complete the inspection item details.
+                            </div>
+                            <field name="checklist_ids">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="type"/>
+                                    <field name="result"/>
+                                    <field name="previous_result" invisible="parent.type != 'return'"/>
+                                </list>
+                                <form>
+                                    <sheet>
+                                        <div class="alert alert-info" role="alert"
+                                             invisible="not (require_photo or require_note)">
+                                            <span invisible="not require_photo">• Photo required for this check</span>
+                                            <br invisible="not (require_photo and require_note)"/>
+                                            <span invisible="not require_note">• Notes required for this check</span>
+                                        </div>
+                                        <group>
+                                            <field name="name" readonly="1"/>
+                                            <field name="description" readonly="1"/>
+                                            <field name="type" readonly="1"/>
+                                        </group>
+                                        <group string="Previous Check Result"
+                                               invisible="parent.type != 'return'">
+                                            <field name="previous_result" readonly="1"/>
+                                        </group>
+                                        <group string="Current Check">
+                                            <field name="result" widget="radio" options="{'horizontal': True}"/>
+                                            <field name="measurement" invisible="type != 'measurement'"/>
+                                            <field name="measurement_uom" invisible="type != 'measurement'"/>
+                                        </group>
+                                        <group string="Photo" invisible="not require_photo">
+                                            <field name="photo" widget="image" nolabel="1"/>
+                                            <field name="photo_name" invisible="1"/>
+                                        </group>
+                                        <group string="Notes" invisible="not require_note">
+                                            <field name="note" nolabel="1"/>
+                                        </group>
+                                        <group invisible="1">
+                                            <field name="require_photo"/>
+                                            <field name="require_note"/>
+                                        </group>
+                                    </sheet>
+                                </form>
+                            </field>
+                        </page>
+                        <page string="Damage Report" name="damage">
+                            <group>
+                                <field name="damage_found"/>
+                                <field name="damage_description" required="damage_found"/>
+                            </group>
+                        </page>
+                        <page string="Notes" name="notes">
+                            <field name="note" placeholder="Add any additional notes or observations..."/>
+                        </page>
+                        <page string="Signatures" name="signatures">
+                            <group>
+                                <group string="Customer">
+                                    <field name="customer_signature" widget="signature"/>
+                                    <field name="customer_name"/>
+                                    <field name="customer_signature_date"/>
+                                </group>
+                                <group string="Inspector">
+                                    <field name="inspector_signature" widget="signature"/>
+                                    <field name="inspector_name_id"/>
+                                    <field name="inspector_signature_date"/>
+                                </group>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- Inspection List View -->
+    <record id="rental_inspection_list" model="ir.ui.view">
+        <field name="name">rental.inspection.list</field>
+        <field name="model">rental.inspection</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="rental_order_id"/>
+                <field name="product_id"/>
+                <field name="unit_label" string="Unit"/>
+                <field name="type"/>
+                <field name="date"/>
+                <field name="inspector_id"/>
+                <field name="state" decoration-info="state == 'draft'"
+                       decoration-warning="state == 'in_progress'"
+                       decoration-success="state == 'done'"
+                       decoration-danger="state == 'cancelled'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Inspection Search View -->
+    <record id="view_rental_inspection_search" model="ir.ui.view">
+        <field name="name">rental.inspection.search</field>
+        <field name="model">rental.inspection</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="rental_order_id"/>
+                <field name="product_id"/>
+                <field name="partner_id"/>
+                <field name="inspector_id"/>
+                <field name="lot_id" string="Serial Number"/>
+                <separator/>
+                <filter string="My Inspections" name="my_inspections"
+                        domain="[('inspector_id', '=', uid)]"/>
+                <filter string="Pickup Inspections" name="pickup"
+                        domain="[('type', '=', 'pickup')]"/>
+                <filter string="Return Inspections" name="return"
+                        domain="[('type', '=', 'return')]"/>
+                <separator/>
+                <filter string="Draft" name="state_draft"
+                        domain="[('state', '=', 'draft')]"/>
+                <filter string="In Progress" name="state_progress"
+                        domain="[('state', '=', 'in_progress')]"/>
+                <filter string="Done" name="state_done"
+                        domain="[('state', '=', 'done')]"/>
+                <separator/>
+                <filter string="Status" name="groupby_state"
+                        context="{'group_by': 'state'}"/>
+                <filter string="Type" name="groupby_type"
+                        context="{'group_by': 'type'}"/>
+                <filter string="Rental Order" name="groupby_order"
+                        context="{'group_by': 'rental_order_id'}"/>
+                <filter string="Product" name="groupby_product"
+                        context="{'group_by': 'product_id'}"/>
+                <filter string="Inspector" name="groupby_inspector"
+                        context="{'group_by': 'inspector_id'}"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- Main Action -->
+    <record id="action_rental_inspection" model="ir.actions.act_window">
+        <field name="name">Equipment Inspections</field>
+        <field name="res_model">rental.inspection</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_rental_inspection_search"/>
+        <field name="context">{'search_default_my_inspections': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create your first equipment inspection
+            </p>
+            <p>
+                Record equipment condition during rental pickup and return.
+            </p>
+        </field>
+    </record>
+</odoo>

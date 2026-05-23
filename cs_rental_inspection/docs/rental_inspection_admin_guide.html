@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rental Equipment Inspections - Administrator Guide</title>
+    <link rel="stylesheet" href="user-guide.css">
+</head>
+<body>
+<div class="container">
+
+    <div class="header-container">
+        <a href="https://www.cyder.com.au">
+            <img src="https://lib.cyder.com.au/logo.png" alt="Cyder Solutions Logo" height="40px" width="auto"
+                style="position:absolute;right:20px;top:20px;"
+                class="logo">
+        </a>
+        <h1>Rental Equipment Inspections — Administrator Guide</h1>
+    </div>
+
+    <div class="toc">
+        <strong>Contents</strong>
+        <ul>
+            <li><a href="#overview">1. Overview</a></li>
+            <li><a href="#architecture">2. How the Module Works</a></li>
+            <li><a href="#templates">3. Configuring Inspection Templates</a></li>
+            <li><a href="#categories">4. Assigning Templates to Product Categories</a></li>
+            <li><a href="#access">5. Access Rights and Record Rules</a></li>
+            <li><a href="#preloaded">6. Pre-loaded Templates</a></li>
+            <li><a href="#workflows">7. Standard Setup Workflows</a></li>
+            <li><a href="#troubleshooting">8. Troubleshooting</a></li>
+        </ul>
+    </div>
+
+    <!-- 1. OVERVIEW -->
+    <h2 id="overview">1. Overview</h2>
+
+    <p>The Rental Equipment Inspections module extends Odoo's native rental order functionality (<code>sale_renting</code>) to provide structured, template-driven equipment condition inspections at pickup and return. As administrator, your primary responsibilities are designing inspection templates that reflect your operational requirements, assigning those templates to the appropriate product categories, and managing user access so that the right people can create and complete inspections.</p>
+
+    <p>The module ships with four pre-loaded templates covering Heavy Equipment and Small Equipment categories for both pickup and return inspection types. These are provided as a starting point. You will typically need to review and extend them to match your actual equipment and operational standards.</p>
+
+    <div class="feature-box">
+        <strong>Key design principle:</strong> The system is category-driven, not product-driven. Inspection templates are assigned to product categories, not to individual products. All products in the same category will use the same template. If different products require different checklists, they must be in different product categories.
+    </div>
+
+    <!-- 2. HOW THE MODULE WORKS -->
+    <h2 id="architecture">2. How the Module Works</h2>
+
+    <p>Understanding the data flow is essential for configuring the module correctly and diagnosing issues when they arise.</p>
+
+    <h3>The Template → Category → Inspection Chain</h3>
+    <p>Inspection templates are defined at <strong>Rentals → Inspections → Inspection Templates</strong>. Each template is typed as either a Pickup template or a Return template — a single template cannot serve both purposes. Templates contain an ordered list of checklist items, each defining what is checked, what type of check it is, and whether a photo or note is mandatory.</p>
+
+    <p>Templates are linked to product categories through two fields added to <code>product.category</code>: <em>Pickup Inspection Template</em> and <em>Return Inspection Template</em>. These are independent fields — you can assign a pickup template without a return template and vice versa. A product category with neither template assigned is effectively excluded from the inspection system.</p>
+
+    <p>When a user creates an inspection from a rental order, the system identifies which of the order's rental lines involve products in categories with templates configured, and creates one inspection record per qualifying product per type. The inspection starts in Draft status with no checklist items. Checklist items are only generated when the user clicks <em>Start Inspection</em>, at which point the current template items are copied into the inspection as live records. This copy is permanent — subsequent changes to the template do not affect in-progress or completed inspections.</p>
+
+    <h3>Pickup / Return Sequencing Logic</h3>
+    <p>The module enforces that return inspections cannot be created until all pickup inspections on the same order are in <strong>Completed</strong> (Done) status. This is computed through the <code>has_completed_pickups</code> field on the rental order, which is recalculated whenever inspection status changes. The <em>Create Return Inspection</em> button on the rental order is conditional on this field.</p>
+
+    <p>Return inspections automatically compute a link to the corresponding completed pickup inspection (same rental order, same product). This is used to display previous checklist results on the return inspection for comparison. This link is stored on both the inspection header and individual checklist items.</p>
+
+    <h3>Rental Order Smart Buttons</h3>
+    <p>The rental order form gains four computed fields that drive the button visibility and status indicators: <code>has_inspection_required</code> (any product on the order has a configured template), <code>has_pending_pickup</code> (at least one product needs a pickup inspection), <code>has_pending_return</code> (at least one product needs a return inspection, and all pickups are done), and <code>inspection_count</code> (total non-cancelled inspections). These fields are stored and recomputed on changes to order lines, product categories, and inspection states.</p>
+
+    <!-- 3. CONFIGURING TEMPLATES -->
+    <h2 id="templates">3. Configuring Inspection Templates</h2>
+
+    <p>Navigate to <strong>Rentals → Inspections → Inspection Templates</strong> to create and manage templates. Only Sales Managers have write access to templates — standard sales users can read templates but cannot create or modify them.</p>
+
+    <h3>Template Header Fields</h3>
+    <p>Each template requires a descriptive name that clearly identifies its purpose — for example, "Compressor Pickup Inspection" rather than just "Pickup Template". The <em>Type</em> field is either Pickup or Return and determines which category field the template can be assigned to. In multi-company environments, the <em>Company</em> field scopes the template to a specific company; leave it blank to share the template across all companies.</p>
+
+    <p>The <em>Description</em> field (on the Description tab) accepts HTML content and is available to inspectors when viewing the template. Use it for general instructions that apply to the inspection as a whole — safety briefings, environmental conditions to note, process reminders — rather than item-specific instructions.</p>
+
+    <h3>Checklist Items</h3>
+    <p>Checklist items are the core of the template. Each item must have a name of at least three characters and a check type. The available check types are: <strong>Condition Check</strong>, <strong>Damage Check</strong>, <strong>Safety Check</strong>, <strong>Operation Check</strong>, <strong>Cleanliness Check</strong>, <strong>Measurement</strong>, and <strong>Other</strong>. These types are informational — they appear in the checklist and on the printed report to help the inspector understand the nature of the check — but they do not change how the item behaves except that Measurement items include a numeric value field.</p>
+
+    <p>Item order is controlled by the <em>Sequence</em> field (drag handle in the list). Items appear to the inspector in sequence order. Group related checks together — typically: safety checks first, then operational checks, then physical/condition checks, then measurements, then cleanliness.</p>
+
+    <p>The <em>Description</em> field on each item is the most important documentation element. Write it as an acceptance criterion: what must be true for this item to pass? Include specific thresholds, observable indicators, and common failure modes. An inspector should be able to assess the item using only the description without needing prior training on what to look for.</p>
+
+    <h3>Photo and Note Requirements</h3>
+    <p><em>Require Photo</em> and <em>Require Note</em> are boolean flags on each checklist item. When set, the inspector must provide the corresponding content on that item — the system enforces this before the inspection can be completed. Apply these flags deliberately:</p>
+
+    <p>Use <em>Require Photo</em> on items where visible evidence is essential for dispute resolution — body condition checks, any item that assesses existing damage, fuel level gauges, and meter readings on equipment without digital displays. Use <em>Require Note</em> on items where a simple pass/fail is insufficient — operational checks where the nature of any defect matters, measurements where the value needs to be recorded explicitly, and any item that frequently generates follow-up questions.</p>
+
+    <div class="warning">
+        <strong>Be deliberate with mandatory requirements:</strong> Every item marked as requiring a photo or note adds friction to the inspection process. If everything is mandatory, inspectors will treat the requirements as a checkbox exercise rather than meaningful documentation. Reserve mandatory flags for checks where the requirement is genuinely non-negotiable.
+    </div>
+
+    <h3>Archiving Templates</h3>
+    <p>Templates that are no longer in use should be archived rather than deleted. Archiving prevents the template from being assigned to new product categories while preserving the record for inspections that were created from it. The archived filter in the template search view allows you to review and restore archived templates if needed.</p>
+
+    <!-- 4. ASSIGNING TEMPLATES TO CATEGORIES -->
+    <h2 id="categories">4. Assigning Templates to Product Categories</h2>
+
+    <p>Template assignment is done on the product category record. Navigate to <strong>Inventory → Configuration → Product Categories</strong> (or <strong>Configuration → Products → Product Categories</strong> depending on your installed apps). Open the category and locate the <em>Pickup Inspection Template</em> and <em>Return Inspection Template</em> fields added by this module.</p>
+
+    <p>The Pickup Template field will only show templates of type Pickup in its dropdown. The Return Template field will only show Return templates. This prevents accidental misconfiguration.</p>
+
+    <div class="feature-box">
+        <strong>Category hierarchy note:</strong> Odoo product categories support parent/child relationships, but template assignment is not inherited. A parent category's template does not cascade to child categories — each category that requires inspection must have its templates explicitly assigned. If you want all sub-categories to share the same template, you must assign it to each one individually.
+    </div>
+
+    <p>To remove a template from a category — for example, if you no longer want pickup inspections for that equipment type — simply clear the template field on the category record. Existing inspections already in progress are unaffected. New inspections created after the change will not include that equipment in the inspection creation logic.</p>
+
+    <h3>Testing the Configuration</h3>
+    <p>After assigning templates to a category, test the configuration by opening a rental order that includes a product from that category and confirming the <em>Create Pickup Inspection</em> button appears. Click it and verify the inspection is created. Start the inspection and confirm the checklist is populated with the items from your template. This end-to-end test should be performed for each new template configuration before it goes into production use.</p>
+
+    <!-- 5. ACCESS RIGHTS -->
+    <h2 id="access">5. Access Rights and Record Rules</h2>
+
+    <p>The module implements access control at two levels: model-level permissions defined in <code>ir.model.access.csv</code> and record-level rules defined in <code>inspection_security.xml</code>.</p>
+
+    <h3>Model-Level Permissions</h3>
+
+    <p><strong>Sales / Salesperson group</strong> — Can create, read, and write inspection records. Cannot delete. Has read-only access to templates and template items (cannot create, write, or delete templates). This ensures inspectors can work with inspections freely while template integrity is protected.</p>
+
+    <p><strong>Sales Manager group</strong> — Full create/read/write/delete access to inspection records and templates. Can manage all templates including creating new ones and modifying existing items.</p>
+
+    <h3>Record-Level Rules</h3>
+
+    <p>Record rules provide row-level access control that operates on top of model permissions.</p>
+
+    <p>For inspection records, the <strong>Personal Inspections</strong> rule restricts salesperson-group users to inspections where they are either the assigned inspector or the salesperson on the linked rental order. A salesperson cannot see inspections assigned to a different inspector on orders they did not originate. The <strong>All Inspections</strong> rule gives manager-group users unrestricted access to all inspection records. Both rules apply within the multi-company constraint, which prevents cross-company data access regardless of group.</p>
+
+    <p>For templates, salesperson-group users can read all templates (the read-only rule grants global read access), but only managers can write, create, or delete template records. Template access is not restricted by assignment or ownership — all users can see all templates for the purposes of understanding what checklists contain.</p>
+
+    <div class="warning">
+        <strong>Inspector assignment matters:</strong> Because salesperson access is scoped to their own inspections, if an inspection is created with the wrong inspector assigned, the intended inspector will not be able to see it. Managers can reassign the inspector field. This is the most common access issue reported by users.
+    </div>
+
+    <h3>Multi-Company</h3>
+    <p>Both inspection records and templates are subject to multi-company record rules. Inspection records inherit their company from the linked rental order. Template records have an explicit company field — if left blank, the template is shared across all companies. If set to a specific company, only users logged in under that company can see and use it. In a single-company environment, the company field on templates can be left blank without consequence.</p>
+
+    <!-- 6. PRE-LOADED TEMPLATES -->
+    <h2 id="preloaded">6. Pre-loaded Templates</h2>
+
+    <p>The module ships with four inspection templates and two product categories installed with <code>noupdate="1"</code>, meaning they will not be overwritten by future module updates once installed.</p>
+
+    <p>The <strong>Heavy Equipment</strong> category is configured with the Heavy Equipment Pickup Inspection and Heavy Equipment Return Inspection templates. The pickup template covers engine operation, fluid levels, and body condition. The return template covers new damage assessment, hour meter reading, and fuel level. All items require notes; body condition and damage assessment additionally require photos.</p>
+
+    <p>The <strong>Small Equipment</strong> category is configured with the Small Equipment Pickup Inspection and Small Equipment Return Inspection templates. The pickup template covers general operation, physical condition, and accessories/attachments. The return template covers damage assessment, final operation check, and cleanliness. Physical condition, damage assessment, and cleanliness items require photos.</p>
+
+    <p>Two additional templates — Basic Condition Pickup Inspection and Basic Condition Return Inspection — are pre-loaded but not assigned to any category. These provide a minimal checklist for simple equipment that does not warrant the full heavy or small equipment checklist.</p>
+
+    <div class="warning">
+        <strong>Review before go-live:</strong> The pre-loaded templates are illustrative starting points, not production-ready checklists. Review each template against your actual equipment and operational standards before using them in real inspections. In particular, confirm that the checklist item descriptions are accurate acceptance criteria for your equipment and that the photo/note requirements match your documentation policy.
+    </div>
+
+    <!-- 7. STANDARD SETUP WORKFLOWS -->
+    <h2 id="workflows">7. Standard Setup Workflows</h2>
+
+    <h3>Workflow: Setting Up Inspection for a New Equipment Type</h3>
+    <p><em>Scenario: Your business begins renting a new category of equipment — aerial work platforms — that requires a specific inspection checklist different from existing templates.</em></p>
+
+    <div class="step">Step 1: Navigate to <strong>Rentals → Inspections → Inspection Templates</strong>. Create a new template named "Aerial Work Platform Pickup Inspection" with Type set to Pickup.</div>
+    <div class="step">Step 2: Add checklist items in sequence order. For each item, write a clear description of the acceptance criteria. Set Require Photo on any item documenting visible condition or existing damage. Set Require Note on any item where the pass/fail result alone is insufficient.</div>
+    <div class="step">Step 3: Save the pickup template. Create a second template named "Aerial Work Platform Return Inspection" with Type set to Return. Add the return-specific checklist items (new damage, hour meter, fuel level, cleaning status).</div>
+    <div class="step">Step 4: Save the return template.</div>
+    <div class="step">Step 5: Navigate to the product category for aerial work platforms. If no specific category exists, create one under <strong>Inventory → Configuration → Product Categories</strong>.</div>
+    <div class="step">Step 6: Set <em>Pickup Inspection Template</em> to your new pickup template and <em>Return Inspection Template</em> to your new return template. Save.</div>
+    <div class="step">Step 7: Ensure all aerial work platform products are assigned to this category (check <strong>Product → General Information → Category</strong> for each product).</div>
+    <div class="step">Step 8: Test end-to-end: open a rental order containing an aerial work platform, create a pickup inspection, start it, and verify the checklist matches your template exactly.</div>
+
+    <h3>Workflow: Modifying an Existing Template</h3>
+    <p><em>Scenario: Following a review, you need to add a mandatory safety check and remove an obsolete checklist item from an existing template.</em></p>
+
+    <div class="step">Step 1: Open the template in <strong>Rentals → Inspections → Inspection Templates</strong>. Confirm no inspections are currently in Draft or In Progress status that were created from this template — changes to the template do not affect in-progress inspections, but you need to know which inspections will be affected going forward.</div>
+    <div class="step">Step 2: Add the new safety check item. Set its sequence to place it appropriately in the checklist order. Write the description, set Type to Safety Check, and set Require Note to true.</div>
+    <div class="step">Step 3: Locate the obsolete item and delete it from the template items list. This will not affect any checklist items already copied into existing inspections.</div>
+    <div class="step">Step 4: Save the template. The changes take effect immediately for all new inspections started from this template.</div>
+    <div class="step">Step 5: Communicate the change to inspectors so they are aware of the updated checklist structure.</div>
+
+    <!-- 8. TROUBLESHOOTING -->
+    <h2 id="troubleshooting">8. Troubleshooting</h2>
+
+    <h3>Pickup inspection button does not appear on a rental order</h3>
+    <p>The button visibility is driven by the <code>has_inspection_required</code> computed field on the rental order. This field is True only when at least one rental line contains a product whose category has a pickup template assigned. Check: (1) the order line is marked as a rental line (is_rental = True); (2) the product is in a category that has a <em>Pickup Inspection Template</em> set; (3) the category is correctly saved. If all three are correct and the button still does not appear, trigger a recompute by saving the order or making a minor edit to a rental line.</p>
+
+    <h3>Return inspection button remains unavailable after all pickups appear complete</h3>
+    <p>The <code>has_completed_pickups</code> field requires every rental line product with a pickup template to have a corresponding inspection in Done status. Check for: (1) a pickup inspection in In Progress that was not completed; (2) a cancelled pickup inspection with no replacement; (3) a product recently added to the order whose pickup inspection has not been created. The field also requires that the rental lines have <code>is_rental = True</code> — non-rental lines on a mixed order do not factor in. Run a search on inspections filtered to this order and review the status of each.</p>
+
+    <h3>Start Inspection raises "No inspection template found" error</h3>
+    <p>The product on this inspection is in a category that lacks the required template. Navigate to the product category and verify the appropriate template (pickup or return, matching the inspection type) is assigned and saved. If the category has recently changed, the inspection may reference the old category — check the <em>Equipment Category</em> field on the inspection record and compare it to the product's current category.</p>
+
+    <h3>Checklist is generated with wrong items</h3>
+    <p>The checklist is built from the template assigned to the product category at the time <em>Start Inspection</em> is clicked. If the template was recently changed (items added, removed, or reordered), new inspections will reflect those changes but inspections started before the change will retain the old checklist. This is by design — inspections are an immutable record of what was assessed at that point in time. If the wrong template was assigned to the category, the template assignment must be corrected and a new inspection started (the incorrect one should be cancelled).</p>
+
+    <h3>Users cannot see inspections created by other inspectors</h3>
+    <p>This is the expected behaviour for the salesperson access group. The Personal Inspections record rule restricts visibility to inspections where the user is the inspector or the rental order salesperson. Reassign the inspection to the correct inspector (requires manager access), or grant the user Sales Manager access if they need visibility across all inspections. Do not attempt to work around this by sharing login credentials.</p>
+
+    <h3>Template changes are not reflected in existing in-progress inspections</h3>
+    <p>This is by design. Checklist items are copied from the template into the inspection at the moment <em>Start Inspection</em> is clicked. The copied records are independent of the template. This ensures the inspection record accurately reflects what was assessed, regardless of subsequent template changes. Only inspections started after the template change will include the updated items.</p>
+
+    <h3>Previous result comparison is empty on a return inspection</h3>
+    <p>The previous inspection link is computed on the return inspection based on finding a completed (Done) pickup inspection for the same product and rental order. If that pickup inspection does not exist, was cancelled, or is not yet in Done status, the link will be empty and no previous results will appear. Ensure the pickup inspection is fully completed before starting the return inspection. If the pickup inspection was accidentally cancelled, a new one must be created and completed before the return inspection will show comparison data.</p>
+
+</div>
+
+<footer class="copyright-footer"><hr><center>&copy; 2018 Cyder Solutions. All rights reserved. | <a href="https://www.cyder.com.au">www.cyder.com.au</a></center></footer>
+
+</body>
+</html>

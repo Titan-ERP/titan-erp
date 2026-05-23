@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright (C) 2024 Cyder Solutions - All Rights Reserved -->
+<odoo>
+    <!-- Report Templates -->
+    <template id="report_rental_inspection">
+        <t t-call="web.html_container">
+            <t t-call="web.external_layout">
+                <t t-foreach="docs" t-as="inspection">
+                    <div class="page">
+                        <div class="row">
+                            <div class="col-6">
+                                <h2>Equipment Inspection Report</h2>
+                                <div class="mt-3">
+                                    <strong>Reference:</strong> <span t-field="inspection.name"/><br/>
+                                    <strong>Type:</strong> <span t-field="inspection.type"/><br/>
+                                    <strong>Date:</strong> <span t-field="inspection.date"/><br/>
+                                    <strong>Inspector:</strong> <span t-field="inspection.inspector_id"/>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="mt-3">
+                                    <strong>Equipment:</strong> <span t-field="inspection.product_id"/><br/>
+                                    <strong>Serial/Reference:</strong> <span t-field="inspection.product_id.default_code"/><br/>
+                                    <t t-if="inspection.lot_id">
+                                        <strong>Serial Number:</strong> <span t-field="inspection.lot_id.name"/><br/>
+                                    </t>
+                                    <t t-elif="inspection.unit_number">
+                                        <strong>Unit:</strong> <span t-esc="'Unit %d' % inspection.unit_number"/><br/>
+                                    </t>
+                                    <strong>Hours/Odometer:</strong> <span t-field="inspection.equipment_hours"/><br/>
+                                    <t t-if="inspection.type == 'return'">
+                                        <strong>Usage:</strong> <span t-field="inspection.hours_usage"/><br/>
+                                    </t>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mt-4">
+                            <div class="col-12">
+                                <h3>Checklist Items</h3>
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Item</th>
+                                            <th>Type</th>
+                                            <th>Result</th>
+                                            <th>Notes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr t-foreach="inspection.checklist_ids" t-as="item">
+                                            <td><span t-field="item.name"/></td>
+                                            <td><span t-field="item.type"/></td>
+                                            <td>
+                                                <span t-field="item.result"
+                                                      t-att-class="'badge badge-' + ('success' if item.result == 'pass' else 'danger' if item.result == 'fail' else 'secondary')"/>
+                                            </td>
+                                            <td><span t-field="item.note"/></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="row mt-4" t-if="inspection.checklist_ids.filtered(lambda x: x.photo)">
+                            <div class="col-12">
+                                <h3>Photos</h3>
+                                <div class="row">
+                                    <t t-foreach="inspection.checklist_ids.filtered(lambda x: x.photo)" t-as="item">
+                                        <div class="col-4 mb-3">
+                                            <div class="border p-2">
+                                                <img t-att-src="image_data_uri(item.photo)" class="img-fluid" alt="Inspection Photo"/>
+                                                <div class="text-center mt-2">
+                                                    <small><span t-field="item.name"/></small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </t>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mt-4" t-if="inspection.damage_found">
+                            <div class="col-12">
+                                <h3>Damage Report</h3>
+                                <div class="alert alert-warning">
+                                    <span t-field="inspection.damage_description"/>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mt-4">
+                            <div class="col-12">
+                                <h3>Notes</h3>
+                                <span t-field="inspection.note"/>
+                            </div>
+                        </div>
+
+                        <div class="row mt-4">
+                            <div class="col-6">
+                                <h3>Customer Signature</h3>
+                                <img t-if="inspection.customer_signature"
+                                     t-att-src="image_data_uri(inspection.customer_signature)"
+                                     style="max-height: 100px;"/>
+                                <div class="mt-2">
+                                    <strong>Name:</strong> <span t-field="inspection.customer_name"/><br/>
+                                    <strong>Date:</strong> <span t-field="inspection.customer_signature_date"/>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <h3>Inspector Signature</h3>
+                                <img t-if="inspection.inspector_signature"
+                                     t-att-src="image_data_uri(inspection.inspector_signature)"
+                                     style="max-height: 100px;"/>
+                                <div class="mt-2">
+                                    <strong>Name:</strong> <span t-field="inspection.inspector_name_id.name"/><br/>
+                                    <strong>Date:</strong> <span t-field="inspection.inspector_signature_date"/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+
+    <!-- Combined Report Template -->
+    <template id="report_rental_inspection_combined">
+        <t t-call="web.html_container">
+            <t t-call="web.external_layout">
+                <div class="page">
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h2>Rental Inspection Report</h2>
+                            <div class="mt-3">
+                                <strong>Rental Order:</strong> <span t-field="docs[0].rental_order_id.name"/><br/>
+                                <strong>Customer:</strong> <span t-field="docs[0].partner_id.name"/><br/>
+                                <strong>Equipment:</strong> <span t-field="docs[0].product_id.name"/>
+                            </div>
+                        </div>
+                    </div>
+
+                    <t t-foreach="docs" t-as="inspection">
+                        <div class="mt-4 mb-4">
+                            <h3 t-esc="'Pickup Inspection' if inspection.type == 'pickup' else 'Return Inspection'"/>
+                            <div class="row">
+                                <div class="col-6">
+                                    <strong>Reference:</strong> <span t-field="inspection.name"/><br/>
+                                    <strong>Date:</strong> <span t-field="inspection.date"/><br/>
+                                    <strong>Inspector:</strong> <span t-field="inspection.inspector_id"/>
+                                </div>
+                                <div class="col-6">
+                                    <t t-if="inspection.lot_id">
+                                        <strong>Serial Number:</strong> <span t-field="inspection.lot_id.name"/><br/>
+                                    </t>
+                                    <t t-elif="inspection.unit_number">
+                                        <strong>Unit:</strong> <span t-esc="'Unit %d' % inspection.unit_number"/><br/>
+                                    </t>
+                                    <strong>Hours/Odometer:</strong> <span t-field="inspection.equipment_hours"/><br/>
+                                    <t t-if="inspection.type == 'return'">
+                                        <strong>Usage:</strong> <span t-field="inspection.hours_usage"/><br/>
+                                    </t>
+                                </div>
+                            </div>
+
+                            <div class="row mt-4">
+                                <div class="col-12">
+                                    <h4>Checklist Items</h4>
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Item</th>
+                                                <th>Type</th>
+                                                <th>Result</th>
+                                                <th>Notes</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr t-foreach="inspection.checklist_ids" t-as="item">
+                                                <td><span t-field="item.name"/></td>
+                                                <td><span t-field="item.type"/></td>
+                                                <td>
+                                                    <span t-field="item.result"
+                                                          t-att-class="'badge badge-' + ('success' if item.result == 'pass' else 'danger' if item.result == 'fail' else 'secondary')"/>
+                                                </td>
+                                                <td><span t-field="item.note"/></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div class="row mt-4" t-if="inspection.checklist_ids.filtered(lambda x: x.photo)">
+                                <div class="col-12">
+                                    <h4>Photos</h4>
+                                    <div class="row">
+                                        <t t-foreach="inspection.checklist_ids.filtered(lambda x: x.photo)" t-as="item">
+                                            <div class="col-4 mb-3">
+                                                <div class="border p-2">
+                                                    <img t-att-src="image_data_uri(item.photo)" class="img-fluid" alt="Inspection Photo"/>
+                                                    <div class="text-center mt-2">
+                                                        <small><span t-field="item.name"/></small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </t>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row mt-4" t-if="inspection.damage_found">
+                                <div class="col-12">
+                                    <h4>Damage Report</h4>
+                                    <div class="alert alert-warning">
+                                        <span t-field="inspection.damage_description"/>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row mt-4">
+                                <div class="col-12">
+                                    <h4>Notes</h4>
+                                    <span t-field="inspection.note"/>
+                                </div>
+                            </div>
+
+                            <div class="row mt-4">
+                                <div class="col-6">
+                                    <h4>Customer Signature</h4>
+                                    <img t-if="inspection.customer_signature"
+                                         t-att-src="image_data_uri(inspection.customer_signature)"
+                                         style="max-height: 100px;"/>
+                                    <div class="mt-2">
+                                        <strong>Name:</strong> <span t-field="inspection.customer_name"/><br/>
+                                        <strong>Date:</strong> <span t-field="inspection.customer_signature_date"/>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <h4>Inspector Signature</h4>
+                                    <img t-if="inspection.inspector_signature"
+                                         t-att-src="image_data_uri(inspection.inspector_signature)"
+                                         style="max-height: 100px;"/>
+                                    <div class="mt-2">
+                                        <strong>Name:</strong> <span t-field="inspection.inspector_name_id.name"/><br/>
+                                        <strong>Date:</strong> <span t-field="inspection.inspector_signature_date"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="page-break" t-if="not inspection_last"/>
+                    </t>
+                </div>
+            </t>
+        </t>
+    </template>
+
+    <!-- Report Actions -->
+    <record id="action_report_rental_inspection" model="ir.actions.report">
+        <field name="name">Inspection Report</field>
+        <field name="model">rental.inspection</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">cs_rental_inspection.report_rental_inspection</field>
+        <field name="report_file">cs_rental_inspection.report_rental_inspection</field>
+        <field name="print_report_name">'Inspection Report - %s' % object.name</field>
+        <field name="binding_model_id" ref="model_rental_inspection"/>
+        <field name="binding_type">report</field>
+    </record>
+
+    <record id="action_report_rental_inspection_combined" model="ir.actions.report">
+        <field name="name">Combined Inspection Report</field>
+        <field name="model">rental.inspection</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">cs_rental_inspection.report_rental_inspection_combined</field>
+        <field name="report_file">cs_rental_inspection.report_rental_inspection_combined</field>
+        <field name="print_report_name">'Combined Inspection Report - %s' % object.rental_order_id.name</field>
+        <field name="binding_model_id" ref="model_rental_inspection"/>
+        <field name="binding_type">report</field>
+    </record>
+</odoo>

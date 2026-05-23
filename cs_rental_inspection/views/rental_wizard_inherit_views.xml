@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright (C) 2024 Cyder Solutions - All Rights Reserved -->
+<odoo>
+    <record id="rental_order_wizard_view_form_inherit_inspection" model="ir.ui.view">
+        <field name="name">rental.order.wizard.form.inherit.inspection</field>
+        <field name="model">rental.order.wizard</field>
+        <field name="inherit_id" ref="sale_renting.rental_order_wizard_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='rental_wizard_line_ids']/list" position="inside">
+                <field name="product_tracking" column_invisible="True"/>
+                <field name="lot_id"
+                       column_invisible="parent.status != 'pickup'"
+                       invisible="product_tracking != 'serial'"
+                       options="{'no_create': True}"
+                       string="Serial Number"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

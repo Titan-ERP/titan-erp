@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright (C) 2024 Cyder Solutions - All Rights Reserved -->
+<odoo>
+    <data noupdate="1">
+        <!-- Sequence for Inspection References -->
+        <record id="seq_rental_inspection" model="ir.sequence">
+            <field name="name">Rental Equipment Inspection</field>
+            <field name="code">rental.inspection</field>
+            <field name="prefix">INSP/%(year)s/</field>
+            <field name="padding">5</field>
+            <field name="company_id" eval="False"/>
+        </record>
+
+        <!-- Sequence for Template References -->
+        <record id="seq_rental_inspection_template" model="ir.sequence">
+            <field name="name">Inspection Template</field>
+            <field name="code">rental.inspection.template</field>
+            <field name="prefix">TEMP/</field>
+            <field name="padding">5</field>
+            <field name="company_id" eval="False"/>
+        </record>
+    </data>
+</odoo>
