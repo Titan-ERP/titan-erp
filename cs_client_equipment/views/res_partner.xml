@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="partner_equipment_list_inherit" model="ir.ui.view">
+        <field name="name">Partner Equipment List Inherit</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='user_id']" position="after">
+                <field name="equipment_count" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="partner_equipment_form_inherit" model="ir.ui.view">
+        <field name="name">Partner Equipment Form Inherit</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="listEquipment"
+                        class="oe_stat_button"
+                        icon="fa-tachometer"
+                        type="object">
+                    <field name="equipment_count" widget="statinfo" string="Equipment"/>
+                </button>
+            </xpath>
+        </field>
+    </record>
+</odoo>
