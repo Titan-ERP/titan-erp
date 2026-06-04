@@ -1,0 +1,6 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_dmc_backup_service_admin,dmc.backup.service admin,model_dmc_backup_service,base.group_system,1,0,0,0
+access_dmc_backup_log_admin,dmc.backup.log admin,model_dmc_backup_log,base.group_system,1,1,1,1
+access_dmc_backup_config_admin,dmc.backup.config admin,model_dmc_backup_config,base.group_system,1,1,1,1
+access_dmc_backup_folder_wizard_admin,dmc.backup.folder.wizard admin,model_dmc_backup_folder_wizard,base.group_system,1,1,1,1
+access_dmc_backup_folder_item_admin,dmc.backup.folder.item admin,model_dmc_backup_folder_item,base.group_system,1,1,1,1

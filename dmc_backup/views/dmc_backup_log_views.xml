@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="dmc_backup_log_list_view" model="ir.ui.view">
+        <field name="name">dmc.backup.log.list</field>
+        <field name="model">dmc.backup.log</field>
+        <field name="arch" type="xml">
+            <list string="Backup History" create="false" edit="false">
+                <field name="backup_date"  string="Date (UTC)"/>
+                <field name="db_name"      string="Database"/>
+                <field name="odoo_version" string="Version"/>
+                <field name="size_mb"      string="Size (MB)" optional="show"/>
+                <field name="state" widget="badge"
+                       decoration-warning="state == 'running'"
+                       decoration-success="state == 'success'"
+                       decoration-danger="state == 'failed'"/>
+                <button name="action_download" type="object"
+                        string="Download" icon="fa-download"
+                        invisible="state != 'success' or not storage_url"/>
+                <field name="storage_url" optional="show" string="Storage URL"/>
+                <field name="error_message" optional="hide" string="Error"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_dmc_backup_log" model="ir.actions.act_window">
+        <field name="name">Backup History</field>
+        <field name="res_model">dmc.backup.log</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="dmc_backup_log_list_view"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No backups yet. The scheduled job runs daily.
+            </p>
+        </field>
+    </record>
+
+    <menuitem id="menu_dmc_backup_root"
+              name="DMC Backup"
+              web_icon="dmc_backup,static/description/icon.png"
+              sequence="100"/>
+
+    <menuitem id="menu_dmc_backup_history"
+              name="Backup History"
+              parent="menu_dmc_backup_root"
+              action="action_dmc_backup_log"
+              sequence="10"/>
+
+</odoo>

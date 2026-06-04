@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+</head>
+<body>
+
+<section class="oe_container">
+    <div class="oe_row oe_spaced">
+        <h2 class="oe_slogan">DMC Backup</h2>
+        <h3 class="oe_slogan">Scheduled database backup to Azure Blob Storage or OneDrive</h3>
+        <div class="oe_span12">
+            <p>
+                Automatically backs up your Odoo database on a daily schedule. Each backup is
+                compressed, stored in the Odoo filestore, and optionally pushed to Azure Blob
+                Storage or OneDrive (Microsoft Graph API). A built-in history list lets you
+                review past backups, check their size and status, and download them directly
+                from the browser.
+            </p>
+        </div>
+    </div>
+</section>
+
+<section class="oe_container oe_dark">
+    <div class="oe_row oe_spaced">
+        <h3 class="oe_slogan">Features</h3>
+        <div class="oe_span6">
+            <ul>
+                <li>Daily scheduled backup via Odoo cron</li>
+                <li>Backup history with size, state, and download</li>
+                <li>Configurable retention period (days)</li>
+            </ul>
+        </div>
+        <div class="oe_span6">
+            <ul>
+                <li>Azure Blob Storage destination (SAS token)</li>
+                <li>OneDrive destination (Client Credentials, Microsoft Graph API)</li>
+                <li>Interactive OneDrive folder browser</li>
+                <li>Test Connection button for both destinations</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="oe_container">
+    <div class="oe_row oe_spaced">
+        <h3 class="oe_slogan">Setup: Azure Blob Storage</h3>
+
+        <div class="oe_span12">
+            <h4>1. Create a Storage Account and Container</h4>
+            <ol>
+                <li>In the <strong>Azure Portal</strong>, open <em>Storage accounts</em> and create or select an account.</li>
+                <li>Inside the account, go to <em>Containers</em> and create a new container (e.g. <code>odoo-backups</code>).</li>
+                <li>Set the access level to <strong>Private</strong>.</li>
+            </ol>
+
+            <h4>2. Generate a SAS Token</h4>
+            <ol>
+                <li>Open the container, then go to <em>Shared access tokens</em>.</li>
+                <li>Grant the following permissions: <strong>Read, Write, Delete, List</strong>.</li>
+                <li>Set an expiry date far enough in the future (e.g. 2 years).</li>
+                <li>Click <strong>Generate SAS token and URL</strong>.</li>
+                <li>Copy the <strong>SAS token</strong> (the part starting with <code>sv=...</code>, without the <code>?</code>).</li>
+            </ol>
+
+            <h4>3. Configure in Odoo</h4>
+            <ol>
+                <li>Go to <em>DMC Backup → Configuration</em> and create a new destination.</li>
+                <li>Set <strong>Storage Type</strong> to <em>Azure Blob Storage</em>.</li>
+                <li>Fill in:
+                    <ul>
+                        <li><strong>Storage Account</strong>: the account name (e.g. <code>mycompanystorage</code>)</li>
+                        <li><strong>Container</strong>: the container name (e.g. <code>odoo-backups</code>)</li>
+                        <li><strong>SAS Token</strong>: the token copied in step 2</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Test Connection</strong> to verify access.</li>
+                <li>Click <strong>Set as Default</strong> to use this destination for scheduled backups.</li>
+            </ol>
+        </div>
+    </div>
+</section>
+
+<section class="oe_container oe_dark">
+    <div class="oe_row oe_spaced">
+        <h3 class="oe_slogan">Setup: OneDrive</h3>
+
+        <div class="oe_span12">
+            <p>
+                OneDrive integration uses the <strong>Client Credentials</strong> (application
+                permissions) OAuth2 flow via Microsoft Graph API. No user sign-in is required —
+                ideal for unattended scheduled backups.
+            </p>
+
+            <h4>1. Register an Application in Azure Active Directory</h4>
+            <ol>
+                <li>In the <strong>Azure Portal</strong>, open <em>Azure Active Directory → App registrations</em>.</li>
+                <li>Click <strong>New registration</strong>.</li>
+                <li>Give it a name (e.g. <code>Odoo Backup Connection</code>).</li>
+                <li>Leave the redirect URI blank — it is not needed for this flow.</li>
+                <li>Click <strong>Register</strong>.</li>
+            </ol>
+
+            <h4>2. Note the Tenant ID and Client ID</h4>
+            <ol>
+                <li>On the app's <em>Overview</em> page, copy:
+                    <ul>
+                        <li><strong>Application (client) ID</strong> → this is the Client ID</li>
+                        <li><strong>Directory (tenant) ID</strong> → this is the Tenant ID</li>
+                    </ul>
+                </li>
+            </ol>
+
+            <h4>3. Create a Client Secret</h4>
+            <ol>
+                <li>Go to <em>Certificates &amp; secrets → Client secrets</em>.</li>
+                <li>Click <strong>New client secret</strong>, set a description and expiry.</li>
+                <li>Copy the <strong>Value</strong> immediately — it is only shown once.</li>
+            </ol>
+
+            <h4>4. Grant Application Permissions</h4>
+            <ol>
+                <li>Go to <em>API permissions → Add a permission → Microsoft Graph → Application permissions</em>.</li>
+                <li>Search for and add <strong>Files.ReadWrite.All</strong>.</li>
+                <li>
+                    Back on the API permissions page, click
+                    <strong>Grant admin consent for [your organisation]</strong>.
+                </li>
+                <li>Confirm the status shows a green tick (<em>Granted</em>).</li>
+            </ol>
+            <div style="background:#fff3cd;border-left:4px solid #ffc107;padding:10px 14px;margin:10px 0;">
+                <strong>Important:</strong> Only <em>Application</em> permissions work for unattended
+                backups. <em>Delegated</em> permissions require an interactive user sign-in and will
+                cause a <code>generalException</code> error at runtime.
+            </div>
+
+            <h4>5. (Optional) Provision the Target User's OneDrive</h4>
+            <p>
+                If backing up to a specific user's OneDrive and their drive has never been
+                accessed before, ask that user to visit their OneDrive URL once in a browser.
+                Microsoft provisions the drive on first access; the API returns
+                <code>generalException</code> until provisioning is complete.
+            </p>
+
+            <h4>6. Configure in Odoo</h4>
+            <ol>
+                <li>Go to <em>DMC Backup → Configuration</em> and create a new destination.</li>
+                <li>Set <strong>Storage Type</strong> to <em>OneDrive</em>.</li>
+                <li>Fill in:
+                    <ul>
+                        <li><strong>Client ID</strong>: from step 2</li>
+                        <li><strong>Tenant ID</strong>: from step 2</li>
+                        <li><strong>Client Secret</strong>: from step 3</li>
+                        <li><strong>Drive Type</strong>: <em>User OneDrive</em> or <em>SharePoint</em></li>
+                        <li><strong>User Email / SharePoint URL</strong>: the target email address or full SharePoint site URL</li>
+                        <li><strong>Folder Path</strong>: optional subfolder (e.g. <code>Backups/Odoo</code>). Use <em>Browse Folders</em> to pick one interactively.</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Test Connection</strong> to verify.</li>
+                <li>Click <strong>Set as Default</strong> to activate.</li>
+            </ol>
+        </div>
+    </div>
+</section>
+
+<section class="oe_container">
+    <div class="oe_row oe_spaced">
+        <h3 class="oe_slogan">Changelog</h3>
+        <div class="oe_span12">
+            <dl>
+                <dt><strong>19.0.4.0.0</strong></dt>
+                <dd>Added OneDrive destination, folder browser wizard, resumable chunked upload, Test Connection for both storage types.</dd>
+                <dt><strong>19.0.3.0.0</strong></dt>
+                <dd>Added configurable retention days per destination; fixed status badge in list view.</dd>
+                <dt><strong>19.0.2.0.0</strong></dt>
+                <dd>Added Azure Blob Storage push via SAS token and storage URL on backup log.</dd>
+                <dt><strong>19.0.1.0.0</strong></dt>
+                <dd>Initial release: scheduled SQL dump, zip packaging, in-app history and download.</dd>
+            </dl>
+        </div>
+    </div>
+</section>
+
+</body>
+</html>

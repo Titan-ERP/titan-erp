@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+
+        <record id="ir_cron_dmc_backup" model="ir.cron">
+            <field name="name">DMC: Daily Database Backup</field>
+            <field name="model_id" ref="dmc_backup.model_dmc_backup_service"/>
+            <field name="state">code</field>
+            <field name="code">model.run_backup()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active" eval="True"/>
+            <field name="user_id" ref="base.user_root"/>
+        </record>
+
+    </data>
+</odoo>

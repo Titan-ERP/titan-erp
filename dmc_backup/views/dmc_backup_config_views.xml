@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="dmc_backup_config_list_view" model="ir.ui.view">
+        <field name="name">dmc.backup.config.list</field>
+        <field name="model">dmc.backup.config</field>
+        <field name="arch" type="xml">
+            <list string="Backup Destinations">
+                <field name="name"/>
+                <field name="storage_type" widget="badge"
+                       decoration-info="storage_type == 'azure'"
+                       decoration-warning="storage_type == 'onedrive'"
+                       string="Type"/>
+                <field name="status_label" widget="badge"
+                       decoration-success="is_default"
+                       decoration-muted="not is_default"
+                       string="Status"/>
+                <field name="is_default" column_invisible="1"/>
+                <button name="action_set_default" type="object"
+                        string="Set as Default"
+                        icon="fa-star-o"
+                        invisible="is_default"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="dmc_backup_config_form_view" model="ir.ui.view">
+        <field name="name">dmc.backup.config.form</field>
+        <field name="model">dmc.backup.config</field>
+        <field name="arch" type="xml">
+            <form string="Backup Destination">
+                <header>
+                    <button name="action_set_default" type="object"
+                            string="Set as Default"
+                            class="btn-primary"
+                            invisible="is_default"/>
+                    <button name="action_test_connection" type="object"
+                            string="Test Connection"
+                            class="btn-secondary"/>
+                </header>
+                <sheet>
+                    <widget name="web_ribbon" title="Default"
+                            bg_color="bg-success"
+                            invisible="not is_default"/>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name" placeholder="e.g. Azure Staging Backup"/></h1>
+                    </div>
+                    <group>
+                        <field name="storage_type" widget="radio"/>
+                    </group>
+                    <details class="mb-3" invisible="storage_type != 'onedrive'">
+                        <summary class="btn btn-link btn-sm ps-0 text-info"
+                                 style="list-style: none; cursor: pointer;">
+                            <i class="fa fa-question-circle me-1"/> How do I set up OneDrive?
+                        </summary>
+                        <div class="alert alert-info mt-2" role="alert">
+                        <h6 class="mb-2"><strong>How to connect OneDrive — 4 steps</strong></h6>
+                        <p><strong>Step 1 — Sign in to OneDrive</strong><br/>
+                        Open your browser and go to
+                        <a href="https://onedrive.live.com" target="_blank">onedrive.live.com</a>
+                        (personal) or your organisation's OneDrive link. Sign in with the Microsoft
+                        account that will own the backups. This activates the account so Odoo can
+                        connect to it later.</p>
+                        <p><strong>Step 2 — Go to the Azure Portal</strong><br/>
+                        In the same browser, open
+                        <a href="https://portal.azure.com" target="_blank">portal.azure.com</a>
+                        and sign in with your organisation's admin account. Then:
+                        <ul class="mt-1 mb-0">
+                            <li>Go to <strong>Azure Active Directory → App registrations → New registration</strong></li>
+                            <li>Give it a name (e.g. <em>Odoo Backup</em>) and click <strong>Register</strong></li>
+                            <li>Go to <strong>API permissions → Add a permission → Microsoft Graph → Application permissions</strong>, add <strong>Files.ReadWrite.All</strong>, then click <strong>Grant admin consent</strong></li>
+                            <li>Go to <strong>Certificates &amp; secrets → New client secret</strong> — copy the secret value immediately, it is only shown once</li>
+                            <li>Note the <strong>Application (Client) ID</strong> and <strong>Directory (Tenant) ID</strong> shown on the app's Overview page</li>
+                        </ul>
+                        </p>
+                        <p><strong>Step 3 — Fill in the fields below</strong><br/>
+                        Paste the Client ID, Tenant ID, and Client Secret into the corresponding fields.
+                        Then choose the Drive Type and enter the OneDrive owner's email address
+                        (or your SharePoint site URL).</p>
+                        <p class="mb-1"><strong>Step 4 — Test and activate</strong><br/>
+                        Click <strong>Test Connection</strong>. When it succeeds, click <strong>Set as Default</strong>.</p>
+                        <hr class="my-2"/>
+                        <p class="mb-0"><strong>Test Connection failed?</strong>
+                        Make sure you completed Step 1 (opening OneDrive) and that admin consent was
+                        granted in Step 2 — then try again.</p>
+                        </div>
+                    </details>
+                    <details class="mb-3" invisible="storage_type != 'azure'">
+                        <summary class="btn btn-link btn-sm ps-0 text-info"
+                                 style="list-style: none; cursor: pointer;">
+                            <i class="fa fa-question-circle me-1"/> How do I set up Azure Blob Storage?
+                        </summary>
+                        <div class="alert alert-info mt-2" role="alert">
+                        <h6 class="mb-2"><strong>How to set up Azure Blob Storage — 4 steps</strong></h6>
+                        <p><strong>Step 1 — Sign in to the Azure Portal</strong><br/>
+                        Open your browser and go to
+                        <a href="https://portal.azure.com" target="_blank">portal.azure.com</a>.
+                        Sign in with your organisation's admin account.</p>
+                        <p><strong>Step 2 — Create a Storage Account</strong><br/>
+                        In the search bar at the top, type <em>Storage accounts</em> and open it. Then:
+                        <ul class="mt-1 mb-0">
+                            <li>Click <strong>+ Create</strong></li>
+                            <li>Choose your subscription and resource group, give it a name (e.g. <em>odoobackups</em>), and select your region</li>
+                            <li>Click <strong>Review + Create</strong>, then <strong>Create</strong></li>
+                            <li>Note down the storage account name — you will need it below</li>
+                        </ul>
+                        </p>
+                        <p><strong>Step 3 — Create a Container</strong><br/>
+                        Open the storage account you just created. Then:
+                        <ul class="mt-1 mb-0">
+                            <li>Go to <strong>Data storage → Containers</strong></li>
+                            <li>Click <strong>+ Container</strong>, give it a name (e.g. <em>odoo-backups</em>), and click <strong>Create</strong></li>
+                            <li>Note down the container name — you will need it below</li>
+                        </ul>
+                        </p>
+                        <p><strong>Step 4 — Generate a SAS Token</strong><br/>
+                        Still inside the storage account, go to <strong>Security + networking → Shared access signature</strong>. Then:
+                        <ul class="mt-1 mb-0">
+                            <li>Under <em>Allowed services</em>, tick <strong>Blob</strong></li>
+                            <li>Under <em>Allowed resource types</em>, tick <strong>Container</strong> and <strong>Object</strong></li>
+                            <li>Under <em>Allowed permissions</em>, tick <strong>Read, Write, Delete, List</strong></li>
+                            <li>Set an expiry date (e.g. one year from today)</li>
+                            <li>Click <strong>Generate SAS and connection string</strong></li>
+                            <li>Copy the <strong>SAS token</strong> value — paste it into the SAS Token field below</li>
+                        </ul>
+                        </p>
+                        <hr class="my-2"/>
+                        <p class="mb-0"><strong>Test Connection failed?</strong>
+                        Check that the SAS token has not expired and that <em>Read, Write, Delete, List</em>
+                        permissions were all selected when generating it.</p>
+                        </div>
+                    </details>
+                    <group string="Azure Blob Storage"
+                           invisible="storage_type != 'azure'">
+                        <field name="azure_account" string="Storage Account"/>
+                        <field name="azure_container" string="Container"/>
+                        <field name="azure_sas_token" string="SAS Token" password="True"/>
+                    </group>
+                    <group string="OneDrive"
+                           invisible="storage_type != 'onedrive'">
+                        <field name="onedrive_client_id" string="Client ID"/>
+                        <field name="onedrive_tenant_id" string="Tenant ID"/>
+                        <field name="onedrive_client_secret" string="Client Secret" password="True"/>
+                        <field name="onedrive_drive_type" string="Drive Type"/>
+                        <field name="onedrive_drive_target" string="User Email / SharePoint URL"/>
+                        <field name="onedrive_folder_path" string="Folder Path"
+                               placeholder="/Backups/Odoo (leave blank for root)"/>
+                        <div colspan="2">
+                            <button name="action_browse_onedrive_folders" type="object"
+                                    string="Browse Folders" icon="fa-folder-open"
+                                    class="btn btn-secondary btn-sm"
+                                    invisible="not onedrive_drive_target or not onedrive_client_id or not onedrive_tenant_id or not onedrive_client_secret"/>
+                        </div>
+                    </group>
+                    <group string="Retention">
+                        <field name="retention_days"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_dmc_backup_config" model="ir.actions.act_window">
+        <field name="name">Backup Destinations</field>
+        <field name="res_model">dmc.backup.config</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Add your first backup destination.
+            </p>
+        </field>
+    </record>
+
+    <menuitem id="menu_dmc_backup_config"
+              name="Configuration"
+              parent="menu_dmc_backup_root"
+              action="action_dmc_backup_config"
+              sequence="20"/>
+
+</odoo>
