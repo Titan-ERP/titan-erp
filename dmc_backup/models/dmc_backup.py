@@ -220,8 +220,12 @@ class DmcBackupService(models.Model):
         # Produce the same layout as an Odoo.sh exact backup:
         #   dump.sql      — full PostgreSQL dump
         #   filestore/    — on-disk attachments, paths relative to filestore root
+        now = datetime.now(timezone.utc)
+        date_time = (now.year, now.month, now.day, now.hour, now.minute, now.second)
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-            with zf.open('dump.sql', 'w', force_zip64=True) as sql_stream:
+            sql_info = zipfile.ZipInfo('dump.sql', date_time=date_time)
+            sql_info.compress_type = zipfile.ZIP_DEFLATED
+            with zf.open(sql_info, 'w', force_zip64=True) as sql_stream:
                 self._generate_sql_dump(sql_stream)
 
             if os.path.isdir(filestore_root):
