@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import os
-import json
 import logging
 import tempfile
 import zipfile
@@ -216,29 +215,24 @@ class DmcBackupService(models.Model):
     # ── Backup generation ────────────────────────────────────────────────────
 
     def _dump_db(self, db_name, zip_path):
-        cr = self.env.cr
+        filestore_root = odoo.tools.config.filestore(db_name)
 
-        cr.execute(
-            "SELECT name, latest_version FROM ir_module_module WHERE state = 'installed'"
-        )
-        modules = dict(cr.fetchall())
-        pg_version = "%d.%d" % divmod(cr._obj.connection.server_version // 100, 100)
-        manifest = json.dumps({
-            'odoo_dump': '1',
-            'db_name': db_name,
-            'version': odoo.release.version,
-            'version_info': odoo.release.version_info,
-            'major_version': odoo.release.major_version,
-            'pg_version': pg_version,
-            'modules': modules,
-        }, indent=4).encode()
-
-        # Stream manifest + SQL directly into the zip — no intermediate dump.sql on disk.
-        # Peak disk usage is the growing compressed zip only; SQL text compresses ~90%.
+        # Produce the same layout as an Odoo.sh exact backup:
+        #   dump.sql      — full PostgreSQL dump
+        #   filestore/    — on-disk attachments, paths relative to filestore root
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr('manifest.json', manifest)
             with zf.open('dump.sql', 'w', force_zip64=True) as sql_stream:
                 self._generate_sql_dump(sql_stream)
+
+            if os.path.isdir(filestore_root):
+                for dirpath, _dirs, filenames in os.walk(filestore_root):
+                    for fname in filenames:
+                        abs_path = os.path.join(dirpath, fname)
+                        rel_path = os.path.relpath(abs_path, filestore_root)
+                        zf.write(abs_path, os.path.join('filestore', rel_path))
+                _logger.info('Filestore included in backup: %s', filestore_root)
+            else:
+                _logger.info('No filestore found at %s — skipping', filestore_root)
 
     def _generate_sql_dump(self, stream):
         cr = self.env.cr
