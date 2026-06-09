@@ -31,9 +31,19 @@ class DmcBackupConfig(models.Model):
     onedrive_folder_path   = fields.Char(string='Folder Path')
 
     # ── Common ────────────────────────────────────────────────────────────────
-    is_default     = fields.Boolean(string='Default', default=False, copy=False)
-    retention_days = fields.Integer(string='Retention (days)', default=7)
-    status_label   = fields.Char(compute='_compute_status_label')
+    is_default        = fields.Boolean(string='Default', default=False, copy=False)
+    retention_days    = fields.Integer(string='Retention (days)', default=7)
+    neutralize        = fields.Boolean(
+        string='Neutralize for Staging', default=True,
+        help='Append neutralization SQL to the dump: deactivates crons, mail servers, '
+             'CDN and removes sensitive API keys. Recommended for non-production restores.',
+    )
+    include_filestore = fields.Boolean(
+        string='Include Filestore', default=True,
+        help='Include the filestore directory in the backup zip. '
+             'Uncheck to create a database-only dump.',
+    )
+    status_label      = fields.Char(compute='_compute_status_label')
 
     _CREDENTIAL_FIELDS = frozenset({
         'azure_account', 'azure_container', 'azure_sas_token',

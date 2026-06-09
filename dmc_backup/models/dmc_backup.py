@@ -146,7 +146,7 @@ class DmcBackupService(models.Model):
 
         _logger.info('Starting DB backup: %s', file_name)
         try:
-            self._dump_db(db_name, zip_path)
+            self._dump_db(db_name, zip_path, config)
             file_size = os.path.getsize(zip_path)
 
             if config.storage_type == 'onedrive':
@@ -215,8 +215,11 @@ class DmcBackupService(models.Model):
 
     # ── Backup generation ────────────────────────────────────────────────────
 
-    def _dump_db(self, db_name, zip_path):
+    def _dump_db(self, db_name, zip_path, config=None):
         cr = self.env.cr
+
+        neutralize        = config.neutralize        if config else False
+        include_filestore = config.include_filestore if config else True
 
         cr.execute(
             "SELECT name, latest_version FROM ir_module_module WHERE state = 'installed'"
@@ -240,19 +243,20 @@ class DmcBackupService(models.Model):
             dump_info = zipfile.ZipInfo('dump.sql', date_time=now)
             dump_info.compress_type = zipfile.ZIP_DEFLATED
             with zf.open(dump_info, 'w', force_zip64=True) as sql_stream:
-                self._generate_sql_dump(sql_stream, pg_version)
-            filestore_path = odoo.tools.config.filestore(db_name)
-            if os.path.exists(filestore_path):
-                for dirpath, _dirs, filenames in os.walk(filestore_path):
-                    for fname in filenames:
-                        abs_path = os.path.join(dirpath, fname)
-                        arc_path = os.path.join(
-                            'filestore',
-                            os.path.relpath(abs_path, filestore_path),
-                        )
-                        zf.write(abs_path, arc_path)
+                self._generate_sql_dump(sql_stream, pg_version, neutralize=neutralize)
+            if include_filestore:
+                filestore_path = odoo.tools.config.filestore(db_name)
+                if os.path.exists(filestore_path):
+                    for dirpath, _dirs, filenames in os.walk(filestore_path):
+                        for fname in filenames:
+                            abs_path = os.path.join(dirpath, fname)
+                            arc_path = os.path.join(
+                                'filestore',
+                                os.path.relpath(abs_path, filestore_path),
+                            )
+                            zf.write(abs_path, arc_path)
 
-    def _generate_sql_dump(self, stream, pg_version=''):
+    def _generate_sql_dump(self, stream, pg_version='', neutralize=False):
         cr = self.env.cr
         f  = stream
 
@@ -500,7 +504,81 @@ class DmcBackupService(models.Model):
         for seq, _, _, _, _, _, cur_val, is_called in sequences:
             f.write(f"SELECT pg_catalog.setval('public.{seq}', {cur_val}, {str(is_called).lower()});\n".encode())
 
+        if neutralize:
+            self._write_neutralization(f)
+
         f.write(b'\nCOMMIT;\n')
+
+    def _write_neutralization(self, f):
+        f.write(b'\n-- Neutralization\n\n')
+
+        # Deactivate all crons, then re-enable safe system ones
+        f.write(b"UPDATE ir_cron SET active = 'f';\n")
+        f.write(
+            b"UPDATE ir_cron SET active = 't'\n"
+            b"    WHERE id IN (SELECT res_id FROM ir_model_data\n"
+            b"                  WHERE name = 'autovacuum_job' AND module = 'base');\n\n"
+        )
+
+        # Remove sensitive config parameters
+        f.write(
+            b"DELETE FROM ir_config_parameter\n"
+            b"    WHERE key IN (\n"
+            b"        'web.base.url.freeze', 'report.url', 'database.enterprise_code',\n"
+            b"        'iap_extract_endpoint', 'odoo_ocn.project_id', 'ocn.uuid',\n"
+            b"        'product_barcodelookup.api_key', 'web_map.token_map_box'\n"
+            b"    );\n\n"
+        )
+
+        # Reset DB UUID so staging has a distinct identity
+        f.write(
+            b"UPDATE ir_config_parameter\n"
+            b"    SET value = gen_random_uuid()::text\n"
+            b"    WHERE key = 'database.uuid';\n\n"
+        )
+
+        # Deactivate mail servers and clear server from templates
+        f.write(
+            b"DO $$\n"
+            b"BEGIN\n"
+            b"    UPDATE ir_mail_server SET active = 'f';\n"
+            b"    IF EXISTS (\n"
+            b"        SELECT 1 FROM ir_module_module\n"
+            b"        WHERE name = 'mail'\n"
+            b"        AND state IN ('installed', 'to upgrade', 'to remove')\n"
+            b"    ) THEN\n"
+            b"        UPDATE mail_template SET mail_server_id = NULL;\n"
+            b"    END IF;\n"
+            b"EXCEPTION WHEN undefined_table OR undefined_column THEN NULL;\n"
+            b"END $$;\n\n"
+        )
+
+        # Disable website CDN and block crawlers
+        f.write(
+            b"DO $$\n"
+            b"BEGIN\n"
+            b"    UPDATE website SET cdn_activated = false;\n"
+            b"    UPDATE website SET robots_txt = E'User-agent: *\\nDisallow: /';\n"
+            b"EXCEPTION WHEN undefined_table OR undefined_column THEN NULL;\n"
+            b"END $$;\n\n"
+        )
+
+        # Disable bank sync links
+        f.write(
+            b"DO $$\n"
+            b"BEGIN\n"
+            b"    UPDATE account_online_link SET client_id = 'duplicate';\n"
+            b"EXCEPTION WHEN undefined_table OR undefined_column THEN NULL;\n"
+            b"END $$;\n\n"
+        )
+
+        # Re-enable module update notification cron
+        f.write(
+            b"UPDATE ir_cron SET active = 't'\n"
+            b"    WHERE id IN (SELECT res_id FROM ir_model_data\n"
+            b"                  WHERE name = 'ir_cron_module_update_notification'\n"
+            b"                    AND module = 'mail');\n"
+        )
 
     # ── Azure Blob Storage push ───────────────────────────────────────────────
 
