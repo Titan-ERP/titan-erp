@@ -233,9 +233,13 @@ class DmcBackupService(models.Model):
             'modules': modules,
         }, indent=4).encode()
 
+        import time
+        now = time.localtime()[:6]
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
             zf.writestr('manifest.json', manifest)
-            with zf.open('dump.sql', 'w', force_zip64=True) as sql_stream:
+            dump_info = zipfile.ZipInfo('dump.sql', date_time=now)
+            dump_info.compress_type = zipfile.ZIP_DEFLATED
+            with zf.open(dump_info, 'w', force_zip64=True) as sql_stream:
                 self._generate_sql_dump(sql_stream, pg_version)
             filestore_path = odoo.tools.config.filestore(db_name)
             if os.path.exists(filestore_path):
