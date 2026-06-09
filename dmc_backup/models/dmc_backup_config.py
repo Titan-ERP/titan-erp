@@ -22,7 +22,7 @@ class DmcBackupConfig(models.Model):
     # ── OneDrive ──────────────────────────────────────────────────────────────
     onedrive_client_id     = fields.Char(string='Client ID')
     onedrive_tenant_id     = fields.Char(string='Tenant ID')
-    onedrive_client_secret = fields.Char(string='Client Secret', password=True)
+    onedrive_client_secret = fields.Char(string='Client Secret')
     onedrive_drive_type    = fields.Selection(
         [('user', 'User OneDrive'), ('sharepoint', 'SharePoint')],
         string='Drive Type',
