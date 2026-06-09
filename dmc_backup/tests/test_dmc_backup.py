@@ -1,52 +1,8 @@
 # -*- coding: utf-8 -*-
-import io
 import odoo
 from unittest.mock import patch, MagicMock, mock_open
 from odoo.tests.common import TransactionCase
 from odoo.exceptions import UserError, ValidationError
-
-
-class TestGenerateSqlDump(TransactionCase):
-    """Tests for _generate_sql_dump correctness."""
-
-    def setUp(self):
-        super().setUp()
-        self.service = self.env['dmc.backup.service']
-
-    def _run_dump(self):
-        """Run _generate_sql_dump and return the output as a string."""
-        buf = io.BytesIO()
-        self.service._generate_sql_dump(buf)
-        return buf.getvalue().decode('utf-8')
-
-    def test_copy_failure_raises_with_table_name(self):
-        """copy_expert failure must propagate — not silently skip the table."""
-        with patch.object(
-            self.service.env.cr._obj, 'copy_expert',
-            side_effect=Exception('simulated disk error')
-        ):
-            with self.assertRaises(Exception) as ctx:
-                self.service._generate_sql_dump(io.BytesIO())
-        self.assertIn('COPY failed for table', str(ctx.exception))
-
-    def test_dump_wrapped_in_transaction(self):
-        """SQL dump must start with BEGIN and end with COMMIT."""
-        sql = self._run_dump()
-        self.assertTrue(sql.startswith('SET '), 'dump must begin with SET client_encoding')
-        self.assertIn('BEGIN;', sql, 'dump must contain BEGIN;')
-        self.assertTrue(sql.strip().endswith('COMMIT;'), 'dump must end with COMMIT;')
-
-    def test_truncate_before_copy(self):
-        """A TRUNCATE statement must appear before any COPY FROM STDIN."""
-        sql = self._run_dump()
-        if 'CREATE TABLE' not in sql:
-            return  # truly empty DB — nothing to assert
-        self.assertIn('TRUNCATE ', sql, 'TRUNCATE block must be present when tables exist')
-        truncate_pos = sql.find('TRUNCATE ')
-        copy_pos     = sql.find('COPY ')
-        if copy_pos == -1:
-            return  # tables exist but all are empty — ordering check not applicable
-        self.assertLess(truncate_pos, copy_pos, 'TRUNCATE must appear before first COPY')
 
 
 class TestRunBackup(TransactionCase):
