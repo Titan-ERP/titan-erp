@@ -234,7 +234,8 @@ class DmcBackupService(models.Model):
             'modules': modules,
         }, indent=4).encode()
 
-        pg_dump = odoo.tools.find_pg_tool('pg_dump')
+        from odoo.service.db import find_pg_tool
+        pg_dump = find_pg_tool('pg_dump')
         env = os.environ.copy()
         cfg = odoo.tools.config
         if cfg.get('db_password'):
