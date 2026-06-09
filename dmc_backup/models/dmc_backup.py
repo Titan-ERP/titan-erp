@@ -269,7 +269,48 @@ class DmcBackupService(models.Model):
         f.write(b"SET check_function_bodies = false;\n")
         f.write(b"SET xmloption = content;\n")
         f.write(b"SET client_min_messages = warning;\n")
-        f.write(b"SET row_security = off;\n\n")
+        f.write(b"SET row_security = off;\n")
+        f.write(b"SET default_tablespace = '';\n")
+        f.write(b"SET default_table_access_method = heap;\n\n")
+
+        # ── Schemas (for extensions installed outside public) ─
+        cr.execute("""
+            SELECT DISTINCT n.nspname
+            FROM   pg_extension e
+            JOIN   pg_namespace n ON n.oid = e.extnamespace
+            WHERE  n.nspname NOT IN ('public', 'pg_catalog', 'information_schema')
+            ORDER  BY n.nspname
+        """)
+        for (schema,) in cr.fetchall():
+            f.write(f'CREATE SCHEMA IF NOT EXISTS "{schema}";\n'.encode())
+        f.write(b'\n')
+
+        # ── Extensions ────────────────────────────────────────
+        cr.execute("""
+            SELECT e.extname, n.nspname
+            FROM   pg_extension e
+            JOIN   pg_namespace n ON n.oid = e.extnamespace
+            WHERE  e.extname <> 'plpgsql'
+            ORDER  BY e.extname
+        """)
+        for extname, schema in cr.fetchall():
+            f.write(f'CREATE EXTENSION IF NOT EXISTS "{extname}" WITH SCHEMA "{schema}";\n'.encode())
+        f.write(b'\n')
+
+        # ── User-defined functions (not owned by any extension) ─
+        cr.execute("""
+            SELECT pg_get_functiondef(p.oid)
+            FROM   pg_proc p
+            JOIN   pg_namespace n ON n.oid = p.pronamespace
+            WHERE  n.nspname = 'public'
+            AND    NOT EXISTS (
+                       SELECT 1 FROM pg_depend d
+                       WHERE  d.objid = p.oid AND d.deptype = 'e'
+                   )
+            ORDER  BY p.proname
+        """)
+        for (funcdef,) in cr.fetchall():
+            f.write(f'{funcdef.strip()};\n\n'.encode())
 
         f.write(b"BEGIN;\n\n")
 
@@ -457,7 +498,7 @@ class DmcBackupService(models.Model):
 
         # ── Sequence current values ───────────────────────────
         for seq, _, _, _, _, _, cur_val, is_called in sequences:
-            f.write(f"SELECT setval('{seq}', {cur_val}, {str(is_called).lower()});\n".encode())
+            f.write(f"SELECT pg_catalog.setval('public.{seq}', {cur_val}, {str(is_called).lower()});\n".encode())
 
         f.write(b'\nCOMMIT;\n')
 
