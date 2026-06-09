@@ -2,7 +2,6 @@
 import os
 import json
 import logging
-import subprocess
 import tempfile
 import zipfile
 import odoo
@@ -234,41 +233,186 @@ class DmcBackupService(models.Model):
             'modules': modules,
         }, indent=4).encode()
 
-        from odoo.service.db import find_pg_tool
-        pg_dump = find_pg_tool('pg_dump')
-        env = os.environ.copy()
-        cfg = odoo.tools.config
-        if cfg.get('db_password'):
-            env['PGPASSWORD'] = cfg['db_password']
-        if cfg.get('db_host'):
-            env['PGHOST'] = cfg['db_host']
-        if cfg.get('db_port'):
-            env['PGPORT'] = str(cfg['db_port'])
-        if cfg.get('db_user'):
-            env['PGUSER'] = cfg['db_user']
-
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
             zf.writestr('manifest.json', manifest)
             with zf.open('dump.sql', 'w', force_zip64=True) as sql_stream:
-                proc = subprocess.Popen(
-                    [pg_dump, '--no-owner', db_name],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    env=env,
-                )
-                try:
-                    while True:
-                        chunk = proc.stdout.read(65536)
-                        if not chunk:
-                            break
-                        sql_stream.write(chunk)
-                finally:
-                    proc.stdout.close()
-                    stderr_data = proc.stderr.read()
-                    proc.stderr.close()
-                    proc.wait()
-                if proc.returncode != 0:
-                    raise Exception(f'pg_dump failed: {stderr_data.decode()}')
+                self._generate_sql_dump(sql_stream, pg_version)
+
+    def _generate_sql_dump(self, stream, pg_version=''):
+        cr = self.env.cr
+        f  = stream
+
+        # pg_dump-compatible plain-text header so restore tools accept this as a valid SQL dump
+        f.write(b'--\n-- PostgreSQL database dump\n--\n\n')
+        if pg_version:
+            f.write(f'-- Dumped from database version {pg_version}\n\n'.encode())
+
+        f.write(b"SET statement_timeout = 0;\n")
+        f.write(b"SET lock_timeout = 0;\n")
+        f.write(b"SET idle_in_transaction_session_timeout = 0;\n")
+        f.write(b"SET client_encoding = 'UTF8';\n")
+        f.write(b"SET standard_conforming_strings = on;\n")
+        f.write(b"SET check_function_bodies = false;\n")
+        f.write(b"SET xmloption = content;\n")
+        f.write(b"SET client_min_messages = warning;\n")
+        f.write(b"SET row_security = off;\n\n")
+
+        f.write(b"BEGIN;\n\n")
+
+        # ── Sequences ────────────────────────────────────────
+        cr.execute("""
+            SELECT sequencename, start_value, increment_by, min_value, max_value,
+                   cycle,
+                   COALESCE(last_value, start_value) AS cur_val,
+                   last_value IS NOT NULL           AS is_called
+            FROM   pg_sequences
+            WHERE  schemaname = 'public'
+            ORDER  BY sequencename
+        """)
+        sequences = cr.fetchall()
+        for seq, start, incr, mn, mx, cycle, cur_val, is_called in sequences:
+            f.write((
+                f'CREATE SEQUENCE IF NOT EXISTS "{seq}"'
+                f' START WITH {start} INCREMENT BY {incr}'
+                f' MINVALUE {mn} MAXVALUE {mx}'
+                + (' CYCLE' if cycle else ' NO CYCLE') + ';\n'
+            ).encode())
+        f.write(b'\n')
+
+        # ── Tables ────────────────────────────────────────────
+        cr.execute("""
+            SELECT c.relname
+            FROM   pg_class c
+            JOIN   pg_namespace ns ON c.relnamespace = ns.oid
+            WHERE  ns.nspname = 'public' AND c.relkind = 'r'
+            ORDER  BY c.relname
+        """)
+        tables = [row[0] for row in cr.fetchall()]
+
+        for table in tables:
+            cr.execute("""
+                SELECT a.attname,
+                       pg_catalog.format_type(a.atttypid, a.atttypmod),
+                       pg_catalog.pg_get_expr(ad.adbin, ad.adrelid),
+                       a.attnotnull
+                FROM   pg_catalog.pg_attribute a
+                LEFT JOIN pg_catalog.pg_attrdef ad
+                       ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
+                WHERE  a.attrelid = (
+                           SELECT oid FROM pg_class
+                           WHERE  relname = %s
+                           AND    relnamespace = (
+                                      SELECT oid FROM pg_namespace WHERE nspname = 'public'
+                                  )
+                       )
+                AND    a.attnum > 0 AND NOT a.attisdropped
+                ORDER  BY a.attnum
+            """, (table,))
+            col_defs = []
+            for col, dtype, default, notnull in cr.fetchall():
+                defn = f'    "{col}" {dtype}'
+                if default:
+                    defn += f' DEFAULT {default}'
+                if notnull:
+                    defn += ' NOT NULL'
+                col_defs.append(defn)
+
+            f.write(f'CREATE TABLE IF NOT EXISTS "{table}" (\n'.encode())
+            f.write(',\n'.join(col_defs).encode())
+            f.write(b'\n);\n')
+
+        f.write(b'\n')
+
+        # ── Truncate all tables before loading data ───────────
+        if tables:
+            table_list = ', '.join(f'"{t}"' for t in tables)
+            f.write(f'TRUNCATE {table_list} CASCADE;\n\n'.encode())
+
+        # ── Data ──────────────────────────────────────────────
+        for table in tables:
+            f.write(f'COPY "{table}" FROM STDIN;\n'.encode())
+            try:
+                cr._obj.copy_expert(f'COPY "{table}" TO STDOUT', f)
+            except Exception as exc:
+                raise Exception(f'COPY failed for table "{table}": {exc}') from exc
+            f.write(b'\\.\n\n')
+
+        # ── Primary keys + unique constraints ─────────────────
+        cr.execute("""
+            SELECT c.conname, c.contype, t.relname,
+                   (SELECT array_agg(a.attname
+                            ORDER BY array_position(c.conkey, a.attnum))
+                    FROM   pg_attribute a
+                    WHERE  a.attrelid = c.conrelid
+                    AND    a.attnum   = ANY(c.conkey)) AS cols
+            FROM   pg_constraint c
+            JOIN   pg_class t      ON t.oid = c.conrelid
+            JOIN   pg_namespace ns ON ns.oid = c.connamespace
+            WHERE  ns.nspname = 'public' AND c.contype IN ('p', 'u')
+            ORDER  BY t.relname, c.contype DESC
+        """)
+        for con_name, con_type, table, cols in cr.fetchall():
+            col_str = ', '.join(f'"{c}"' for c in cols)
+            kw      = 'PRIMARY KEY' if con_type == 'p' else 'UNIQUE'
+            f.write(f'ALTER TABLE "{table}" ADD CONSTRAINT "{con_name}" {kw} ({col_str});\n'.encode())
+        f.write(b'\n')
+
+        # ── Indexes ───────────────────────────────────────────
+        cr.execute("""
+            SELECT indexname, indexdef
+            FROM   pg_indexes
+            WHERE  schemaname = 'public'
+            AND    indexname NOT IN (
+                       SELECT conname FROM pg_constraint
+                       WHERE  connamespace = (
+                                  SELECT oid FROM pg_namespace WHERE nspname = 'public'
+                              )
+                   )
+            ORDER  BY indexname
+        """)
+        for _, idx_def in cr.fetchall():
+            f.write(f'{idx_def};\n'.encode())
+        f.write(b'\n')
+
+        # ── Foreign keys ──────────────────────────────────────
+        fk_action = {
+            'a': 'NO ACTION', 'r': 'RESTRICT', 'c': 'CASCADE',
+            'n': 'SET NULL',  'd': 'SET DEFAULT',
+        }
+        cr.execute("""
+            SELECT c.conname, t.relname, ft.relname,
+                   (SELECT array_agg(a.attname
+                            ORDER BY array_position(c.conkey, a.attnum))
+                    FROM   pg_attribute a
+                    WHERE  a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)),
+                   (SELECT array_agg(a.attname
+                            ORDER BY array_position(c.confkey, a.attnum))
+                    FROM   pg_attribute a
+                    WHERE  a.attrelid = c.confrelid AND a.attnum = ANY(c.confkey)),
+                   c.confupdtype, c.confdeltype
+            FROM   pg_constraint c
+            JOIN   pg_class t      ON t.oid = c.conrelid
+            JOIN   pg_class ft     ON ft.oid = c.confrelid
+            JOIN   pg_namespace ns ON ns.oid = c.connamespace
+            WHERE  ns.nspname = 'public' AND c.contype = 'f'
+            ORDER  BY t.relname, c.conname
+        """)
+        for con_name, table, ftable, cols, fcols, upd, dlt in cr.fetchall():
+            col_str  = ', '.join(f'"{c}"' for c in cols)
+            fcol_str = ', '.join(f'"{c}"' for c in fcols)
+            f.write((
+                f'ALTER TABLE "{table}" ADD CONSTRAINT "{con_name}"'
+                f' FOREIGN KEY ({col_str}) REFERENCES "{ftable}" ({fcol_str})'
+                f' ON UPDATE {fk_action.get(upd, "NO ACTION")}'
+                f' ON DELETE {fk_action.get(dlt, "NO ACTION")};\n'
+            ).encode())
+        f.write(b'\n')
+
+        # ── Sequence current values ───────────────────────────
+        for seq, _, _, _, _, _, cur_val, is_called in sequences:
+            f.write(f"SELECT setval('{seq}', {cur_val}, {str(is_called).lower()});\n".encode())
+
+        f.write(b'\nCOMMIT;\n')
 
     # ── Azure Blob Storage push ───────────────────────────────────────────────
 
