@@ -337,6 +337,39 @@ class DmcBackupService(models.Model):
 
         f.write(b'\n')
 
+        # ── Views (dependency-ordered via pg_depend) ─────────────
+        # Alphabetical order is unsafe: a failed CREATE inside BEGIN/COMMIT
+        # aborts the entire transaction. Sort by dependency depth so every
+        # view is emitted only after the views it references.
+        cr.execute("""
+            WITH RECURSIVE view_deps(oid, depth) AS (
+                SELECT c.oid, 0
+                FROM   pg_class c
+                JOIN   pg_namespace n ON n.oid = c.relnamespace
+                WHERE  n.nspname = 'public' AND c.relkind = 'v'
+                UNION
+                SELECT d.objid, vd.depth + 1
+                FROM   pg_depend d
+                JOIN   pg_class c  ON c.oid = d.objid
+                JOIN   pg_namespace n ON n.oid = c.relnamespace
+                JOIN   view_deps vd ON vd.oid = d.refobjid
+                WHERE  c.relkind = 'v' AND n.nspname = 'public' AND d.deptype = 'n'
+            )
+            SELECT v.viewname, v.definition
+            FROM   pg_views v
+            JOIN   pg_class c ON c.relname = v.viewname
+            JOIN   pg_namespace n ON n.oid = c.relnamespace AND n.nspname = 'public'
+            JOIN   (SELECT oid, MAX(depth) AS max_depth FROM view_deps GROUP BY oid) md
+                   ON md.oid = c.oid
+            WHERE  v.schemaname = 'public'
+            ORDER  BY md.max_depth, v.viewname
+        """)
+        for viewname, definition in cr.fetchall():
+            f.write(
+                f'CREATE OR REPLACE VIEW "{viewname}" AS\n    {definition.strip()};\n'.encode()
+            )
+        f.write(b'\n')
+
         # ── Truncate all tables before loading data ───────────
         if tables:
             table_list = ', '.join(f'"{t}"' for t in tables)
