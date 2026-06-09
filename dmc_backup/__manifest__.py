@@ -19,6 +19,17 @@ Features
 
 Changelog
 ---------
+19.0.5.0.0
+  - Added neutralize option: deactivates crons, mail servers, CDN and removes
+    sensitive API keys when restoring to a non-production environment
+  - Added include_filestore option: allows database-only dumps without filestore
+  - Fixed restore reliability: removed transaction wrapper so a single statement
+    failure no longer aborts the entire restore
+  - Fixed double-semicolon on view definitions produced by pg_views.definition
+  - Added view dependency ordering to guarantee correct CREATE VIEW sequencing
+  - Added extensions (pg_trgm, unaccent, vector), schemas, and user-defined
+    functions to the dump so GIN/trgm/vector indexes restore correctly
+
 19.0.4.0.0
   - Added OneDrive (Microsoft Graph API) as a second backup destination
   - Added storage_type selection on backup configuration
@@ -43,7 +54,7 @@ Changelog
     'author': "DMC Strategic IT",
     'website': "https://www.dmcstrategicit.com",
 
-    'version': '19.0.4.0.0',
+    'version': '19.0.5.0.0',
 
     'application': True,
     'installable': True,

@@ -3,6 +3,7 @@ import os
 import json
 import logging
 import tempfile
+import time
 import zipfile
 import odoo
 import odoo.tools
@@ -236,7 +237,6 @@ class DmcBackupService(models.Model):
             'modules': modules,
         }, indent=4).encode()
 
-        import time
         now = time.localtime()[:6]
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
             zf.writestr('manifest.json', manifest)
@@ -316,8 +316,6 @@ class DmcBackupService(models.Model):
         for (funcdef,) in cr.fetchall():
             f.write(f'{funcdef.strip()};\n\n'.encode())
 
-        f.write(b"BEGIN;\n\n")
-
         # ── Sequences ────────────────────────────────────────
         cr.execute("""
             SELECT sequencename, start_value, increment_by, min_value, max_value,
@@ -383,9 +381,8 @@ class DmcBackupService(models.Model):
         f.write(b'\n')
 
         # ── Views (dependency-ordered via pg_depend) ─────────────
-        # Alphabetical order is unsafe: a failed CREATE inside BEGIN/COMMIT
-        # aborts the entire transaction. Sort by dependency depth so every
-        # view is emitted only after the views it references.
+        # A view must be emitted after every view it references.
+        # Sort by dependency depth to guarantee that ordering.
         cr.execute("""
             WITH RECURSIVE view_deps(oid, depth) AS (
                 SELECT c.oid, 0
@@ -410,8 +407,9 @@ class DmcBackupService(models.Model):
             ORDER  BY md.max_depth, v.viewname
         """)
         for viewname, definition in cr.fetchall():
+            defn = definition.strip().rstrip(';')
             f.write(
-                f'CREATE OR REPLACE VIEW "{viewname}" AS\n    {definition.strip()};\n'.encode()
+                f'CREATE OR REPLACE VIEW "{viewname}" AS\n    {defn};\n'.encode()
             )
         f.write(b'\n')
 
@@ -506,8 +504,6 @@ class DmcBackupService(models.Model):
 
         if neutralize:
             self._write_neutralization(f)
-
-        f.write(b'\nCOMMIT;\n')
 
     def _write_neutralization(self, f):
         f.write(b'\n-- Neutralization\n\n')
