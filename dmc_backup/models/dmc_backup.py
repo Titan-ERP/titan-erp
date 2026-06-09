@@ -237,6 +237,16 @@ class DmcBackupService(models.Model):
             zf.writestr('manifest.json', manifest)
             with zf.open('dump.sql', 'w', force_zip64=True) as sql_stream:
                 self._generate_sql_dump(sql_stream, pg_version)
+            filestore_path = odoo.tools.config.filestore(db_name)
+            if os.path.exists(filestore_path):
+                for dirpath, _dirs, filenames in os.walk(filestore_path):
+                    for fname in filenames:
+                        abs_path = os.path.join(dirpath, fname)
+                        arc_path = os.path.join(
+                            'filestore',
+                            os.path.relpath(abs_path, filestore_path),
+                        )
+                        zf.write(abs_path, arc_path)
 
     def _generate_sql_dump(self, stream, pg_version=''):
         cr = self.env.cr
