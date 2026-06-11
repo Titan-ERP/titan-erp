@@ -18,6 +18,7 @@
                         string="Download" icon="fa-download"
                         invisible="state != 'success' or not storage_url"/>
                 <field name="storage_url" optional="show" string="Storage URL"/>
+                <field name="storage_type" optional="show" string="Storage"/>
                 <field name="error_message" optional="hide" string="Error"/>
             </list>
         </field>

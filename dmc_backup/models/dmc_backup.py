@@ -29,6 +29,11 @@ class DmcBackupLog(models.Model):
     error_message = fields.Text(readonly=True)
     attachment_id = fields.Many2one('ir.attachment', ondelete='set null', readonly=True)
     storage_url   = fields.Char(readonly=True, string='Storage URL')
+    storage_type  = fields.Selection(
+        [('azure', 'Azure Blob'), ('onedrive', 'OneDrive')],
+        readonly=True,
+        string='Storage',
+    )
 
     def unlink(self):
         self._delete_remote_files()

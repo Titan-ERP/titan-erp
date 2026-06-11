@@ -87,6 +87,18 @@ class TestRunBackup(TransactionCase):
         })
         self.assertEqual(log.storage_url, 'https://example.com/test.zip')
 
+    def test_log_has_storage_type_field(self):
+        """dmc.backup.log must store a storage_type so deletion routes correctly."""
+        log = self.env['dmc.backup.log'].sudo().create({
+            'name': 'test.zip',
+            'db_name': 'test',
+            'odoo_version': '19.0',
+            'state': 'success',
+            'storage_url': 'https://example.com/test.zip',
+            'storage_type': 'azure',
+        })
+        self.assertEqual(log.storage_type, 'azure')
+
 
 class TestDmcBackupConfig(TransactionCase):
     """Tests for dmc.backup.config field constraints."""
