@@ -276,6 +276,7 @@ class DmcBackupService(models.Model):
         f.write(b"SET row_security = off;\n")
         f.write(b"SET default_tablespace = '';\n")
         f.write(b"SET default_table_access_method = heap;\n\n")
+        f.write(b'BEGIN;\n\n')
 
         # ── Schemas (for extensions installed outside public) ─
         cr.execute("""
@@ -299,6 +300,21 @@ class DmcBackupService(models.Model):
         """)
         for extname, schema in cr.fetchall():
             f.write(f'CREATE EXTENSION IF NOT EXISTS "{extname}" WITH SCHEMA "{schema}";\n'.encode())
+        f.write(b'\n')
+
+        # ── Custom enum types ─────────────────────────────────
+        cr.execute("""
+            SELECT t.typname, array_agg(e.enumlabel ORDER BY e.enumsortorder)
+            FROM   pg_type t
+            JOIN   pg_namespace n ON n.oid = t.typnamespace
+            JOIN   pg_enum e ON e.enumtypid = t.oid
+            WHERE  n.nspname = 'public'
+            GROUP  BY t.typname
+            ORDER  BY t.typname
+        """)
+        for typname, labels in cr.fetchall():
+            labels_str = ', '.join("'" + lbl.replace("'", "''") + "'" for lbl in labels)
+            f.write(f'CREATE TYPE "{typname}" AS ENUM ({labels_str});\n'.encode())
         f.write(b'\n')
 
         # ── User-defined functions (not owned by any extension) ─
@@ -447,6 +463,19 @@ class DmcBackupService(models.Model):
             f.write(f'ALTER TABLE "{table}" ADD CONSTRAINT "{con_name}" {kw} ({col_str});\n'.encode())
         f.write(b'\n')
 
+        # ── Check constraints ─────────────────────────────────
+        cr.execute("""
+            SELECT c.conname, t.relname, pg_get_constraintdef(c.oid)
+            FROM   pg_constraint c
+            JOIN   pg_class t      ON t.oid = c.conrelid
+            JOIN   pg_namespace ns ON ns.oid = c.connamespace
+            WHERE  ns.nspname = 'public' AND c.contype = 'c'
+            ORDER  BY t.relname, c.conname
+        """)
+        for con_name, table, condef in cr.fetchall():
+            f.write(f'ALTER TABLE "{table}" ADD CONSTRAINT "{con_name}" {condef};\n'.encode())
+        f.write(b'\n')
+
         # ── Indexes ───────────────────────────────────────────
         cr.execute("""
             SELECT indexname, indexdef
@@ -498,12 +527,28 @@ class DmcBackupService(models.Model):
             ).encode())
         f.write(b'\n')
 
+        # ── Triggers ──────────────────────────────────────────
+        cr.execute("""
+            SELECT pg_get_triggerdef(t.oid)
+            FROM   pg_trigger t
+            JOIN   pg_class c  ON c.oid = t.tgrelid
+            JOIN   pg_namespace n ON n.oid = c.relnamespace
+            WHERE  n.nspname = 'public'
+            AND    NOT t.tgisinternal
+            ORDER  BY c.relname, t.tgname
+        """)
+        for (trigdef,) in cr.fetchall():
+            f.write(f'{trigdef.strip()};\n'.encode())
+        f.write(b'\n')
+
         # ── Sequence current values ───────────────────────────
         for seq, _, _, _, _, _, cur_val, is_called in sequences:
             f.write(f"SELECT pg_catalog.setval('public.{seq}', {cur_val}, {str(is_called).lower()});\n".encode())
 
         if neutralize:
             self._write_neutralization(f)
+
+        f.write(b'\nCOMMIT;\n')
 
     def _write_neutralization(self, f):
         f.write(b'\n-- Neutralization\n\n')
