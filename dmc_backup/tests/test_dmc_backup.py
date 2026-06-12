@@ -162,6 +162,35 @@ class TestRunBackup(TransactionCase):
         if log:
             self.assertEqual(log.storage_type, 'azure')
 
+    def test_cleanup_failure_does_not_rollback_success_log(self):
+        """A cleanup exception must not prevent the success log from being written."""
+        config = self.env['dmc.backup.config'].sudo().search(
+            [('is_default', '=', True)], limit=1
+        )
+        if not config:
+            config = self.env['dmc.backup.config'].create({
+                'name': 'Test', 'storage_type': 'azure',
+                'azure_account': 'a', 'azure_container': 'c',
+                'azure_sas_token': 'sv=x', 'is_default': True, 'retention_days': 0,
+            })
+
+        with patch.object(self.service.__class__, '_dump_db', return_value=None), \
+             patch.object(self.service.__class__, '_push_to_azure',
+                          return_value='https://a.blob.core.windows.net/c/f.zip'), \
+             patch('tempfile.mkstemp', return_value=(0, '/tmp/fake.zip')), \
+             patch('os.close'), \
+             patch('os.path.getsize', return_value=1024), \
+             patch('os.path.exists', return_value=False), \
+             patch.object(
+                 self.env['dmc.backup.log'].__class__,
+                 'unlink',
+                 side_effect=Exception('simulated cleanup failure'),
+             ):
+            self.service.run_backup()  # must NOT raise
+
+        success_logs = self.env['dmc.backup.log'].search([('state', '=', 'success')])
+        self.assertTrue(success_logs, 'Success log was rolled back by the cleanup failure')
+
 
 class TestDmcBackupConfig(TransactionCase):
     """Tests for dmc.backup.config field constraints."""

@@ -233,11 +233,16 @@ class DmcBackupService(models.Model):
                 except OSError:
                     pass
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
-        old = self.env['dmc.backup.log'].sudo().search([('backup_date', '<', cutoff)])
-        old.mapped('attachment_id').unlink()
-        old.unlink()
-        _logger.info('Cleanup complete: %d old backup(s) removed', len(old))
+        try:
+            cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+            old = self.env['dmc.backup.log'].sudo().search([('backup_date', '<', cutoff)])
+            old.unlink()
+            _logger.info('Cleanup complete: %d old backup(s) removed', len(old))
+        except Exception as cleanup_err:
+            _logger.error(
+                'Retention cleanup failed (backup was uploaded successfully): %s',
+                cleanup_err,
+            )
 
     # ── Backup generation ────────────────────────────────────────────────────
 
