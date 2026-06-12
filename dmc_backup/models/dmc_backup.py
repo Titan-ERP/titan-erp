@@ -99,14 +99,18 @@ class DmcBackupLog(models.Model):
         self.ensure_one()
         if not self.storage_url:
             raise UserError('No remote storage URL recorded for this backup.')
-        if '.blob.core.windows.net' in self.storage_url:
+        # Use stored field; fall back to URL heuristic for legacy records without storage_type
+        storage_type = self.storage_type or (
+            'azure' if '.blob.core.windows.net' in (self.storage_url or '') else 'onedrive'
+        )
+        if storage_type == 'azure':
             config = self.env['dmc.backup.config'].sudo().search(
                 [('is_default', '=', True)], limit=1
             )
             sas_token = (config.azure_sas_token or '').strip() if config else ''
             if not sas_token:
                 raise UserError('No Azure SAS token found on the default destination.')
-            url = f'{self.storage_url}?{sas_token}'
+            url    = f'{self.storage_url}?{sas_token}'
             target = 'self'
         else:
             url    = self.storage_url
