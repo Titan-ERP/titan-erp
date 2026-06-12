@@ -334,6 +334,10 @@ class DmcBackupService(models.Model):
             JOIN   pg_namespace n ON n.oid = t.typnamespace
             JOIN   pg_enum e ON e.enumtypid = t.oid
             WHERE  n.nspname = 'public'
+            AND    NOT EXISTS (
+                       SELECT 1 FROM pg_depend d
+                       WHERE  d.objid = t.oid AND d.deptype = 'e'
+                   )
             GROUP  BY t.typname
             ORDER  BY t.typname
         """)
