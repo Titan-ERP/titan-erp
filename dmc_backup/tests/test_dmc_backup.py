@@ -382,7 +382,10 @@ class TestPushToOneDrive(TransactionCase):
 
             final_resp = MagicMock()
             final_resp.status_code = 201
-            final_resp.json.return_value = {'webUrl': 'https://od.com/file.zip'}
+            final_resp.json.return_value = {
+                'webUrl': 'https://od.com/file.zip',
+                'name':   'file.zip',
+            }
 
             with patch.object(
                 self.config.__class__, '_get_onedrive_token', return_value='tok'
@@ -396,7 +399,7 @@ class TestPushToOneDrive(TransactionCase):
                     zip_path, 25 * 1024 * 1024, 'backup.zip', self.config
                 )
             self.assertEqual(mock_put.call_count, 3)
-            self.assertEqual(result, 'https://od.com/file.zip')
+            self.assertEqual(result, ('https://od.com/file.zip', 'file.zip'))
         finally:
             os.unlink(zip_path)
 

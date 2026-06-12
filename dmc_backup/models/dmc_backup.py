@@ -164,7 +164,10 @@ class DmcBackupService(models.Model):
             file_size = os.path.getsize(zip_path)
 
             if config.storage_type == 'onedrive':
-                storage_url = self._push_to_onedrive(zip_path, file_size, file_name, config)
+                storage_url, actual_name = self._push_to_onedrive(zip_path, file_size, file_name, config)
+                if actual_name != file_name:
+                    _logger.info('OneDrive renamed file: %s → %s', file_name, actual_name)
+                    file_name = actual_name  # use actual name for log record
                 _logger.info('OneDrive push complete: %s', storage_url)
             else:
                 storage_url = self._push_to_azure(zip_path, file_size, file_name, config)
@@ -173,6 +176,7 @@ class DmcBackupService(models.Model):
             if log_id:
                 log = self.env['dmc.backup.log'].sudo().browse(log_id)
                 log.write({
+                    'name':         file_name,
                     'size_mb':      round(file_size / 1024 / 1024, 2),
                     'state':        'success',
                     'storage_url':  storage_url,
@@ -685,9 +689,10 @@ class DmcBackupService(models.Model):
         session_resp.raise_for_status()
         upload_url = session_resp.json()['uploadUrl']
 
-        chunk_size = 10 * 1024 * 1024
-        uploaded   = 0
-        web_url    = None
+        chunk_size  = 10 * 1024 * 1024
+        uploaded    = 0
+        web_url     = None
+        actual_name = file_name  # updated on final chunk if OneDrive renamed the file
         with open(zip_path, 'rb') as f:
             while True:
                 chunk = f.read(chunk_size)
@@ -704,10 +709,12 @@ class DmcBackupService(models.Model):
                     timeout=120,
                 )
                 if resp.status_code in (200, 201):
-                    web_url = resp.json().get('webUrl')
+                    item_data   = resp.json()
+                    web_url     = item_data.get('webUrl')
+                    actual_name = item_data.get('name', file_name)  # capture post-rename name
                 elif resp.status_code != 202:
                     resp.raise_for_status()
                 uploaded += len(chunk)
         if web_url is None:
             raise UserError('OneDrive upload completed but no webUrl was returned.')
-        return web_url
+        return web_url, actual_name
