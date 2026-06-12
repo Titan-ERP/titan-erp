@@ -366,6 +366,30 @@ class TestPushToOneDrive(TransactionCase):
             mock_od.assert_called()
             mock_az.assert_not_called()
 
+    def test_run_backup_stores_actual_name_after_onedrive_rename(self):
+        """run_backup must store the OneDrive-assigned filename on the log when the file is renamed."""
+        renamed = 'backup_prod_20260601 1.zip'
+        with patch.object(self.service.__class__, '_dump_db', return_value=None), \
+             patch.object(
+                 self.service.__class__, '_push_to_onedrive',
+                 return_value=('https://od.com/' + renamed, renamed)
+             ), \
+             patch('tempfile.mkstemp', return_value=(0, '/tmp/fake_backup.zip')), \
+             patch('os.close'), \
+             patch('os.path.getsize', return_value=1024), \
+             patch('os.path.exists', return_value=False):
+            self.service.run_backup()
+
+        log = self.env['dmc.backup.log'].sudo().search(
+            [('state', '=', 'success'), ('storage_type', '=', 'onedrive')],
+            limit=1, order='id desc',
+        )
+        self.assertTrue(log, 'No success log record found after run_backup')
+        self.assertEqual(
+            log.name, renamed,
+            f'Log name should be the OneDrive-assigned name "{renamed}", got "{log.name}"',
+        )
+
     def test_push_to_onedrive_streams_in_chunks(self):
         """_push_to_onedrive must call PUT once per 10 MB chunk."""
         import tempfile, os
