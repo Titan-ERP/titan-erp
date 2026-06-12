@@ -57,7 +57,7 @@ class TestGenerateSqlDump(TransactionCase):
         import inspect
         src = inspect.getsource(self.service._generate_sql_dump)
         # Verify pg_enum block contains the pg_depend filter
-        enum_section = src[src.find('pg_enum'):]
+        enum_section = src[src.find('pg_enum') : src.find('pg_get_functiondef')]
         self.assertIn("deptype = 'e'", enum_section,
             "Enum type query must filter out extension-owned types via pg_depend deptype='e'")
 
