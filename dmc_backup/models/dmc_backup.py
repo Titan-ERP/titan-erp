@@ -51,16 +51,20 @@ class DmcBackupLog(models.Model):
         if not records:
             return
 
-        if config.storage_type == 'onedrive':
-            try:
-                token    = config._get_onedrive_token()
-                drive_id = config._resolve_onedrive_drive(token)
-            except Exception as exc:
-                _logger.warning('OneDrive auth failed during delete: %s', exc)
-                return
-            headers = {'Authorization': f'Bearer {token}'}
-            folder  = (config.onedrive_folder_path or '').strip('/')
-            for record in records:
+        for record in records:
+            # Determine backend from stored field; fall back to URL heuristic for legacy records
+            rec_type = record.storage_type or (
+                'azure' if '.blob.core.windows.net' in (record.storage_url or '') else 'onedrive'
+            )
+            if rec_type == 'onedrive':
+                try:
+                    token    = config._get_onedrive_token()
+                    drive_id = config._resolve_onedrive_drive(token)
+                except Exception as exc:
+                    _logger.warning('OneDrive auth failed during delete: %s', exc)
+                    continue
+                headers   = {'Authorization': f'Bearer {token}'}
+                folder    = (config.onedrive_folder_path or '').strip('/')
                 file_name = (record.name or '').strip()
                 item_path = f'{folder}/{file_name}' if folder else file_name
                 url = (
@@ -74,11 +78,10 @@ class DmcBackupLog(models.Model):
                     _logger.info('OneDrive file deleted: %s', item_path)
                 except Exception as exc:
                     _logger.warning('OneDrive delete failed for %s: %s', item_path, exc)
-        else:
-            sas_token = (config.azure_sas_token or '').strip()
-            if not sas_token:
-                return
-            for record in records:
+            else:
+                sas_token = (config.azure_sas_token or '').strip()
+                if not sas_token:
+                    continue
                 url = f'{record.storage_url}?{sas_token}'
                 try:
                     resp = requests.delete(url, timeout=30)

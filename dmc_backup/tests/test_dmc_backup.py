@@ -287,6 +287,46 @@ class TestDmcBackupConfig(TransactionCase):
             with self.assertRaises(UserError):
                 cfg._ensure_onedrive_folder('tok', 'drv', 'Backups')
 
+    def test_delete_routes_by_record_storage_type_not_config(self):
+        """_delete_remote_files must use record.storage_type, not config.storage_type."""
+        # Create an OneDrive config as default (with an azure_sas_token so the azure
+        # branch in _delete_remote_files can actually issue the DELETE request)
+        od_config = self.env['dmc.backup.config'].create({
+            'name': 'OD',
+            'storage_type': 'onedrive',
+            'onedrive_client_id': 'c', 'onedrive_tenant_id': 't',
+            'onedrive_client_secret': 's', 'onedrive_drive_type': 'user',
+            'onedrive_drive_target': 'x@y.com', 'is_default': True,
+            'azure_sas_token': 'sv=test',
+        })
+        # Log record that was created under Azure (storage_type='azure')
+        log = self.env['dmc.backup.log'].sudo().create({
+            'name': 'backup.zip',
+            'db_name': 'test',
+            'odoo_version': '19.0',
+            'state': 'success',
+            'storage_url': 'https://acct.blob.core.windows.net/ctr/backup.zip',
+            'storage_type': 'azure',
+        })
+        azure_delete_called = []
+        onedrive_delete_called = []
+
+        def mock_delete(url, **kwargs):
+            if 'blob.core.windows.net' in url:
+                azure_delete_called.append(url)
+            elif 'graph.microsoft.com' in url:
+                onedrive_delete_called.append(url)
+            m = MagicMock()
+            m.status_code = 202
+            return m
+
+        import requests
+        with patch('requests.delete', side_effect=mock_delete):
+            log._delete_remote_files()
+
+        self.assertTrue(azure_delete_called, 'Azure DELETE was not called — routing used wrong backend')
+        self.assertFalse(onedrive_delete_called, 'OneDrive DELETE was incorrectly called for an Azure record')
+
 
 class TestPushToOneDrive(TransactionCase):
     """Tests for _push_to_onedrive and run_backup routing."""
