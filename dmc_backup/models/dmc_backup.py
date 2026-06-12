@@ -564,6 +564,10 @@ class DmcBackupService(models.Model):
             JOIN   pg_namespace n ON n.oid = c.relnamespace
             WHERE  n.nspname = 'public'
             AND    NOT t.tgisinternal
+            AND    NOT EXISTS (
+                       SELECT 1 FROM pg_depend d
+                       WHERE  d.objid = t.oid AND d.deptype = 'e'
+                   )
             ORDER  BY c.relname, t.tgname
         """)
         for (trigdef,) in cr.fetchall():

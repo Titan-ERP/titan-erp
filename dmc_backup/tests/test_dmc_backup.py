@@ -61,6 +61,15 @@ class TestGenerateSqlDump(TransactionCase):
         self.assertIn("deptype = 'e'", enum_section,
             "Enum type query must filter out extension-owned types via pg_depend deptype='e'")
 
+    def test_extension_owned_triggers_excluded(self):
+        """Triggers belonging to an extension must not appear in the dump."""
+        import inspect
+        src = inspect.getsource(self.service._generate_sql_dump)
+        # Verify pg_depend filter exists in the trigger section (bounded between trigger and setval sections)
+        trigger_section = src[src.find('pg_get_triggerdef') : src.find('pg_catalog.setval')]
+        self.assertIn("deptype = 'e'", trigger_section,
+            "Trigger query must filter out extension-owned triggers via pg_depend deptype='e'")
+
 
 class TestRunBackup(TransactionCase):
     """Tests for run_backup failure-log persistence."""
