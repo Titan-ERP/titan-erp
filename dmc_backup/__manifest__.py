@@ -19,12 +19,31 @@ Features
 
 Changelog
 ---------
+19.0.6.0.0
+  - Fixed: _delete_remote_files now routes by the per-record storage_type field
+    so changing the default config does not silently skip blob deletion
+  - Fixed: action_download routes by stored storage_type instead of URL pattern
+  - Fixed: OneDrive deletion uses the actual uploaded filename (capturing
+    post-rename name from the Graph API response) instead of the original
+    requested filename
+  - Fixed: enum type query now excludes extension-owned types (pg_depend filter)
+    to prevent CREATE TYPE conflicts on restore
+  - Fixed: trigger query now excludes extension-owned triggers for same reason
+  - Fixed: setval uses double-quoted sequence identifiers to handle mixed-case
+    sequence names from custom modules
+  - Fixed: retention cleanup wrapped in try/except so a filestore or DB error
+    during cleanup cannot roll back the success log write
+  - Changed: dump.sql is now wrapped in BEGIN/COMMIT for atomic restore —
+    either the entire restore succeeds or the database is left empty (previously
+    removed in 19.0.5.0.0; re-added because partial restores are harder to
+    diagnose than a clean failure)
+
 19.0.5.0.0
   - Added neutralize option: deactivates crons, mail servers, CDN and removes
     sensitive API keys when restoring to a non-production environment
   - Added include_filestore option: allows database-only dumps without filestore
-  - Fixed restore reliability: removed transaction wrapper so a single statement
-    failure no longer aborts the entire restore
+  - Added triggers and check constraints to dump for full schema fidelity
+  - Added custom enum types to dump (extension-owned types excluded)
   - Fixed double-semicolon on view definitions produced by pg_views.definition
   - Added view dependency ordering to guarantee correct CREATE VIEW sequencing
   - Added extensions (pg_trgm, unaccent, vector), schemas, and user-defined
@@ -54,7 +73,7 @@ Changelog
     'author': "DMC Strategic IT",
     'website': "https://www.dmcstrategicit.com",
 
-    'version': '19.0.5.0.0',
+    'version': '19.0.6.0.0',
 
     'application': True,
     'installable': True,
