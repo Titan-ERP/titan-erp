@@ -70,6 +70,21 @@ class TestGenerateSqlDump(TransactionCase):
         self.assertIn("deptype = 'e'", trigger_section,
             "Trigger query must filter out extension-owned triggers via pg_depend deptype='e'")
 
+    def test_setval_uses_quoted_sequence_name(self):
+        """setval must emit quoted identifiers so mixed-case sequence names work."""
+        import io, re
+        buf = io.BytesIO()
+        self.service._generate_sql_dump(buf)
+        sql = buf.getvalue().decode('utf-8')
+        # Every setval line must quote the sequence name with double-quotes
+        setval_lines = [l for l in sql.splitlines() if 'setval' in l]
+        for line in setval_lines:
+            self.assertRegex(
+                line,
+                r'''setval\('public\."[^"]+"''',
+                f'setval must use double-quoted identifier, got: {line}',
+            )
+
 
 class TestRunBackup(TransactionCase):
     """Tests for run_backup failure-log persistence."""

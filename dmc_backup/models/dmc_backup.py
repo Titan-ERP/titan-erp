@@ -576,7 +576,11 @@ class DmcBackupService(models.Model):
 
         # ── Sequence current values ───────────────────────────
         for seq, _, _, _, _, _, cur_val, is_called in sequences:
-            f.write(f"SELECT pg_catalog.setval('public.{seq}', {cur_val}, {str(is_called).lower()});\n".encode())
+            quoted = seq.replace('"', '""')
+            f.write(
+                f"SELECT pg_catalog.setval('public.\"{quoted}\"', {cur_val}, "
+                f"{str(is_called).lower()});\n".encode()
+            )
 
         if neutralize:
             self._write_neutralization(f)
