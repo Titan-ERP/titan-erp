@@ -144,6 +144,7 @@ class DmcBackupService(models.Model):
                     'db_name':      db_name,
                     'odoo_version': odoo.release.version,
                     'state':        'running',
+                    'storage_type': config.storage_type,
                 })
                 log_id = running_log.id
                 start_cr.commit()
@@ -165,9 +166,10 @@ class DmcBackupService(models.Model):
             if log_id:
                 log = self.env['dmc.backup.log'].sudo().browse(log_id)
                 log.write({
-                    'size_mb':     round(file_size / 1024 / 1024, 2),
-                    'state':       'success',
-                    'storage_url': storage_url,
+                    'size_mb':      round(file_size / 1024 / 1024, 2),
+                    'state':        'success',
+                    'storage_url':  storage_url,
+                    'storage_type': config.storage_type,
                 })
             else:
                 log = self.env['dmc.backup.log'].sudo().create({
@@ -177,6 +179,7 @@ class DmcBackupService(models.Model):
                     'size_mb':       round(file_size / 1024 / 1024, 2),
                     'state':         'success',
                     'storage_url':   storage_url,
+                    'storage_type':  config.storage_type,
                 })
 
             _logger.info('Backup complete: %s (%.2f MB)', file_name, round(file_size / 1024 / 1024, 2))
@@ -199,6 +202,7 @@ class DmcBackupService(models.Model):
                             'odoo_version':  odoo.release.version,
                             'state':         'failed',
                             'error_message': str(e),
+                            'storage_type':  config.storage_type,
                         })
                     new_cr.commit()
             except Exception as log_err:
