@@ -51,25 +51,29 @@ class DmcBackupLog(models.Model):
         if not records:
             return
 
+        _od_token    = None
+        _od_drive_id = None
+
         for record in records:
             # Determine backend from stored field; fall back to URL heuristic for legacy records
             rec_type = record.storage_type or (
                 'azure' if '.blob.core.windows.net' in (record.storage_url or '') else 'onedrive'
             )
             if rec_type == 'onedrive':
-                try:
-                    token    = config._get_onedrive_token()
-                    drive_id = config._resolve_onedrive_drive(token)
-                except Exception as exc:
-                    _logger.warning('OneDrive auth failed during delete: %s', exc)
-                    continue
-                headers   = {'Authorization': f'Bearer {token}'}
+                if _od_token is None:
+                    try:
+                        _od_token    = config._get_onedrive_token()
+                        _od_drive_id = config._resolve_onedrive_drive(_od_token)
+                    except Exception as exc:
+                        _logger.warning('OneDrive auth failed during delete: %s', exc)
+                        continue
+                headers   = {'Authorization': f'Bearer {_od_token}'}
                 folder    = (config.onedrive_folder_path or '').strip('/')
                 file_name = (record.name or '').strip()
                 item_path = f'{folder}/{file_name}' if folder else file_name
                 url = (
                     f'https://graph.microsoft.com/v1.0'
-                    f'/drives/{drive_id}/root:/{item_path}'
+                    f'/drives/{_od_drive_id}/root:/{item_path}'
                 )
                 try:
                     resp = requests.delete(url, headers=headers, timeout=30)

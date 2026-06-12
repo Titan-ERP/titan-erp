@@ -320,7 +320,6 @@ class TestDmcBackupConfig(TransactionCase):
             m.status_code = 202
             return m
 
-        import requests
         with patch('requests.delete', side_effect=mock_delete):
             log._delete_remote_files()
 
