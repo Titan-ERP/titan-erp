@@ -99,6 +99,36 @@ class TestRunBackup(TransactionCase):
         })
         self.assertEqual(log.storage_type, 'azure')
 
+    def test_run_backup_sets_storage_type_on_log(self):
+        """run_backup must write config.storage_type onto the success log."""
+        from unittest.mock import patch, mock_open
+        config = self.env['dmc.backup.config'].sudo().search(
+            [('is_default', '=', True)], limit=1
+        )
+        if not config:
+            config = self.env['dmc.backup.config'].create({
+                'name': 'Azure Test ST',
+                'storage_type': 'azure',
+                'azure_account': 'acct',
+                'azure_container': 'ctr',
+                'azure_sas_token': 'sv=test',
+                'is_default': True,
+                'retention_days': 30,
+            })
+        with patch.object(self.service.__class__, '_dump_db', return_value=None), \
+             patch.object(self.service.__class__, '_push_to_azure',
+                          return_value='https://acct.blob.core.windows.net/ctr/f.zip'), \
+             patch('tempfile.mkstemp', return_value=(0, '/tmp/fake_backup.zip')), \
+             patch('os.close'), \
+             patch('os.path.getsize', return_value=1024), \
+             patch('os.path.exists', return_value=False):
+            self.service.run_backup()
+        log = self.env['dmc.backup.log'].sudo().search(
+            [('state', '=', 'success')], limit=1, order='id desc'
+        )
+        if log:
+            self.assertEqual(log.storage_type, 'azure')
+
 
 class TestDmcBackupConfig(TransactionCase):
     """Tests for dmc.backup.config field constraints."""

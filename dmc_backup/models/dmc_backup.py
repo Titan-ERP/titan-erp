@@ -194,6 +194,7 @@ class DmcBackupService(models.Model):
                         new_env['dmc.backup.log'].sudo().browse(log_id).write({
                             'state':         'failed',
                             'error_message': str(e),
+                            'storage_type':  config.storage_type,
                         })
                     else:
                         new_env['dmc.backup.log'].sudo().create({
