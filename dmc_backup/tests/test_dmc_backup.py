@@ -350,7 +350,7 @@ class TestPushToOneDrive(TransactionCase):
         """run_backup must call _push_to_onedrive when storage_type is onedrive."""
         with patch.object(self.service.__class__, '_dump_db', return_value=None), \
              patch.object(self.service.__class__, '_push_to_onedrive',
-                          return_value='https://od.com/file.zip') as mock_od, \
+                          return_value=('https://od.com/file.zip', 'file.zip')) as mock_od, \
              patch.object(self.service.__class__, '_push_to_azure',
                           return_value=None) as mock_az, \
              patch('tempfile.mkstemp', return_value=(0, '/tmp/fake_backup.zip')), \
