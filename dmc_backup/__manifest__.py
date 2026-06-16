@@ -19,6 +19,22 @@ Features
 
 Changelog
 ---------
+19.0.9.0.0
+  - Fixed: pg_dump command now matches odoo.service.db.dump_db exactly —
+    removed --no-acl and explicit --host/--port/--username flags; connection
+    parameters are supplied via exec_pg_environ() environment variables so the
+    dump is byte-for-byte compatible with Odoo SH's restore_db import utility
+  - Fixed: _find_pg_dump now checks Odoo's configured pg_dump binary first
+    (respecting pg_dump_path in odoo.conf) and only falls back to the
+    version-specific system path when the configured binary's major version
+    does not match the server — this prevents using an outdated system binary
+    that misreports the server version
+  - Fixed: pg_version in manifest.json now uses float division matching
+    odoo.service.db.dump_db_manifest (e.g. "16.14" instead of "16.0")
+  - Fixed: zip is now created with osutil.zip_dir (allowZip64=True, dump.sql
+    sorted first) and filestore is copied with shutil.copytree, matching
+    odoo.service.db.dump_db's zip structure exactly
+
 19.0.8.0.0
   - Fixed: pg_dump subprocess now uses the version-specific binary
     (/usr/lib/postgresql/N/bin/pg_dump) matching the connected PostgreSQL server
@@ -90,7 +106,7 @@ Changelog
     'author': "DMC Strategic IT",
     'website': "https://www.dmcstrategicit.com",
 
-    'version': '19.0.8.0.0',
+    'version': '19.0.9.0.0',
 
     'application': True,
     'installable': True,

@@ -4,7 +4,6 @@ import json
 import logging
 import tempfile
 import time
-import zipfile
 import odoo
 import odoo.tools
 import odoo.release
@@ -247,22 +246,46 @@ class DmcBackupService(models.Model):
     # ── Backup generation ────────────────────────────────────────────────────
 
     def _find_pg_dump(self):
-        """Return the pg_dump binary that matches the connected PostgreSQL server version."""
-        from odoo.service.db import find_pg_tool
+        """Return the pg_dump binary for the connected PostgreSQL server version.
 
-        server_version = self.env.cr._obj.connection.server_version
-        pg_major = server_version // 10000  # e.g. 160001 → 16
+        Priority:
+        1. Odoo's configured pg_dump (find_pg_tool respects pg_dump_path in odoo.conf)
+        2. Version-specific system path matching the server major version, as a
+           fallback for environments where the system pg_dump lags behind the server
+           (e.g. /usr/bin/pg_dump is pg14 but the server is pg16).
+        """
+        from odoo.tools.misc import find_pg_tool
+        import shutil
+
+        configured = find_pg_tool('pg_dump')
+
+        # If the configured binary's major version matches the server, use it.
+        server_major = self.env.cr._obj.connection.server_version // 10000
+        try:
+            import subprocess as _sp
+            out = _sp.run([configured, '--version'], capture_output=True, timeout=5).stdout
+            # output: "pg_dump (PostgreSQL) 16.14\n"
+            configured_major = int(out.decode().split()[-1].split('.')[0])
+            if configured_major == server_major:
+                return configured
+        except Exception:
+            pass
+
+        # Fallback: version-specific path when the configured binary is too old.
         for candidate in (
-            f'/usr/lib/postgresql/{pg_major}/bin/pg_dump',  # Debian/Ubuntu
-            f'/usr/pgsql-{pg_major}/bin/pg_dump',           # RHEL/CentOS
+            f'/usr/lib/postgresql/{server_major}/bin/pg_dump',  # Debian/Ubuntu
+            f'/usr/pgsql-{server_major}/bin/pg_dump',           # RHEL/CentOS
         ):
             if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
                 return candidate
-        return find_pg_tool('pg_dump')
+
+        return configured
 
     def _dump_db(self, db_name, zip_path, config=None):
         import subprocess
-        from odoo.service.db import exec_pg_environ
+        import shutil
+        from odoo.tools.misc import exec_pg_environ
+        from odoo.tools import osutil
 
         neutralize        = config.neutralize        if config else False
         include_filestore = config.include_filestore if config else True
@@ -272,7 +295,8 @@ class DmcBackupService(models.Model):
             "SELECT name, latest_version FROM ir_module_module WHERE state = 'installed'"
         )
         modules = dict(cr.fetchall())
-        pg_version = "%d.%d" % divmod(cr._obj.connection.server_version // 100, 100)
+        # Match odoo.service.db.dump_db_manifest: float division so pg_version is "16.14" not "16.0"
+        pg_version = "%d.%d" % divmod(cr._obj.connection.server_version / 100, 100)
         manifest = json.dumps({
             'odoo_dump': '1',
             'db_name':       db_name,
@@ -283,19 +307,12 @@ class DmcBackupService(models.Model):
             'modules':       modules,
         }, indent=4).encode()
 
-        cfg = odoo.tools.config
         with tempfile.TemporaryDirectory() as tmp_dir:
             dump_path = os.path.join(tmp_dir, 'dump.sql')
 
-            cmd = [self._find_pg_dump(), '--no-owner', '--no-acl', '--format=p',
-                   '--file=' + dump_path]
-            if cfg['db_host']:
-                cmd += ['--host=' + cfg['db_host']]
-            if cfg['db_port']:
-                cmd += ['--port=' + str(cfg['db_port'])]
-            if cfg['db_user']:
-                cmd += ['--username=' + cfg['db_user']]
-            cmd.append(db_name)
+            # Match odoo.service.db.dump_db exactly: --no-owner only, no --no-acl,
+            # no explicit host/port/user (exec_pg_environ sets PGHOST/PGPORT/PGUSER/PGPASSWORD).
+            cmd = [self._find_pg_dump(), '--no-owner', '--file=' + dump_path, db_name]
 
             result = subprocess.run(
                 cmd, env=exec_pg_environ(), check=False, timeout=3600,
@@ -311,20 +328,22 @@ class DmcBackupService(models.Model):
                 with open(dump_path, 'ab') as f:
                     self._write_neutralization(f)
 
-            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-                zf.writestr('manifest.json', manifest)
-                zf.write(dump_path, 'dump.sql')
-                if include_filestore:
-                    filestore_path = odoo.tools.config.filestore(db_name)
-                    if os.path.exists(filestore_path):
-                        for dirpath, _dirs, filenames in os.walk(filestore_path):
-                            for fname in filenames:
-                                abs_path = os.path.join(dirpath, fname)
-                                arc_path = os.path.join(
-                                    'filestore',
-                                    os.path.relpath(abs_path, filestore_path),
-                                )
-                                zf.write(abs_path, arc_path)
+            # Write manifest.json into the temp dir so osutil.zip_dir picks it up.
+            with open(os.path.join(tmp_dir, 'manifest.json'), 'wb') as mf:
+                mf.write(manifest)
+
+            if include_filestore:
+                filestore_path = odoo.tools.config.filestore(db_name)
+                if os.path.exists(filestore_path):
+                    shutil.copytree(filestore_path, os.path.join(tmp_dir, 'filestore'))
+
+            # Match odoo.service.db.dump_db: dump.sql first (False sorts before True),
+            # allowZip64 for large databases.
+            with open(zip_path, 'wb') as zf:
+                osutil.zip_dir(
+                    tmp_dir, zf, include_dir=False,
+                    fnct_sort=lambda fname: fname != 'dump.sql',
+                )
 
     def _write_neutralization(self, f):
         f.write(b'\nBEGIN;\n\n-- Neutralization\n\n')
