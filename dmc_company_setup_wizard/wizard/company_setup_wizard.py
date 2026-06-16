@@ -230,16 +230,25 @@ class DmcCompanySetupWizard(models.TransientModel):
             )
 
     def _step3_associate_shared_accounts(self, company):
-        # Select all non-Bank/Cash accounts that are already company-scoped
-        # (i.e., part of the shared chart of accounts).
+        # In Odoo 17+, account.account.code is company-dependent: every company
+        # in company_ids must have its own code entry or the constraint fires.
+        # We read each account's existing code (from one of its current companies)
+        # and then write that same code for the new company.
         shared_accounts = self.env["account.account"].sudo().search(
             [
                 ("account_type", "!=", "asset_cash"),
                 ("company_ids", "!=", False),
             ]
         )
-        if shared_accounts:
-            shared_accounts.write({"company_ids": [Command.link(company.id)]})
+        for account in shared_accounts:
+            # Read the code in the context of an existing company on this account.
+            source_company = account.company_ids[:1]
+            existing_code = account.with_company(source_company).code if source_company else account.code
+            # Link the new company to the account.
+            account.write({"company_ids": [Command.link(company.id)]})
+            # Set the same code for the new company so the constraint is satisfied.
+            if existing_code:
+                account.with_company(company).write({"code": existing_code})
 
     def _step4_copy_taxes_and_groups(self, company):
         titan = self.env["res.company"].sudo().search(
