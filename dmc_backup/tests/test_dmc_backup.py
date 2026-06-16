@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import io
+import zipfile
 import odoo
 from unittest.mock import patch, MagicMock, mock_open
 from odoo.tests.common import TransactionCase
@@ -7,14 +8,21 @@ from odoo.exceptions import UserError, ValidationError
 
 
 class TestDumpDb(TransactionCase):
-    """Tests for _dump_db using pg_dump."""
+    """Tests for _dump_db using odoo.service.db.dump_db."""
 
     def setUp(self):
         super().setUp()
         self.service = self.env['dmc.backup.service']
 
-    def test_dump_db_calls_pg_dump(self):
-        """_dump_db must invoke pg_dump — not generate SQL in Python."""
+    def _fake_odoo_zip(self, sql=b'-- odoo dump\n'):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w') as z:
+            z.writestr('manifest.json', b'{"odoo_dump": "1"}')
+            z.writestr('dump.sql', sql)
+        return buf.getvalue()
+
+    def test_dump_db_delegates_to_odoo_dump_db(self):
+        """_dump_db must delegate to odoo.service.db.dump_db."""
         import os
         import tempfile
 
@@ -22,29 +30,23 @@ class TestDumpDb(TransactionCase):
             zip_path = tf.name
 
         try:
-            def fake_run(cmd, **kw):
-                dump_path = next(a for a in cmd if a.startswith('--file=')).split('=', 1)[1]
-                with open(dump_path, 'wb') as f:
-                    f.write(b'-- pg_dump output\n')
+            zip_bytes = self._fake_odoo_zip()
 
-            with patch('subprocess.run', side_effect=fake_run) as mock_run, \
-                 patch('odoo.service.db.find_pg_tool', return_value='pg_dump'), \
-                 patch('odoo.service.db.exec_pg_environ', return_value={}):
+            def fake_dump(db_name, stream, backup_format='zip'):
+                stream.write(zip_bytes)
+
+            with patch('odoo.service.db.dump_db', side_effect=fake_dump) as mock_dump:
                 self.service._dump_db(self.env.cr.dbname, zip_path)
 
-            args = mock_run.call_args[0][0]
-            self.assertEqual(args[0], 'pg_dump')
-            self.assertIn('--no-owner', args)
-            self.assertIn('--format=p', args)
-            self.assertIn(self.env.cr.dbname, args)
+            mock_dump.assert_called_once()
+            self.assertEqual(mock_dump.call_args[0][0], self.env.cr.dbname)
         finally:
             os.unlink(zip_path)
 
     def test_neutralization_appended_in_own_transaction(self):
-        """When neutralize=True the neutralization SQL is wrapped in BEGIN/COMMIT."""
+        """When neutralize=True the neutralization SQL is appended with BEGIN/COMMIT."""
         import os
         import tempfile
-        import zipfile
 
         config = self.env['dmc.backup.config'].create({
             'name': 'Test',
@@ -59,14 +61,12 @@ class TestDumpDb(TransactionCase):
             zip_path = tf.name
 
         try:
-            def fake_run(cmd, **kw):
-                dump_path = next(a for a in cmd if a.startswith('--file=')).split('=', 1)[1]
-                with open(dump_path, 'wb') as f:
-                    f.write(b'-- pg_dump output\n')
+            zip_bytes = self._fake_odoo_zip()
 
-            with patch('subprocess.run', side_effect=fake_run), \
-                 patch('odoo.service.db.find_pg_tool', return_value='pg_dump'), \
-                 patch('odoo.service.db.exec_pg_environ', return_value={}):
+            def fake_dump(db_name, stream, backup_format='zip'):
+                stream.write(zip_bytes)
+
+            with patch('odoo.service.db.dump_db', side_effect=fake_dump):
                 self.service._dump_db(self.env.cr.dbname, zip_path, config=config)
 
             with zipfile.ZipFile(zip_path) as zf:

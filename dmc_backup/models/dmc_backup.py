@@ -247,62 +247,33 @@ class DmcBackupService(models.Model):
     # ── Backup generation ────────────────────────────────────────────────────
 
     def _dump_db(self, db_name, zip_path, config=None):
-        import subprocess
-        from odoo.service.db import find_pg_tool, exec_pg_environ
+        import io
+        from odoo.service.db import dump_db as odoo_dump_db
 
         neutralize        = config.neutralize        if config else False
         include_filestore = config.include_filestore if config else True
 
-        cr = self.env.cr
-        cr.execute(
-            "SELECT name, latest_version FROM ir_module_module WHERE state = 'installed'"
-        )
-        modules = dict(cr.fetchall())
-        pg_version = "%d.%d" % divmod(cr._obj.connection.server_version // 100, 100)
-        manifest = json.dumps({
-            'odoo_dump': '1',
-            'db_name':       db_name,
-            'version':       odoo.release.version,
-            'version_info':  odoo.release.version_info,
-            'major_version': odoo.release.major_version,
-            'pg_version':    pg_version,
-            'modules':       modules,
-        }, indent=4).encode()
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tf:
+            odoo_zip_path = tf.name
 
-        cfg = odoo.tools.config
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            dump_path = os.path.join(tmp_dir, 'dump.sql')
+        try:
+            with open(odoo_zip_path, 'wb') as f:
+                odoo_dump_db(db_name, f, backup_format='zip')
 
-            cmd = [find_pg_tool('pg_dump'), '--no-owner', '--no-acl', '--format=p',
-                   '--file=' + dump_path]
-            if cfg['db_host']:
-                cmd += ['--host=' + cfg['db_host']]
-            if cfg['db_port']:
-                cmd += ['--port=' + str(cfg['db_port'])]
-            if cfg['db_user']:
-                cmd += ['--username=' + cfg['db_user']]
-            cmd.append(db_name)
-
-            subprocess.run(cmd, env=exec_pg_environ(), check=True, timeout=3600)
-
-            if neutralize:
-                with open(dump_path, 'ab') as f:
-                    self._write_neutralization(f)
-
-            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-                zf.writestr('manifest.json', manifest)
-                zf.write(dump_path, 'dump.sql')
-                if include_filestore:
-                    filestore_path = odoo.tools.config.filestore(db_name)
-                    if os.path.exists(filestore_path):
-                        for dirpath, _dirs, filenames in os.walk(filestore_path):
-                            for fname in filenames:
-                                abs_path = os.path.join(dirpath, fname)
-                                arc_path = os.path.join(
-                                    'filestore',
-                                    os.path.relpath(abs_path, filestore_path),
-                                )
-                                zf.write(abs_path, arc_path)
+            with zipfile.ZipFile(odoo_zip_path) as src_zf, \
+                 zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as dst_zf:
+                for name in src_zf.namelist():
+                    if not include_filestore and name.startswith('filestore/'):
+                        continue
+                    data = src_zf.read(name)
+                    if name == 'dump.sql' and neutralize:
+                        buf = io.BytesIO(data)
+                        self._write_neutralization(buf)
+                        data = buf.getvalue()
+                    dst_zf.writestr(name, data)
+        finally:
+            if os.path.exists(odoo_zip_path):
+                os.unlink(odoo_zip_path)
 
     def _write_neutralization(self, f):
         f.write(b'\nBEGIN;\n\n-- Neutralization\n\n')
