@@ -19,6 +19,13 @@ Features
 
 Changelog
 ---------
+19.0.9.0.1
+  - Fixed: added pre-flight check for pg_settings access before invoking
+    pg_dump; on Odoo SH staging/dev branches the PostgreSQL role has
+    pg_settings revoked, causing pg_dump to exit immediately with "permission
+    denied for view pg_settings" — the check now raises a clear UserError
+    telling the user to disable the scheduled action on non-production branches
+
 19.0.9.0.0
   - Fixed: pg_dump command now matches odoo.service.db.dump_db exactly —
     removed --no-acl and explicit --host/--port/--username flags; connection
@@ -106,7 +113,7 @@ Changelog
     'author': "DMC Strategic IT",
     'website': "https://www.dmcstrategicit.com",
 
-    'version': '19.0.9.0.0',
+    'version': '19.0.9.0.1',
 
     'application': True,
     'installable': True,

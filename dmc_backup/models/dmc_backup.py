@@ -281,11 +281,35 @@ class DmcBackupService(models.Model):
 
         return configured
 
+    def _check_pg_dump_available(self):
+        """Raise UserError if the database user cannot access pg_settings.
+
+        On Odoo SH staging/dev branches, the PostgreSQL role that Odoo runs as
+        has pg_settings access revoked as a security measure.  pg_dump reads
+        pg_settings at startup (to check restrict_nonsystem_relation_kind), so it
+        fails immediately with "permission denied for view pg_settings".  Detection
+        here gives a clear, actionable error instead of a cryptic pg_dump exit-1.
+        """
+        try:
+            self.env.cr.execute("SELECT 1 FROM pg_settings LIMIT 1")
+        except Exception:
+            raise UserError(
+                'pg_dump cannot run on this environment because the database '
+                'user lacks access to pg_settings.\n\n'
+                'On Odoo SH this restriction applies to staging and development '
+                'branches. Backups should only be scheduled on the production '
+                'branch.\n\n'
+                'To fix: open the DMC Backup scheduled action on this branch '
+                'and uncheck "Active".'
+            )
+
     def _dump_db(self, db_name, zip_path, config=None):
         import subprocess
         import shutil
         from odoo.tools.misc import exec_pg_environ
         from odoo.tools import osutil
+
+        self._check_pg_dump_available()
 
         neutralize        = config.neutralize        if config else False
         include_filestore = config.include_filestore if config else True
