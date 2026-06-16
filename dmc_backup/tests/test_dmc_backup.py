@@ -8,21 +8,23 @@ from odoo.exceptions import UserError, ValidationError
 
 
 class TestDumpDb(TransactionCase):
-    """Tests for _dump_db using odoo.service.db.dump_db."""
+    """Tests for _dump_db using pg_dump subprocess."""
 
     def setUp(self):
         super().setUp()
         self.service = self.env['dmc.backup.service']
 
-    def _fake_odoo_zip(self, sql=b'-- odoo dump\n'):
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, 'w') as z:
-            z.writestr('manifest.json', b'{"odoo_dump": "1"}')
-            z.writestr('dump.sql', sql)
-        return buf.getvalue()
+    def _fake_pg_dump(self, cmd, **kw):
+        dump_path = next(a for a in cmd if a.startswith('--file=')).split('=', 1)[1]
+        with open(dump_path, 'wb') as f:
+            f.write(b'-- pg_dump output\n')
+        m = MagicMock()
+        m.returncode = 0
+        m.stderr = b''
+        return m
 
-    def test_dump_db_delegates_to_odoo_dump_db(self):
-        """_dump_db must delegate to odoo.service.db.dump_db."""
+    def test_dump_db_calls_pg_dump(self):
+        """_dump_db must invoke pg_dump with --no-owner, --format=p, and the db name."""
         import os
         import tempfile
 
@@ -30,16 +32,16 @@ class TestDumpDb(TransactionCase):
             zip_path = tf.name
 
         try:
-            zip_bytes = self._fake_odoo_zip()
-
-            def fake_dump(db_name, stream, backup_format='zip'):
-                stream.write(zip_bytes)
-
-            with patch('odoo.service.db.dump_db', side_effect=fake_dump) as mock_dump:
+            with patch('subprocess.run', side_effect=self._fake_pg_dump) as mock_run, \
+                 patch.object(self.service.__class__, '_find_pg_dump', return_value='pg_dump'), \
+                 patch('odoo.service.db.exec_pg_environ', return_value={}):
                 self.service._dump_db(self.env.cr.dbname, zip_path)
 
-            mock_dump.assert_called_once()
-            self.assertEqual(mock_dump.call_args[0][0], self.env.cr.dbname)
+            args = mock_run.call_args[0][0]
+            self.assertEqual(args[0], 'pg_dump')
+            self.assertIn('--no-owner', args)
+            self.assertIn('--format=p', args)
+            self.assertIn(self.env.cr.dbname, args)
         finally:
             os.unlink(zip_path)
 
@@ -61,12 +63,9 @@ class TestDumpDb(TransactionCase):
             zip_path = tf.name
 
         try:
-            zip_bytes = self._fake_odoo_zip()
-
-            def fake_dump(db_name, stream, backup_format='zip'):
-                stream.write(zip_bytes)
-
-            with patch('odoo.service.db.dump_db', side_effect=fake_dump):
+            with patch('subprocess.run', side_effect=self._fake_pg_dump), \
+                 patch.object(self.service.__class__, '_find_pg_dump', return_value='pg_dump'), \
+                 patch('odoo.service.db.exec_pg_environ', return_value={}):
                 self.service._dump_db(self.env.cr.dbname, zip_path, config=config)
 
             with zipfile.ZipFile(zip_path) as zf:
