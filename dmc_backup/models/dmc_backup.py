@@ -287,9 +287,15 @@ class DmcBackupService(models.Model):
         On Odoo SH staging/dev branches the app user has pg_settings revoked, which
         causes pg_dump to fail at startup before it reads any data.  This check lets
         _dump_db decide whether to use pg_dump or the Python/psycopg2 fallback.
+
+        The probe must run inside a savepoint.  A permission-denied error from
+        PostgreSQL puts the entire transaction into ABORTED state; without a
+        savepoint to roll back to, every subsequent cr.execute() in the same
+        transaction fails with InFailedSqlTransaction.
         """
         try:
-            self.env.cr.execute("SELECT 1 FROM pg_settings LIMIT 1")
+            with self.env.cr.savepoint(flush=False):
+                self.env.cr.execute("SELECT 1 FROM pg_settings LIMIT 1")
             return True
         except Exception:
             return False
