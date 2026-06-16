@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ══ Wizard Form View ═══════════════════════════════════════════════════ -->
+
+    <record id="dmc_company_setup_wizard_view_form" model="ir.ui.view">
+        <field name="name">dmc.company.setup.wizard.form</field>
+        <field name="model">dmc.company.setup.wizard</field>
+        <field name="arch" type="xml">
+            <form string="New Company Setup">
+
+                <header>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="company_info,bank_setup,journal_prefixes,review,done"
+                           readonly="1"/>
+                </header>
+
+                <sheet>
+
+                    <!-- ── Step 1: Company Information ─────────────────────── -->
+                    <group invisible="state != 'company_info'">
+                        <group string="Company Details">
+                            <field name="company_name"/>
+                            <field name="vat"/>
+                            <field name="currency_id" options="{'no_create': True}"/>
+                            <field name="parent_id" options="{'no_create': True}"/>
+                            <field name="phone"/>
+                            <field name="email"/>
+                            <field name="website"/>
+                        </group>
+                        <group string="Address">
+                            <field name="street"/>
+                            <field name="street2"/>
+                            <field name="city"/>
+                            <field name="state_id"
+                                   options="{'no_create': True}"
+                                   domain="[('country_id', '=', country_id)]"/>
+                            <field name="zip"/>
+                            <field name="country_id" options="{'no_create': True}"/>
+                        </group>
+                        <group string="Logo">
+                            <field name="logo" widget="image"
+                                   options="{'size': [128, 128], 'preview_image': 'logo'}"/>
+                        </group>
+                    </group>
+
+                    <!-- ── Step 2: Bank Account Setup ──────────────────────── -->
+                    <group invisible="state != 'bank_setup'" string="Bank and Cash Chart Accounts">
+                        <group string="Bank Account">
+                            <field name="bank_account_name" placeholder="e.g. Bank Southern Equipment Company"/>
+                            <field name="bank_account_code" placeholder="e.g. 101405"/>
+                            <field name="bank_name" placeholder="e.g. Regions Bank (optional)"/>
+                        </group>
+                        <group string="Cash Account (optional)">
+                            <field name="cash_account_name" placeholder="e.g. Cash Southern Equipment Company"/>
+                            <field name="cash_account_code" placeholder="Leave blank to skip"/>
+                        </group>
+                    </group>
+
+                    <!-- ── Step 3: Journal Prefixes ────────────────────────── -->
+                    <group invisible="state != 'journal_prefixes'" string="Journal Sequence Prefixes">
+                        <div class="alert alert-info" role="alert">
+                            These prefixes must be unique across all companies.
+                            Append a suffix (e.g. INV3, BNK3) if the defaults conflict.
+                        </div>
+                        <group>
+                            <field name="journal_sales_prefix"/>
+                            <field name="journal_purchase_prefix"/>
+                            <field name="journal_bank_prefix"/>
+                            <field name="journal_misc_prefix"/>
+                        </group>
+                    </group>
+
+                    <!-- ── Step 4: Review ──────────────────────────────────── -->
+                    <group invisible="state != 'review'" string="Review — Everything below will be created">
+                        <group string="Company">
+                            <field name="company_name" readonly="1"/>
+                            <field name="currency_id" readonly="1"/>
+                            <field name="parent_id" readonly="1"/>
+                        </group>
+                        <group string="Bank / Cash Accounts">
+                            <field name="bank_account_name" readonly="1"/>
+                            <field name="bank_account_code" readonly="1"/>
+                            <field name="cash_account_name" readonly="1"
+                                   invisible="not cash_account_code"/>
+                            <field name="cash_account_code" readonly="1"
+                                   invisible="not cash_account_code"/>
+                        </group>
+                        <group string="Journal Prefixes">
+                            <field name="journal_sales_prefix" readonly="1"/>
+                            <field name="journal_purchase_prefix" readonly="1"/>
+                            <field name="journal_bank_prefix" readonly="1"/>
+                            <field name="journal_misc_prefix" readonly="1"/>
+                        </group>
+                        <div class="alert alert-warning" role="alert">
+                            Clicking <strong>Create Company</strong> will:
+                            <ul>
+                                <li>Create the company and its partner record</li>
+                                <li>Create company-specific Bank/Cash chart accounts</li>
+                                <li>Add this company to all existing shared chart accounts</li>
+                                <li>Copy all taxes and tax groups from TITAN (Main)</li>
+                                <li>Create Sales, Purchase, Bank, and Misc journals</li>
+                                <li>Create Cash on Delivery, Demo, and Wire Transfer payment providers</li>
+                            </ul>
+                            This operation cannot be undone automatically.
+                        </div>
+                    </group>
+
+                    <!-- ── Step 5: Done ────────────────────────────────────── -->
+                    <group invisible="state != 'done'" string="Setup Complete">
+                        <field name="result_message" readonly="1" nolabel="1"/>
+                        <field name="created_company_id" readonly="1"/>
+                        <field name="created_journal_ids" readonly="1" widget="many2many_tags"/>
+                    </group>
+
+                </sheet>
+
+                <footer>
+                    <!-- Back (steps 2–4) -->
+                    <button name="action_back" string="Back" type="object"
+                            class="btn-secondary"
+                            invisible="state in ('company_info', 'done')"/>
+
+                    <!-- Next (steps 1–3) -->
+                    <button name="action_next" string="Next" type="object"
+                            class="btn-primary"
+                            invisible="state not in ('company_info', 'bank_setup', 'journal_prefixes')"/>
+
+                    <!-- Confirm (step 4) -->
+                    <button name="action_create_company" string="Create Company" type="object"
+                            class="oe_highlight"
+                            invisible="state != 'review'"
+                            confirm="This will create the company and all associated accounting records. This cannot be automatically undone. Continue?"/>
+
+                    <!-- Close (step 5) -->
+                    <button string="Close" special="cancel"
+                            class="btn-primary"
+                            invisible="state != 'done'"/>
+
+                    <!-- Cancel (steps 1–4) -->
+                    <button string="Cancel" special="cancel"
+                            class="btn-secondary"
+                            invisible="state == 'done'"/>
+                </footer>
+
+            </form>
+        </field>
+    </record>
+
+    <!-- ══ Action ════════════════════════════════════════════════════════════ -->
+
+    <record id="action_dmc_company_setup_wizard" model="ir.actions.act_window">
+        <field name="name">New Company Setup</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">dmc.company.setup.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="context">{"dialog_size": "large"}</field>
+    </record>
+
+    <!-- ══ Home Page App Tile ════════════════════════════════════════════════ -->
+    <!--
+        No parent_id → root menu → Odoo home screen tile.
+        application: True in __manifest__.py is required for this to work.
+        Replace web_icon with a real PNG path once an icon is available,
+        or use the color+icon shorthand: "#1c6ea4,fa-building-o"
+    -->
+    <menuitem
+        id="menu_dmc_company_setup_wizard"
+        name="Company Setup"
+        action="action_dmc_company_setup_wizard"
+        web_icon="dmc_company_setup_wizard,static/description/icon.png"
+        sequence="100"
+        groups="base.group_system"/>
+
+</odoo>
