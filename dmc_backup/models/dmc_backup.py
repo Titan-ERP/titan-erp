@@ -410,6 +410,20 @@ class DmcBackupService(models.Model):
             w("SET client_min_messages = warning;\n")
             w("SET row_security = off;\n\n")
 
+            # ── Non-default schemas — must come before extensions so that
+            # CREATE EXTENSION ... WITH SCHEMA "x" succeeds (schema must exist)
+            cr.execute("""
+                SELECT n.nspname
+                FROM pg_namespace n
+                WHERE n.nspname NOT IN ('public', 'information_schema',
+                                        'pg_catalog', 'pg_toast')
+                AND n.nspname NOT LIKE 'pg_%'
+                ORDER BY n.nspname
+            """)
+            for (nspname,) in cr.fetchall():
+                w(f'CREATE SCHEMA IF NOT EXISTS "{nspname}";\n')
+            w('\n')
+
             # ── Extensions ────────────────────────────────────────────────────
             cr.execute("""
                 SELECT e.extname, n.nspname
@@ -420,20 +434,6 @@ class DmcBackupService(models.Model):
             """)
             for extname, nspname in cr.fetchall():
                 w(f'CREATE EXTENSION IF NOT EXISTS "{extname}" WITH SCHEMA "{nspname}";\n')
-            w('\n')
-
-            # ── Non-default schemas (e.g. unaccent_schema) ───────────────────
-            cr.execute("""
-                SELECT n.nspname
-                FROM pg_namespace n
-                WHERE n.nspname NOT IN ('public', 'information_schema',
-                                        'pg_catalog', 'pg_toast')
-                AND n.nspname NOT LIKE 'pg_%'
-                AND n.oid NOT IN (SELECT extnamespace FROM pg_extension)
-                ORDER BY n.nspname
-            """)
-            for (nspname,) in cr.fetchall():
-                w(f'CREATE SCHEMA IF NOT EXISTS "{nspname}";\n')
             w('\n')
 
             # ── User-defined functions in public schema ────────────────────────

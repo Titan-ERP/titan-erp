@@ -19,6 +19,14 @@ Features
 
 Changelog
 ---------
+19.0.10.0.7
+  - Fixed: Python dump now emits CREATE SCHEMA for non-default schemas
+    (e.g. unaccent_schema) BEFORE CREATE EXTENSION statements; previously the
+    schema block ran after extensions and incorrectly excluded extension-target
+    schemas via a NOT IN filter, so CREATE EXTENSION unaccent WITH SCHEMA
+    "unaccent_schema" always failed on restore because the schema did not yet
+    exist — unaccent()-based search was broken on every restored database
+
 19.0.10.0.6
   - Fixed: retention cleanup cutoff now uses a naive UTC datetime
     (datetime.now(timezone.utc).replace(tzinfo=None)) so Odoo 19's domain
@@ -132,7 +140,7 @@ Changelog
     'author': "DMC Strategic IT",
     'website': "https://www.dmcstrategicit.com",
 
-    'version': '19.0.10.0.6',
+    'version': '19.0.10.0.7',
 
     'application': True,
     'installable': True,
