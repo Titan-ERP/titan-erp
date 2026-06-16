@@ -235,7 +235,7 @@ class DmcBackupService(models.Model):
                     pass
 
         try:
-            cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+            cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=retention_days)
             old = self.env['dmc.backup.log'].sudo().search([('backup_date', '<', cutoff)])
             old.unlink()
             _logger.info('Cleanup complete: %d old backup(s) removed', len(old))
