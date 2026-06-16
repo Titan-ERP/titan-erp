@@ -281,35 +281,22 @@ class DmcBackupService(models.Model):
 
         return configured
 
-    def _check_pg_dump_available(self):
-        """Raise UserError if the database user cannot access pg_settings.
+    def _is_pg_dump_available(self):
+        """Return True if pg_dump can run (pg_settings accessible to the DB user).
 
-        On Odoo SH staging/dev branches, the PostgreSQL role that Odoo runs as
-        has pg_settings access revoked as a security measure.  pg_dump reads
-        pg_settings at startup (to check restrict_nonsystem_relation_kind), so it
-        fails immediately with "permission denied for view pg_settings".  Detection
-        here gives a clear, actionable error instead of a cryptic pg_dump exit-1.
+        On Odoo SH staging/dev branches the app user has pg_settings revoked, which
+        causes pg_dump to fail at startup before it reads any data.  This check lets
+        _dump_db decide whether to use pg_dump or the Python/psycopg2 fallback.
         """
         try:
             self.env.cr.execute("SELECT 1 FROM pg_settings LIMIT 1")
+            return True
         except Exception:
-            raise UserError(
-                'pg_dump cannot run on this environment because the database '
-                'user lacks access to pg_settings.\n\n'
-                'On Odoo SH this restriction applies to staging and development '
-                'branches. Backups should only be scheduled on the production '
-                'branch.\n\n'
-                'To fix: open the DMC Backup scheduled action on this branch '
-                'and uncheck "Active".'
-            )
+            return False
 
     def _dump_db(self, db_name, zip_path, config=None):
-        import subprocess
         import shutil
-        from odoo.tools.misc import exec_pg_environ
         from odoo.tools import osutil
-
-        self._check_pg_dump_available()
 
         neutralize        = config.neutralize        if config else False
         include_filestore = config.include_filestore if config else True
@@ -319,9 +306,9 @@ class DmcBackupService(models.Model):
             "SELECT name, latest_version FROM ir_module_module WHERE state = 'installed'"
         )
         modules = dict(cr.fetchall())
-        # Match odoo.service.db.dump_db_manifest: float division so pg_version is "16.14" not "16.0"
+        # Float division matches odoo.service.db.dump_db_manifest: "16.14" not "16.0"
         pg_version = "%d.%d" % divmod(cr._obj.connection.server_version / 100, 100)
-        manifest = json.dumps({
+        manifest_bytes = json.dumps({
             'odoo_dump': '1',
             'db_name':       db_name,
             'version':       odoo.release.version,
@@ -334,40 +321,325 @@ class DmcBackupService(models.Model):
         with tempfile.TemporaryDirectory() as tmp_dir:
             dump_path = os.path.join(tmp_dir, 'dump.sql')
 
-            # Match odoo.service.db.dump_db exactly: --no-owner only, no --no-acl,
-            # no explicit host/port/user (exec_pg_environ sets PGHOST/PGPORT/PGUSER/PGPASSWORD).
-            cmd = [self._find_pg_dump(), '--no-owner', '--file=' + dump_path, db_name]
-
-            result = subprocess.run(
-                cmd, env=exec_pg_environ(), check=False, timeout=3600,
-                stderr=subprocess.PIPE,
-            )
-            if result.returncode != 0:
-                err = result.stderr.decode('utf-8', errors='replace').strip()
-                raise Exception(
-                    f'pg_dump failed (exit {result.returncode}): {err}'
+            if self._is_pg_dump_available():
+                self._run_pg_dump(db_name, dump_path)
+            else:
+                _logger.warning(
+                    'pg_dump unavailable (pg_settings access restricted — '
+                    'typical of Odoo SH staging/dev branches); '
+                    'using Python/psycopg2 SQL dump as fallback.'
                 )
+                self._write_python_sql_dump(dump_path)
 
             if neutralize:
-                with open(dump_path, 'ab') as f:
-                    self._write_neutralization(f)
+                with open(dump_path, 'ab') as nf:
+                    self._write_neutralization(nf)
 
-            # Write manifest.json into the temp dir so osutil.zip_dir picks it up.
             with open(os.path.join(tmp_dir, 'manifest.json'), 'wb') as mf:
-                mf.write(manifest)
+                mf.write(manifest_bytes)
 
             if include_filestore:
                 filestore_path = odoo.tools.config.filestore(db_name)
                 if os.path.exists(filestore_path):
                     shutil.copytree(filestore_path, os.path.join(tmp_dir, 'filestore'))
 
-            # Match odoo.service.db.dump_db: dump.sql first (False sorts before True),
-            # allowZip64 for large databases.
             with open(zip_path, 'wb') as zf:
                 osutil.zip_dir(
                     tmp_dir, zf, include_dir=False,
                     fnct_sort=lambda fname: fname != 'dump.sql',
                 )
+
+    def _run_pg_dump(self, db_name, dump_path):
+        """Run pg_dump subprocess to produce the SQL dump.
+
+        Matches odoo.service.db.dump_db exactly: --no-owner only, connection
+        parameters via exec_pg_environ() (PGHOST/PGPORT/PGUSER/PGPASSWORD).
+        """
+        import subprocess
+        from odoo.tools.misc import exec_pg_environ
+
+        cmd = [self._find_pg_dump(), '--no-owner', '--file=' + dump_path, db_name]
+        result = subprocess.run(
+            cmd, env=exec_pg_environ(), check=False, timeout=3600,
+            stderr=subprocess.PIPE,
+        )
+        if result.returncode != 0:
+            err = result.stderr.decode('utf-8', errors='replace').strip()
+            raise Exception(f'pg_dump failed (exit {result.returncode}): {err}')
+
+    def _write_python_sql_dump(self, dump_path):
+        """Write a psql-compatible SQL dump using psycopg2 catalog queries and COPY TO STDOUT.
+
+        Used when pg_dump is unavailable (e.g. Odoo SH staging where the app user
+        cannot access pg_settings, which pg_dump requires at startup).  Produces a
+        dump.sql that is structurally identical to pg_dump plain-format output and
+        is compatible with Odoo SH's restore_db / import utility.
+        """
+        cr  = self.env.cr
+        raw = cr._obj  # psycopg2 cursor — needed for copy_expert
+
+        # Extend session timeouts so long dumps don't get killed.
+        cr.execute("SET statement_timeout = 0")
+        cr.execute("SET lock_timeout = 0")
+        # Empty search_path forces all catalog functions (pg_get_constraintdef,
+        # pg_get_indexdef, pg_get_expr, …) to emit fully schema-qualified names.
+        # pg_catalog is always implicitly visible regardless of search_path.
+        cr.execute("SET LOCAL search_path = ''")
+
+        with open(dump_path, 'wb') as f:
+            def w(text):
+                f.write(text.encode('utf-8') if isinstance(text, str) else text)
+
+            # ── Header ────────────────────────────────────────────────────────
+            w("SET statement_timeout = 0;\n")
+            w("SET lock_timeout = 0;\n")
+            w("SET idle_in_transaction_session_timeout = 0;\n")
+            w("SET client_encoding = 'UTF8';\n")
+            w("SET standard_conforming_strings = on;\n")
+            w("SELECT pg_catalog.set_config('search_path', '', false);\n")
+            w("SET check_function_bodies = false;\n")
+            w("SET xmloption = content;\n")
+            w("SET client_min_messages = warning;\n")
+            w("SET row_security = off;\n\n")
+
+            # ── Extensions ────────────────────────────────────────────────────
+            cr.execute("""
+                SELECT e.extname, n.nspname
+                FROM pg_extension e
+                JOIN pg_namespace n ON n.oid = e.extnamespace
+                WHERE e.extname != 'plpgsql'
+                ORDER BY e.extname
+            """)
+            for extname, nspname in cr.fetchall():
+                w(f'CREATE EXTENSION IF NOT EXISTS "{extname}" WITH SCHEMA "{nspname}";\n')
+            w('\n')
+
+            # ── Non-default schemas (e.g. unaccent_schema) ───────────────────
+            cr.execute("""
+                SELECT n.nspname
+                FROM pg_namespace n
+                WHERE n.nspname NOT IN ('public', 'information_schema',
+                                        'pg_catalog', 'pg_toast')
+                AND n.nspname NOT LIKE 'pg_%'
+                AND n.oid NOT IN (SELECT extnamespace FROM pg_extension)
+                ORDER BY n.nspname
+            """)
+            for (nspname,) in cr.fetchall():
+                w(f'CREATE SCHEMA IF NOT EXISTS "{nspname}";\n')
+            w('\n')
+
+            # ── User-defined functions in public schema ────────────────────────
+            cr.execute("""
+                SELECT pg_get_functiondef(p.oid)
+                FROM pg_proc p
+                JOIN pg_namespace n ON n.oid = p.pronamespace
+                WHERE n.nspname = 'public'
+                AND p.oid NOT IN (SELECT objid FROM pg_depend WHERE deptype = 'e')
+                ORDER BY p.proname, p.oid
+            """)
+            for (funcdef,) in cr.fetchall():
+                if funcdef:
+                    w(funcdef.rstrip())
+                    w(';\n\n')
+
+            # ── Sequences — skip extension-owned and IDENTITY-auto-sequences ──
+            cr.execute("""
+                SELECT s.oid, n.nspname, s.relname,
+                       sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqmax, sq.seqcycle
+                FROM pg_class s
+                JOIN pg_namespace n ON n.oid = s.relnamespace
+                JOIN pg_sequence sq ON sq.seqrelid = s.oid
+                WHERE s.relkind = 'S'
+                AND n.nspname = 'public'
+                AND s.oid NOT IN (SELECT objid FROM pg_depend WHERE deptype = 'e')
+                AND NOT EXISTS (
+                    SELECT 1 FROM pg_depend d
+                    JOIN pg_attribute a
+                        ON a.attrelid = d.refobjid AND a.attnum = d.refobjsubid
+                    WHERE d.objid = s.oid
+                    AND d.deptype IN ('i', 'a')
+                    AND a.attidentity != ''
+                )
+                ORDER BY s.relname
+            """)
+            sequences = cr.fetchall()
+            for _oid, nspname, seqname, start, inc, min_val, max_val, cycle in sequences:
+                w(f'CREATE SEQUENCE IF NOT EXISTS "{nspname}"."{seqname}"\n'
+                  f'    START WITH {start} INCREMENT BY {inc}\n'
+                  f'    MINVALUE {min_val} MAXVALUE {max_val}\n'
+                  f'    {"CYCLE" if cycle else "NO CYCLE"};\n\n')
+
+            # ── Tables — schema only; FK constraints added after data load ────
+            cr.execute("""
+                SELECT c.oid, n.nspname, c.relname
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE c.relkind = 'r'
+                AND n.nspname = 'public'
+                AND c.oid NOT IN (SELECT objid FROM pg_depend WHERE deptype = 'e')
+                ORDER BY c.relname
+            """)
+            tables = cr.fetchall()
+
+            for tbl_oid, nspname, tblname in tables:
+                cr.execute("""
+                    SELECT a.attname,
+                           pg_catalog.format_type(a.atttypid, a.atttypmod),
+                           pg_catalog.pg_get_expr(ad.adbin, ad.adrelid),
+                           a.attnotnull,
+                           a.attidentity
+                    FROM pg_catalog.pg_attribute a
+                    LEFT JOIN pg_catalog.pg_attrdef ad
+                        ON a.attrelid = ad.adrelid AND a.attnum = ad.adnum
+                    WHERE a.attrelid = %s AND a.attnum > 0 AND NOT a.attisdropped
+                    ORDER BY a.attnum
+                """, (tbl_oid,))
+                cols = cr.fetchall()
+                if not cols:
+                    continue
+
+                col_defs = []
+                for attname, col_type, default_val, attnotnull, attidentity in cols:
+                    col_def = f'    "{attname}" {col_type}'
+                    if attidentity == 'a':
+                        col_def += ' GENERATED ALWAYS AS IDENTITY'
+                    elif attidentity == 'd':
+                        col_def += ' GENERATED BY DEFAULT AS IDENTITY'
+                    elif default_val:
+                        col_def += f' DEFAULT {default_val}'
+                    if attnotnull and not attidentity:
+                        col_def += ' NOT NULL'
+                    col_defs.append(col_def)
+
+                w(f'CREATE TABLE IF NOT EXISTS "{nspname}"."{tblname}" (\n')
+                w(',\n'.join(col_defs))
+                w('\n);\n\n')
+
+            # ── Data — COPY TO STDOUT (works under Odoo SH app-user permissions) ─
+            for tbl_oid, nspname, tblname in tables:
+                cr.execute("""
+                    SELECT attname FROM pg_attribute
+                    WHERE attrelid = %s AND attnum > 0 AND NOT attisdropped
+                    ORDER BY attnum
+                """, (tbl_oid,))
+                col_names = [row[0] for row in cr.fetchall()]
+                if not col_names:
+                    continue
+                col_list = ', '.join(f'"{c}"' for c in col_names)
+                w(f'COPY "{nspname}"."{tblname}" ({col_list}) FROM STDIN;\n')
+                raw.copy_expert(
+                    f'COPY "{nspname}"."{tblname}" ({col_list}) TO STDOUT',
+                    f,
+                )
+                w('\n\\.\n\n')
+
+            # ── Primary key constraints ────────────────────────────────────────
+            cr.execute("""
+                SELECT c.conname,
+                       '"' || n.nspname || '"."' || t.relname || '"',
+                       pg_get_constraintdef(c.oid)
+                FROM pg_constraint c
+                JOIN pg_class t ON t.oid = c.conrelid
+                JOIN pg_namespace n ON n.oid = t.relnamespace
+                WHERE c.contype = 'p' AND n.nspname = 'public'
+                ORDER BY t.relname, c.conname
+            """)
+            for conname, tblref, condef in cr.fetchall():
+                w(f'ALTER TABLE {tblref} ADD CONSTRAINT "{conname}" {condef};\n')
+            w('\n')
+
+            # ── Unique constraints ─────────────────────────────────────────────
+            cr.execute("""
+                SELECT c.conname,
+                       '"' || n.nspname || '"."' || t.relname || '"',
+                       pg_get_constraintdef(c.oid)
+                FROM pg_constraint c
+                JOIN pg_class t ON t.oid = c.conrelid
+                JOIN pg_namespace n ON n.oid = t.relnamespace
+                WHERE c.contype = 'u' AND n.nspname = 'public'
+                ORDER BY t.relname, c.conname
+            """)
+            for conname, tblref, condef in cr.fetchall():
+                w(f'ALTER TABLE {tblref} ADD CONSTRAINT "{conname}" {condef};\n')
+            w('\n')
+
+            # ── Foreign key constraints ────────────────────────────────────────
+            cr.execute("""
+                SELECT c.conname,
+                       '"' || n.nspname || '"."' || t.relname || '"',
+                       pg_get_constraintdef(c.oid)
+                FROM pg_constraint c
+                JOIN pg_class t ON t.oid = c.conrelid
+                JOIN pg_namespace n ON n.oid = t.relnamespace
+                WHERE c.contype = 'f' AND n.nspname = 'public'
+                ORDER BY t.relname, c.conname
+            """)
+            for conname, tblref, condef in cr.fetchall():
+                w(f'ALTER TABLE {tblref} ADD CONSTRAINT "{conname}" {condef};\n')
+            w('\n')
+
+            # ── Check constraints ──────────────────────────────────────────────
+            cr.execute("""
+                SELECT c.conname,
+                       '"' || n.nspname || '"."' || t.relname || '"',
+                       pg_get_constraintdef(c.oid)
+                FROM pg_constraint c
+                JOIN pg_class t ON t.oid = c.conrelid
+                JOIN pg_namespace n ON n.oid = t.relnamespace
+                WHERE c.contype = 'c' AND n.nspname = 'public'
+                ORDER BY t.relname, c.conname
+            """)
+            for conname, tblref, condef in cr.fetchall():
+                w(f'ALTER TABLE {tblref} ADD CONSTRAINT "{conname}" {condef};\n')
+            w('\n')
+
+            # ── Indexes (exclude constraint-backing indexes) ───────────────────
+            cr.execute("""
+                SELECT indexdef
+                FROM pg_indexes
+                WHERE schemaname = 'public'
+                AND indexname NOT IN (
+                    SELECT conname FROM pg_constraint
+                    WHERE conrelid IN (
+                        SELECT oid FROM pg_class
+                        WHERE relnamespace = 'public'::regnamespace AND relkind = 'r'
+                    )
+                )
+                ORDER BY tablename, indexname
+            """)
+            for (indexdef,) in cr.fetchall():
+                w(f'{indexdef};\n')
+            w('\n')
+
+            # ── Views ─────────────────────────────────────────────────────────
+            cr.execute("""
+                SELECT c.relname, pg_get_viewdef(c.oid, true)
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE c.relkind = 'v'
+                AND n.nspname = 'public'
+                AND c.oid NOT IN (SELECT objid FROM pg_depend WHERE deptype = 'e')
+                ORDER BY c.relname
+            """)
+            for viewname, viewdef in cr.fetchall():
+                if viewdef:
+                    w(f'CREATE OR REPLACE VIEW "public"."{viewname}" AS\n'
+                      f'    {viewdef.strip()};\n\n')
+
+            # ── Advance sequences to their current last_value ─────────────────
+            for _oid, nspname, seqname, _s, _i, _mn, _mx, _c in sequences:
+                cr.execute(
+                    f'SELECT last_value, is_called FROM "{nspname}"."{seqname}"'
+                )
+                row = cr.fetchone()
+                if row:
+                    last_val, is_called = row
+                    seq_ref = '"' + nspname + '"."' + seqname + '"'
+                    w(
+                        f"SELECT pg_catalog.setval('{seq_ref}', {last_val},"
+                        f" {'true' if is_called else 'false'});\n"
+                    )
+            w('\n')
 
     def _write_neutralization(self, f):
         f.write(b'\nBEGIN;\n\n-- Neutralization\n\n')

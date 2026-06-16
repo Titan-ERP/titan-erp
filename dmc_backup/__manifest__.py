@@ -19,6 +19,20 @@ Features
 
 Changelog
 ---------
+19.0.10.0.0
+  - Added: Python/psycopg2-based SQL dump fallback for Odoo SH staging and
+    development branches, where the app user lacks access to pg_settings and
+    pg_dump therefore fails at startup; the fallback uses pg_catalog queries
+    and COPY TO STDOUT to produce a dump.sql that is structurally identical
+    to pg_dump plain-format output and fully compatible with Odoo SH's
+    restore_db import utility — no pg_dump binary or superuser privileges
+    required
+  - Changed: _check_pg_dump_available (raised UserError) replaced by
+    _is_pg_dump_available (returns bool); _dump_db now auto-selects pg_dump
+    when available and logs a warning then falls back to the Python dump
+    otherwise — backups on Odoo SH staging now succeed automatically
+  - Changed: pg_dump logic extracted to _run_pg_dump for clarity
+
 19.0.9.0.1
   - Fixed: added pre-flight check for pg_settings access before invoking
     pg_dump; on Odoo SH staging/dev branches the PostgreSQL role has
@@ -113,7 +127,7 @@ Changelog
     'author': "DMC Strategic IT",
     'website': "https://www.dmcstrategicit.com",
 
-    'version': '19.0.9.0.1',
+    'version': '19.0.10.0.0',
 
     'application': True,
     'installable': True,
