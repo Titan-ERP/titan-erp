@@ -127,7 +127,7 @@ Changelog
     'author': "DMC Strategic IT",
     'website': "https://www.dmcstrategicit.com",
 
-    'version': '19.0.10.0.3',
+    'version': '19.0.10.0.4',
 
     'application': True,
     'installable': True,

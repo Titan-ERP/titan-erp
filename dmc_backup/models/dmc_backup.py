@@ -175,25 +175,29 @@ class DmcBackupService(models.Model):
                 storage_url = self._push_to_azure(zip_path, file_size, file_name, config)
                 _logger.info('Azure push complete: %s', storage_url)
 
-            if log_id:
-                log = self.env['dmc.backup.log'].sudo().browse(log_id)
-                log.write({
-                    'name':         file_name,
-                    'size_mb':      round(file_size / 1024 / 1024, 2),
-                    'state':        'success',
-                    'storage_url':  storage_url,
-                    'storage_type': config.storage_type,
-                })
-            else:
-                log = self.env['dmc.backup.log'].sudo().create({
-                    'name':          file_name,
-                    'db_name':       db_name,
-                    'odoo_version':  odoo.release.version,
-                    'size_mb':       round(file_size / 1024 / 1024, 2),
-                    'state':         'success',
-                    'storage_url':   storage_url,
-                    'storage_type':  config.storage_type,
-                })
+            # Write success log on a separate committed cursor so it survives
+            # even if the main cron transaction is later rolled back.
+            with self.env.registry.cursor() as success_cr:
+                success_env = self.env(cr=success_cr)
+                if log_id:
+                    success_env['dmc.backup.log'].sudo().browse(log_id).write({
+                        'name':         file_name,
+                        'size_mb':      round(file_size / 1024 / 1024, 2),
+                        'state':        'success',
+                        'storage_url':  storage_url,
+                        'storage_type': config.storage_type,
+                    })
+                else:
+                    success_env['dmc.backup.log'].sudo().create({
+                        'name':          file_name,
+                        'db_name':       db_name,
+                        'odoo_version':  odoo.release.version,
+                        'size_mb':       round(file_size / 1024 / 1024, 2),
+                        'state':         'success',
+                        'storage_url':   storage_url,
+                        'storage_type':  config.storage_type,
+                    })
+                success_cr.commit()
 
             _logger.info('Backup complete: %s (%.2f MB)', file_name, round(file_size / 1024 / 1024, 2))
 
