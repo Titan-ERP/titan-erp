@@ -229,26 +229,79 @@ class DmcCompanySetupWizard(models.TransientModel):
                 }
             )
 
+    def _find_account_code_mapping_field(self):
+        """
+        Detect the One2many field on account.account that stores per-company code
+        mappings (the field rendered in the Mapping tab of the account form).
+        Returns (field_name, comodel_name) if found, or (None, None) otherwise.
+        In Odoo 17+, this is a One2many to a model with company_id + code fields.
+        """
+        account_fields = self.env["account.account"]._fields
+        for fname, field in account_fields.items():
+            if field.type != "one2many":
+                continue
+            comodel = self.env.get(field.comodel_name)
+            if comodel is None:
+                continue
+            cm_fields = comodel._fields
+            if "company_id" not in cm_fields or "code" not in cm_fields:
+                continue
+            # Confirm the comodel has a Many2one back to account.account
+            for cf in cm_fields.values():
+                if cf.type == "many2one" and cf.comodel_name == "account.account":
+                    return fname, field.comodel_name
+        return None, None
+
     def _step3_associate_shared_accounts(self, company):
-        # In Odoo 17+, account.account.code is company-dependent: every company
-        # in company_ids must have its own code entry or the constraint fires.
-        # We read each account's existing code (from one of its current companies)
-        # and then write that same code for the new company.
+        # In Odoo 17+, account.account has per-company code mappings stored in a
+        # One2many (shown in the "Mapping" tab). The constraint fires the moment
+        # company_ids is updated if the new company has no code entry. We must
+        # set BOTH company_ids AND the code mapping in a single write() call.
         shared_accounts = self.env["account.account"].sudo().search(
             [
                 ("account_type", "!=", "asset_cash"),
                 ("company_ids", "!=", False),
             ]
         )
+        if not shared_accounts:
+            return
+
+        mapping_field, mapping_model = self._find_account_code_mapping_field()
+
         for account in shared_accounts:
-            # Read the code in the context of an existing company on this account.
             source_company = account.company_ids[:1]
-            existing_code = account.with_company(source_company).code if source_company else account.code
-            # Link the new company to the account.
-            account.write({"company_ids": [Command.link(company.id)]})
-            # Set the same code for the new company so the constraint is satisfied.
-            if existing_code:
-                account.with_company(company).write({"code": existing_code})
+            existing_code = ""
+
+            if mapping_field and source_company:
+                # Read code from the existing mapping record for an existing company.
+                mapping_rec = account[mapping_field].filtered(
+                    lambda m: m.company_id.id == source_company.id
+                )[:1]
+                existing_code = mapping_rec.code if mapping_rec else ""
+            elif source_company:
+                # Fallback: company_dependent field (try with_company read)
+                existing_code = account.with_company(source_company).code or ""
+
+            if mapping_field and existing_code:
+                # Combine company_ids link + code mapping creation in ONE write
+                # so the constraint sees both changes simultaneously.
+                account.write({
+                    "company_ids": [Command.link(company.id)],
+                    mapping_field: [Command.create({
+                        "company_id": company.id,
+                        "code": existing_code,
+                    })],
+                })
+            elif mapping_field and not existing_code:
+                # No code found for source company — skip adding this company
+                # to avoid creating an account with an empty code.
+                continue
+            else:
+                # company_dependent fallback: set code before linking company
+                # so the constraint check finds the value already in place.
+                if existing_code:
+                    account.with_company(company).write({"code": existing_code})
+                account.write({"company_ids": [Command.link(company.id)]})
 
     def _step4_copy_taxes_and_groups(self, company):
         titan = self.env["res.company"].sudo().search(
