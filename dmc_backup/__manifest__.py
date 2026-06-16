@@ -19,6 +19,11 @@ Features
 
 Changelog
 ---------
+19.0.10.0.6
+  - Fixed: retention cleanup cutoff now uses a naive UTC datetime
+    (datetime.now(timezone.utc).replace(tzinfo=None)) so Odoo 19's domain
+    optimizer does not emit UserWarning on every cron run after a service restart
+
 19.0.10.0.0
   - Added: Python/psycopg2-based SQL dump fallback for Odoo SH staging and
     development branches, where the app user lacks access to pg_settings and
