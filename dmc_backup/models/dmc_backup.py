@@ -146,8 +146,7 @@ class DmcBackupService(models.Model):
         # Create 'running' log immediately via a separate cursor so it is visible at once
         log_id = None
         try:
-            registry = odoo.registry(db_name)
-            with registry.cursor() as start_cr:
+            with self.env.registry.cursor() as start_cr:
                 start_env = self.env(cr=start_cr)
                 running_log = start_env['dmc.backup.log'].sudo().create({
                     'name':         file_name,
@@ -201,8 +200,7 @@ class DmcBackupService(models.Model):
         except Exception as e:
             # Update or create failure log on a separate cursor — survives the cron rollback
             try:
-                registry = odoo.registry(db_name)
-                with registry.cursor() as new_cr:
+                with self.env.registry.cursor() as new_cr:
                     new_env = self.env(cr=new_cr)
                     if log_id:
                         new_env['dmc.backup.log'].sudo().browse(log_id).write({
@@ -646,6 +644,10 @@ class DmcBackupService(models.Model):
                         f" {'true' if is_called else 'false'});\n"
                     )
             w('\n')
+        # Restore search_path so Odoo ORM queries on this cursor (e.g. writing
+        # the success log in run_backup) work normally.  SET LOCAL reverts at
+        # transaction end, but we return to the same transaction immediately.
+        cr.execute("SET LOCAL search_path TO DEFAULT")
 
     def _write_neutralization(self, f):
         f.write(b'\nBEGIN;\n\n-- Neutralization\n\n')
