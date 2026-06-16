@@ -247,11 +247,13 @@ class DmcBackupService(models.Model):
     # ── Backup generation ────────────────────────────────────────────────────
 
     def _dump_db(self, db_name, zip_path, config=None):
-        cr = self.env.cr
+        import subprocess
+        from odoo.service.db import find_pg_tool, exec_pg_environ
 
         neutralize        = config.neutralize        if config else False
         include_filestore = config.include_filestore if config else True
 
+        cr = self.env.cr
         cr.execute(
             "SELECT name, latest_version FROM ir_module_module WHERE state = 'installed'"
         )
@@ -259,341 +261,51 @@ class DmcBackupService(models.Model):
         pg_version = "%d.%d" % divmod(cr._obj.connection.server_version // 100, 100)
         manifest = json.dumps({
             'odoo_dump': '1',
-            'db_name': db_name,
-            'version': odoo.release.version,
-            'version_info': odoo.release.version_info,
+            'db_name':       db_name,
+            'version':       odoo.release.version,
+            'version_info':  odoo.release.version_info,
             'major_version': odoo.release.major_version,
-            'pg_version': pg_version,
-            'modules': modules,
+            'pg_version':    pg_version,
+            'modules':       modules,
         }, indent=4).encode()
 
-        now = time.localtime()[:6]
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr('manifest.json', manifest)
-            dump_info = zipfile.ZipInfo('dump.sql', date_time=now)
-            dump_info.compress_type = zipfile.ZIP_DEFLATED
-            with zf.open(dump_info, 'w', force_zip64=True) as sql_stream:
-                self._generate_sql_dump(sql_stream, pg_version, neutralize=neutralize)
-            if include_filestore:
-                filestore_path = odoo.tools.config.filestore(db_name)
-                if os.path.exists(filestore_path):
-                    for dirpath, _dirs, filenames in os.walk(filestore_path):
-                        for fname in filenames:
-                            abs_path = os.path.join(dirpath, fname)
-                            arc_path = os.path.join(
-                                'filestore',
-                                os.path.relpath(abs_path, filestore_path),
-                            )
-                            zf.write(abs_path, arc_path)
+        cfg = odoo.tools.config
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            dump_path = os.path.join(tmp_dir, 'dump.sql')
 
-    def _generate_sql_dump(self, stream, pg_version='', neutralize=False):
-        cr = self.env.cr
-        f  = stream
+            cmd = [find_pg_tool('pg_dump'), '--no-owner', '--no-acl', '--format=p',
+                   '--file=' + dump_path]
+            if cfg['db_host']:
+                cmd += ['--host=' + cfg['db_host']]
+            if cfg['db_port']:
+                cmd += ['--port=' + str(cfg['db_port'])]
+            if cfg['db_user']:
+                cmd += ['--username=' + cfg['db_user']]
+            cmd.append(db_name)
 
-        # pg_dump-compatible plain-text header so restore tools accept this as a valid SQL dump
-        f.write(b'--\n-- PostgreSQL database dump\n--\n\n')
-        if pg_version:
-            f.write(f'-- Dumped from database version {pg_version}\n\n'.encode())
+            subprocess.run(cmd, env=exec_pg_environ(), check=True, timeout=3600)
 
-        f.write(b"SET statement_timeout = 0;\n")
-        f.write(b"SET lock_timeout = 0;\n")
-        f.write(b"SET idle_in_transaction_session_timeout = 0;\n")
-        f.write(b"SET client_encoding = 'UTF8';\n")
-        f.write(b"SET standard_conforming_strings = on;\n")
-        f.write(b"SET check_function_bodies = false;\n")
-        f.write(b"SET xmloption = content;\n")
-        f.write(b"SET client_min_messages = warning;\n")
-        f.write(b"SET row_security = off;\n")
-        f.write(b"SET default_tablespace = '';\n")
-        f.write(b"SET default_table_access_method = heap;\n\n")
-        f.write(b'BEGIN;\n\n')
+            if neutralize:
+                with open(dump_path, 'ab') as f:
+                    self._write_neutralization(f)
 
-        # ── Schemas (for extensions installed outside public) ─
-        cr.execute("""
-            SELECT DISTINCT n.nspname
-            FROM   pg_extension e
-            JOIN   pg_namespace n ON n.oid = e.extnamespace
-            WHERE  n.nspname NOT IN ('public', 'pg_catalog', 'information_schema')
-            ORDER  BY n.nspname
-        """)
-        for (schema,) in cr.fetchall():
-            f.write(f'CREATE SCHEMA IF NOT EXISTS "{schema}";\n'.encode())
-        f.write(b'\n')
-
-        # ── Extensions ────────────────────────────────────────
-        cr.execute("""
-            SELECT e.extname, n.nspname
-            FROM   pg_extension e
-            JOIN   pg_namespace n ON n.oid = e.extnamespace
-            WHERE  e.extname <> 'plpgsql'
-            ORDER  BY e.extname
-        """)
-        for extname, schema in cr.fetchall():
-            f.write(f'CREATE EXTENSION IF NOT EXISTS "{extname}" WITH SCHEMA "{schema}";\n'.encode())
-        f.write(b'\n')
-
-        # ── Custom enum types ─────────────────────────────────
-        cr.execute("""
-            SELECT t.typname, array_agg(e.enumlabel ORDER BY e.enumsortorder)
-            FROM   pg_type t
-            JOIN   pg_namespace n ON n.oid = t.typnamespace
-            JOIN   pg_enum e ON e.enumtypid = t.oid
-            WHERE  n.nspname = 'public'
-            AND    NOT EXISTS (
-                       SELECT 1 FROM pg_depend d
-                       WHERE  d.objid = t.oid AND d.deptype = 'e'
-                   )
-            GROUP  BY t.typname
-            ORDER  BY t.typname
-        """)
-        for typname, labels in cr.fetchall():
-            labels_str = ', '.join("'" + lbl.replace("'", "''") + "'" for lbl in labels)
-            f.write(f'CREATE TYPE "{typname}" AS ENUM ({labels_str});\n'.encode())
-        f.write(b'\n')
-
-        # ── User-defined functions (not owned by any extension) ─
-        cr.execute("""
-            SELECT pg_get_functiondef(p.oid)
-            FROM   pg_proc p
-            JOIN   pg_namespace n ON n.oid = p.pronamespace
-            WHERE  n.nspname = 'public'
-            AND    NOT EXISTS (
-                       SELECT 1 FROM pg_depend d
-                       WHERE  d.objid = p.oid AND d.deptype = 'e'
-                   )
-            ORDER  BY p.proname
-        """)
-        for (funcdef,) in cr.fetchall():
-            f.write(f'{funcdef.strip()};\n\n'.encode())
-
-        # ── Sequences ────────────────────────────────────────
-        cr.execute("""
-            SELECT sequencename, start_value, increment_by, min_value, max_value,
-                   cycle,
-                   COALESCE(last_value, start_value) AS cur_val,
-                   last_value IS NOT NULL           AS is_called
-            FROM   pg_sequences
-            WHERE  schemaname = 'public'
-            ORDER  BY sequencename
-        """)
-        sequences = cr.fetchall()
-        for seq, start, incr, mn, mx, cycle, cur_val, is_called in sequences:
-            f.write((
-                f'CREATE SEQUENCE IF NOT EXISTS "{seq}"'
-                f' START WITH {start} INCREMENT BY {incr}'
-                f' MINVALUE {mn} MAXVALUE {mx}'
-                + (' CYCLE' if cycle else ' NO CYCLE') + ';\n'
-            ).encode())
-        f.write(b'\n')
-
-        # ── Tables ────────────────────────────────────────────
-        cr.execute("""
-            SELECT c.relname
-            FROM   pg_class c
-            JOIN   pg_namespace ns ON c.relnamespace = ns.oid
-            WHERE  ns.nspname = 'public' AND c.relkind = 'r'
-            ORDER  BY c.relname
-        """)
-        tables = [row[0] for row in cr.fetchall()]
-
-        for table in tables:
-            cr.execute("""
-                SELECT a.attname,
-                       pg_catalog.format_type(a.atttypid, a.atttypmod),
-                       pg_catalog.pg_get_expr(ad.adbin, ad.adrelid),
-                       a.attnotnull
-                FROM   pg_catalog.pg_attribute a
-                LEFT JOIN pg_catalog.pg_attrdef ad
-                       ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
-                WHERE  a.attrelid = (
-                           SELECT oid FROM pg_class
-                           WHERE  relname = %s
-                           AND    relnamespace = (
-                                      SELECT oid FROM pg_namespace WHERE nspname = 'public'
-                                  )
-                       )
-                AND    a.attnum > 0 AND NOT a.attisdropped
-                ORDER  BY a.attnum
-            """, (table,))
-            col_defs = []
-            for col, dtype, default, notnull in cr.fetchall():
-                defn = f'    "{col}" {dtype}'
-                if default:
-                    defn += f' DEFAULT {default}'
-                if notnull:
-                    defn += ' NOT NULL'
-                col_defs.append(defn)
-
-            f.write(f'CREATE TABLE IF NOT EXISTS "{table}" (\n'.encode())
-            f.write(',\n'.join(col_defs).encode())
-            f.write(b'\n);\n')
-
-        f.write(b'\n')
-
-        # ── Views (dependency-ordered via pg_depend) ─────────────
-        # A view must be emitted after every view it references.
-        # Sort by dependency depth to guarantee that ordering.
-        cr.execute("""
-            WITH RECURSIVE view_deps(oid, depth) AS (
-                SELECT c.oid, 0
-                FROM   pg_class c
-                JOIN   pg_namespace n ON n.oid = c.relnamespace
-                WHERE  n.nspname = 'public' AND c.relkind = 'v'
-                UNION
-                SELECT d.objid, vd.depth + 1
-                FROM   pg_depend d
-                JOIN   pg_class c  ON c.oid = d.objid
-                JOIN   pg_namespace n ON n.oid = c.relnamespace
-                JOIN   view_deps vd ON vd.oid = d.refobjid
-                WHERE  c.relkind = 'v' AND n.nspname = 'public' AND d.deptype = 'n'
-            )
-            SELECT v.viewname, v.definition
-            FROM   pg_views v
-            JOIN   pg_class c ON c.relname = v.viewname
-            JOIN   pg_namespace n ON n.oid = c.relnamespace AND n.nspname = 'public'
-            JOIN   (SELECT oid, MAX(depth) AS max_depth FROM view_deps GROUP BY oid) md
-                   ON md.oid = c.oid
-            WHERE  v.schemaname = 'public'
-            ORDER  BY md.max_depth, v.viewname
-        """)
-        for viewname, definition in cr.fetchall():
-            defn = definition.strip().rstrip(';')
-            f.write(
-                f'CREATE OR REPLACE VIEW "{viewname}" AS\n    {defn};\n'.encode()
-            )
-        f.write(b'\n')
-
-        # ── Truncate all tables before loading data ───────────
-        if tables:
-            table_list = ', '.join(f'"{t}"' for t in tables)
-            f.write(f'TRUNCATE {table_list} CASCADE;\n\n'.encode())
-
-        # ── Data ──────────────────────────────────────────────
-        for table in tables:
-            f.write(f'COPY "{table}" FROM STDIN;\n'.encode())
-            try:
-                cr._obj.copy_expert(f'COPY "{table}" TO STDOUT', f)
-            except Exception as exc:
-                raise Exception(f'COPY failed for table "{table}": {exc}') from exc
-            f.write(b'\\.\n\n')
-
-        # ── Primary keys + unique constraints ─────────────────
-        cr.execute("""
-            SELECT c.conname, c.contype, t.relname,
-                   (SELECT array_agg(a.attname
-                            ORDER BY array_position(c.conkey, a.attnum))
-                    FROM   pg_attribute a
-                    WHERE  a.attrelid = c.conrelid
-                    AND    a.attnum   = ANY(c.conkey)) AS cols
-            FROM   pg_constraint c
-            JOIN   pg_class t      ON t.oid = c.conrelid
-            JOIN   pg_namespace ns ON ns.oid = c.connamespace
-            WHERE  ns.nspname = 'public' AND c.contype IN ('p', 'u')
-            ORDER  BY t.relname, c.contype DESC
-        """)
-        for con_name, con_type, table, cols in cr.fetchall():
-            col_str = ', '.join(f'"{c}"' for c in cols)
-            kw      = 'PRIMARY KEY' if con_type == 'p' else 'UNIQUE'
-            f.write(f'ALTER TABLE "{table}" ADD CONSTRAINT "{con_name}" {kw} ({col_str});\n'.encode())
-        f.write(b'\n')
-
-        # ── Check constraints ─────────────────────────────────
-        cr.execute("""
-            SELECT c.conname, t.relname, pg_get_constraintdef(c.oid)
-            FROM   pg_constraint c
-            JOIN   pg_class t      ON t.oid = c.conrelid
-            JOIN   pg_namespace ns ON ns.oid = c.connamespace
-            WHERE  ns.nspname = 'public' AND c.contype = 'c'
-            ORDER  BY t.relname, c.conname
-        """)
-        for con_name, table, condef in cr.fetchall():
-            f.write(f'ALTER TABLE "{table}" ADD CONSTRAINT "{con_name}" {condef};\n'.encode())
-        f.write(b'\n')
-
-        # ── Indexes ───────────────────────────────────────────
-        cr.execute("""
-            SELECT indexname, indexdef
-            FROM   pg_indexes
-            WHERE  schemaname = 'public'
-            AND    indexname NOT IN (
-                       SELECT conname FROM pg_constraint
-                       WHERE  connamespace = (
-                                  SELECT oid FROM pg_namespace WHERE nspname = 'public'
-                              )
-                   )
-            ORDER  BY indexname
-        """)
-        for _, idx_def in cr.fetchall():
-            f.write(f'{idx_def};\n'.encode())
-        f.write(b'\n')
-
-        # ── Foreign keys ──────────────────────────────────────
-        fk_action = {
-            'a': 'NO ACTION', 'r': 'RESTRICT', 'c': 'CASCADE',
-            'n': 'SET NULL',  'd': 'SET DEFAULT',
-        }
-        cr.execute("""
-            SELECT c.conname, t.relname, ft.relname,
-                   (SELECT array_agg(a.attname
-                            ORDER BY array_position(c.conkey, a.attnum))
-                    FROM   pg_attribute a
-                    WHERE  a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)),
-                   (SELECT array_agg(a.attname
-                            ORDER BY array_position(c.confkey, a.attnum))
-                    FROM   pg_attribute a
-                    WHERE  a.attrelid = c.confrelid AND a.attnum = ANY(c.confkey)),
-                   c.confupdtype, c.confdeltype
-            FROM   pg_constraint c
-            JOIN   pg_class t      ON t.oid = c.conrelid
-            JOIN   pg_class ft     ON ft.oid = c.confrelid
-            JOIN   pg_namespace ns ON ns.oid = c.connamespace
-            WHERE  ns.nspname = 'public' AND c.contype = 'f'
-            ORDER  BY t.relname, c.conname
-        """)
-        for con_name, table, ftable, cols, fcols, upd, dlt in cr.fetchall():
-            col_str  = ', '.join(f'"{c}"' for c in cols)
-            fcol_str = ', '.join(f'"{c}"' for c in fcols)
-            f.write((
-                f'ALTER TABLE "{table}" ADD CONSTRAINT "{con_name}"'
-                f' FOREIGN KEY ({col_str}) REFERENCES "{ftable}" ({fcol_str})'
-                f' ON UPDATE {fk_action.get(upd, "NO ACTION")}'
-                f' ON DELETE {fk_action.get(dlt, "NO ACTION")};\n'
-            ).encode())
-        f.write(b'\n')
-
-        # ── Triggers ──────────────────────────────────────────
-        cr.execute("""
-            SELECT pg_get_triggerdef(t.oid)
-            FROM   pg_trigger t
-            JOIN   pg_class c  ON c.oid = t.tgrelid
-            JOIN   pg_namespace n ON n.oid = c.relnamespace
-            WHERE  n.nspname = 'public'
-            AND    NOT t.tgisinternal
-            AND    NOT EXISTS (
-                       SELECT 1 FROM pg_depend d
-                       WHERE  d.objid = t.oid AND d.deptype = 'e'
-                   )
-            ORDER  BY c.relname, t.tgname
-        """)
-        for (trigdef,) in cr.fetchall():
-            f.write(f'{trigdef.strip()};\n'.encode())
-        f.write(b'\n')
-
-        # ── Sequence current values ───────────────────────────
-        for seq, _, _, _, _, _, cur_val, is_called in sequences:
-            quoted = seq.replace('"', '""')
-            f.write(
-                f"SELECT pg_catalog.setval('public.\"{quoted}\"', {cur_val}, "
-                f"{str(is_called).lower()});\n".encode()
-            )
-
-        if neutralize:
-            self._write_neutralization(f)
-
-        f.write(b'\nCOMMIT;\n')
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+                zf.writestr('manifest.json', manifest)
+                zf.write(dump_path, 'dump.sql')
+                if include_filestore:
+                    filestore_path = odoo.tools.config.filestore(db_name)
+                    if os.path.exists(filestore_path):
+                        for dirpath, _dirs, filenames in os.walk(filestore_path):
+                            for fname in filenames:
+                                abs_path = os.path.join(dirpath, fname)
+                                arc_path = os.path.join(
+                                    'filestore',
+                                    os.path.relpath(abs_path, filestore_path),
+                                )
+                                zf.write(abs_path, arc_path)
 
     def _write_neutralization(self, f):
-        f.write(b'\n-- Neutralization\n\n')
+        f.write(b'\nBEGIN;\n\n-- Neutralization\n\n')
 
         # Deactivate all crons, then re-enable safe system ones
         f.write(b"UPDATE ir_cron SET active = 'f';\n")
@@ -662,6 +374,8 @@ class DmcBackupService(models.Model):
             b"                  WHERE name = 'ir_cron_module_update_notification'\n"
             b"                    AND module = 'mail');\n"
         )
+
+        f.write(b'\nCOMMIT;\n')
 
     # ── Azure Blob Storage push ───────────────────────────────────────────────
 

@@ -6,84 +6,78 @@ from odoo.tests.common import TransactionCase
 from odoo.exceptions import UserError, ValidationError
 
 
-class TestGenerateSqlDump(TransactionCase):
-    """Tests for _generate_sql_dump correctness."""
+class TestDumpDb(TransactionCase):
+    """Tests for _dump_db using pg_dump."""
 
     def setUp(self):
         super().setUp()
         self.service = self.env['dmc.backup.service']
 
-    def _run_dump(self):
-        buf = io.BytesIO()
-        self.service._generate_sql_dump(buf)
-        return buf.getvalue().decode('utf-8')
+    def test_dump_db_calls_pg_dump(self):
+        """_dump_db must invoke pg_dump — not generate SQL in Python."""
+        import os
+        import tempfile
 
-    def test_dump_has_pg_dump_header(self):
-        """dump.sql must start with the pg_dump plain-text header so restore tools accept it."""
-        sql = self._run_dump()
-        self.assertTrue(sql.startswith('--\n'), 'dump must begin with SQL comment')
-        self.assertIn('PostgreSQL database dump', sql[:200])
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tf:
+            zip_path = tf.name
 
-    def test_copy_failure_raises_with_table_name(self):
-        """copy_expert failure must propagate — not silently skip the table."""
-        with patch.object(
-            self.service.env.cr._obj, 'copy_expert',
-            side_effect=Exception('simulated disk error')
-        ):
-            with self.assertRaises(Exception) as ctx:
-                self.service._generate_sql_dump(io.BytesIO())
-        self.assertIn('COPY failed for table', str(ctx.exception))
+        try:
+            def fake_run(cmd, **kw):
+                dump_path = next(a for a in cmd if a.startswith('--file=')).split('=', 1)[1]
+                with open(dump_path, 'wb') as f:
+                    f.write(b'-- pg_dump output\n')
 
-    def test_dump_wrapped_in_transaction(self):
-        """SQL dump must contain BEGIN and end with COMMIT."""
-        sql = self._run_dump()
-        self.assertIn('BEGIN;', sql)
-        self.assertTrue(sql.strip().endswith('COMMIT;'))
+            with patch('subprocess.run', side_effect=fake_run) as mock_run, \
+                 patch('odoo.service.db.find_pg_tool', return_value='pg_dump'), \
+                 patch('odoo.service.db.exec_pg_environ', return_value={}):
+                self.service._dump_db(self.env.cr.dbname, zip_path)
 
-    def test_truncate_before_copy(self):
-        """A TRUNCATE statement must appear before any COPY FROM STDIN."""
-        sql = self._run_dump()
-        if 'CREATE TABLE' not in sql:
-            return
-        self.assertIn('TRUNCATE ', sql)
-        truncate_pos = sql.find('TRUNCATE ')
-        copy_pos     = sql.find('COPY ')
-        if copy_pos == -1:
-            return
-        self.assertLess(truncate_pos, copy_pos)
+            args = mock_run.call_args[0][0]
+            self.assertEqual(args[0], 'pg_dump')
+            self.assertIn('--no-owner', args)
+            self.assertIn('--format=p', args)
+            self.assertIn(self.env.cr.dbname, args)
+        finally:
+            os.unlink(zip_path)
 
-    def test_extension_owned_enum_types_excluded(self):
-        """Enum types belonging to an extension must not appear in the dump."""
-        import inspect
-        src = inspect.getsource(self.service._generate_sql_dump)
-        # Verify pg_enum block contains the pg_depend filter
-        enum_section = src[src.find('pg_enum') : src.find('pg_get_functiondef')]
-        self.assertIn("deptype = 'e'", enum_section,
-            "Enum type query must filter out extension-owned types via pg_depend deptype='e'")
+    def test_neutralization_appended_in_own_transaction(self):
+        """When neutralize=True the neutralization SQL is wrapped in BEGIN/COMMIT."""
+        import os
+        import tempfile
+        import zipfile
 
-    def test_extension_owned_triggers_excluded(self):
-        """Triggers belonging to an extension must not appear in the dump."""
-        import inspect
-        src = inspect.getsource(self.service._generate_sql_dump)
-        # Verify pg_depend filter exists in the trigger section (bounded between trigger and setval sections)
-        trigger_section = src[src.find('pg_get_triggerdef') : src.find('pg_catalog.setval')]
-        self.assertIn("deptype = 'e'", trigger_section,
-            "Trigger query must filter out extension-owned triggers via pg_depend deptype='e'")
+        config = self.env['dmc.backup.config'].create({
+            'name': 'Test',
+            'storage_type': 'azure',
+            'azure_account': 'a',
+            'azure_container': 'c',
+            'azure_sas_token': 't',
+            'neutralize': True,
+        })
 
-    def test_setval_uses_quoted_sequence_name(self):
-        """setval must emit quoted identifiers so mixed-case sequence names work."""
-        import io, re
-        buf = io.BytesIO()
-        self.service._generate_sql_dump(buf)
-        sql = buf.getvalue().decode('utf-8')
-        # Every setval line must quote the sequence name with double-quotes
-        setval_lines = [l for l in sql.splitlines() if 'setval' in l]
-        for line in setval_lines:
-            self.assertRegex(
-                line,
-                r'''setval\('public\."[^"]+"''',
-                f'setval must use double-quoted identifier, got: {line}',
-            )
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tf:
+            zip_path = tf.name
+
+        try:
+            def fake_run(cmd, **kw):
+                dump_path = next(a for a in cmd if a.startswith('--file=')).split('=', 1)[1]
+                with open(dump_path, 'wb') as f:
+                    f.write(b'-- pg_dump output\n')
+
+            with patch('subprocess.run', side_effect=fake_run), \
+                 patch('odoo.service.db.find_pg_tool', return_value='pg_dump'), \
+                 patch('odoo.service.db.exec_pg_environ', return_value={}):
+                self.service._dump_db(self.env.cr.dbname, zip_path, config=config)
+
+            with zipfile.ZipFile(zip_path) as zf:
+                sql = zf.read('dump.sql').decode()
+
+            self.assertIn('BEGIN;', sql)
+            self.assertIn('-- Neutralization', sql)
+            self.assertIn('COMMIT;', sql)
+            self.assertIn('UPDATE ir_cron', sql)
+        finally:
+            os.unlink(zip_path)
 
 
 class TestRunBackup(TransactionCase):

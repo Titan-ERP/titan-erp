@@ -19,6 +19,14 @@ Features
 
 Changelog
 ---------
+19.0.7.0.0
+  - Fixed: replaced custom SQL dump generator with pg_dump subprocess so backup
+    files restore correctly on any Odoo SH or self-hosted environment; the
+    custom generator failed on CREATE SCHEMA when the PostgreSQL role lacked
+    CREATE privilege, causing a full transaction rollback and empty database
+  - Changed: neutralization SQL is now appended after the pg_dump output in its
+    own BEGIN/COMMIT block rather than embedded inside the dump transaction
+
 19.0.6.0.0
   - Fixed: _delete_remote_files now routes by the per-record storage_type field
     so changing the default config does not silently skip blob deletion
@@ -73,7 +81,7 @@ Changelog
     'author': "DMC Strategic IT",
     'website': "https://www.dmcstrategicit.com",
 
-    'version': '19.0.6.0.0',
+    'version': '19.0.7.0.0',
 
     'application': True,
     'installable': True,
