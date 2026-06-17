@@ -49,9 +49,16 @@ class DmcCompanySetupWizard(models.TransientModel):
     # ── Step 2: Bank Account Setup ───────────────────────────────────────────
 
     bank_account_name = fields.Char("Bank Account Name")
-    bank_account_code = fields.Char("Bank Account Code", help="e.g. 101405 — must be unique")
+    bank_account_code = fields.Char(
+        "Bank Account Code",
+        default=lambda self: self._next_bank_code(),
+        help="Auto-generated from the highest existing Bank/Cash account code. Override if needed.",
+    )
     cash_account_name = fields.Char("Cash Account Name")
-    cash_account_code = fields.Char("Cash Account Code", help="Leave blank to skip")
+    cash_account_code = fields.Char(
+        "Cash Account Code",
+        help="Leave blank to skip. Auto-suggested as Bank Code + 1.",
+    )
     bank_name = fields.Char("Bank Name", help="Optional: name of the physical bank")
 
     # ── Step 3: Journal Prefixes ─────────────────────────────────────────────
@@ -69,19 +76,54 @@ class DmcCompanySetupWizard(models.TransientModel):
     )
     result_message = fields.Text("Result", readonly=True)
 
-    # ── Computed display fields for review step ──────────────────────────────
+    # ── Code auto-generation helpers ─────────────────────────────────────────
 
-    @api.depends("company_name")
-    def _compute_bank_account_name(self):
-        for rec in self:
-            if not rec.bank_account_name and rec.company_name:
-                rec.bank_account_name = f"Bank {rec.company_name}"
+    def _next_bank_code(self):
+        """Return the next sequential Bank/Cash account code.
 
-    @api.depends("company_name")
-    def _compute_cash_account_name(self):
-        for rec in self:
-            if not rec.cash_account_name and rec.company_name:
-                rec.cash_account_name = f"Cash {rec.company_name}"
+        Scans all existing asset_cash accounts across every company, finds the
+        highest numeric code, and returns that number + 1 as a string.
+        Falls back to '101001' if no Bank/Cash accounts exist yet.
+        """
+        mapping_field, _ = self._find_account_code_mapping_field()
+        accounts = self.env["account.account"].sudo().search(
+            [("account_type", "=", "asset_cash")]
+        )
+        numeric_codes = []
+        for acc in accounts:
+            if mapping_field:
+                for mapping in acc[mapping_field]:
+                    try:
+                        numeric_codes.append(int(mapping.code.strip()))
+                    except (ValueError, TypeError):
+                        pass
+            else:
+                for company in acc.company_ids:
+                    try:
+                        code = acc.with_company(company).code
+                        if code:
+                            numeric_codes.append(int(code.strip()))
+                    except (ValueError, TypeError):
+                        pass
+        return str(max(numeric_codes) + 1) if numeric_codes else "101001"
+
+    @api.onchange("bank_account_code")
+    def _onchange_bank_account_code(self):
+        """Keep cash code suggestion one step ahead of the bank code."""
+        if self.bank_account_code:
+            try:
+                self.cash_account_code = str(int(self.bank_account_code) + 1)
+            except (ValueError, TypeError):
+                pass
+
+    @api.onchange("company_name")
+    def _onchange_company_name(self):
+        """Auto-fill account names from the company name when the user types it."""
+        if self.company_name:
+            if not self.bank_account_name:
+                self.bank_account_name = f"Bank {self.company_name}"
+            if not self.cash_account_name:
+                self.cash_account_name = f"Cash {self.company_name}"
 
     # ── Navigation ───────────────────────────────────────────────────────────
 
