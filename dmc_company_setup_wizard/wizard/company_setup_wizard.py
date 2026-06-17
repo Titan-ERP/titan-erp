@@ -94,7 +94,8 @@ class DmcCompanySetupWizard(models.TransientModel):
             if mapping_field:
                 for mapping in acc[mapping_field]:
                     try:
-                        numeric_codes.append(int(mapping.code.strip()))
+                        if mapping.code:
+                            numeric_codes.append(int(mapping.code.strip()))
                     except (ValueError, TypeError):
                         pass
             else:
