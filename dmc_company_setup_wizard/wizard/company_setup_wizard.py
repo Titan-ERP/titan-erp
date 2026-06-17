@@ -206,6 +206,10 @@ class DmcCompanySetupWizard(models.TransientModel):
     # ── Step implementations ─────────────────────────────────────────────────
 
     def _step1_create_company(self):
+        # Omit country_id during create so Odoo does not auto-apply the
+        # country's default chart-of-accounts template (which would create
+        # account.account records that conflict with Step 3's shared-account
+        # mapping). We write country_id back onto the company immediately after.
         vals = {
             "name": self.company_name,
             "currency_id": self.currency_id.id if self.currency_id else False,
@@ -216,13 +220,15 @@ class DmcCompanySetupWizard(models.TransientModel):
                 vals[f] = val
         if self.state_id:
             vals["state_id"] = self.state_id.id
-        if self.country_id:
-            vals["country_id"] = self.country_id.id
         if self.parent_id:
             vals["parent_id"] = self.parent_id.id
         if self.logo:
             vals["logo"] = self.logo
-        return self.env["res.company"].sudo().create(vals)
+        company = self.env["res.company"].sudo().create(vals)
+        # Restore country after creation to avoid triggering chart template.
+        if self.country_id:
+            company.sudo().write({"country_id": self.country_id.id})
+        return company
 
     def _step2_create_bank_cash_accounts(self, company):
         bank_name = self.bank_account_name or f"Bank {company.name}"
@@ -258,11 +264,30 @@ class DmcCompanySetupWizard(models.TransientModel):
                     return fname, field.comodel_name
         return None, None
 
+    def _codes_owned_by_company(self, company, mapping_field):
+        """Return the set of account codes already claimed by *company*.
+
+        Odoo may auto-create accounts when a company is created (chart-template
+        loading). We need to know these codes upfront so Step 3 can skip any
+        shared account whose code would collide with an already-existing one.
+        """
+        codes = set()
+        existing = self.env["account.account"].sudo().search(
+            [("company_ids", "in", [company.id])]
+        )
+        for acc in existing:
+            if mapping_field:
+                for m in acc[mapping_field]:
+                    if m.company_id.id == company.id and m.code:
+                        codes.add(m.code)
+            else:
+                code = acc.with_company(company).code
+                if code:
+                    codes.add(code)
+        return codes
+
     def _step3_associate_shared_accounts(self, company):
-        # In Odoo 17+, account.account has per-company code mappings stored in a
-        # One2many (shown in the "Mapping" tab). The constraint fires the moment
-        # company_ids is updated if the new company has no code entry. We must
-        # set BOTH company_ids AND the code mapping in a single write() call.
+        # Only map non-Bank/Cash accounts that are already part of the shared chart.
         shared_accounts = self.env["account.account"].sudo().search(
             [
                 ("account_type", "!=", "asset_cash"),
@@ -272,25 +297,40 @@ class DmcCompanySetupWizard(models.TransientModel):
         if not shared_accounts:
             return
 
-        mapping_field, mapping_model = self._find_account_code_mapping_field()
+        mapping_field, _ = self._find_account_code_mapping_field()
+
+        # Pre-compute codes already owned by the new company.
+        # If Odoo auto-created accounts from a chart template during Step 1,
+        # those codes are already taken; attempting to also link the shared
+        # account with the same code would raise "Account codes must be unique".
+        taken_codes = self._codes_owned_by_company(company, mapping_field)
 
         for account in shared_accounts:
+            # Skip if the company is already linked to this account.
+            if company in account.company_ids:
+                continue
+
             source_company = account.company_ids[:1]
             existing_code = ""
 
             if mapping_field and source_company:
-                # Read code from the existing mapping record for an existing company.
                 mapping_rec = account[mapping_field].filtered(
                     lambda m: m.company_id.id == source_company.id
                 )[:1]
                 existing_code = mapping_rec.code if mapping_rec else ""
             elif source_company:
-                # Fallback: company_dependent field (try with_company read)
                 existing_code = account.with_company(source_company).code or ""
 
-            if mapping_field and existing_code:
-                # Combine company_ids link + code mapping creation in ONE write
-                # so the constraint sees both changes simultaneously.
+            if not existing_code:
+                continue
+
+            # Skip if this code is already taken by an auto-created account.
+            if existing_code in taken_codes:
+                continue
+
+            if mapping_field:
+                # Both company_ids and the code mapping must be written in one
+                # call so the constraint sees both changes simultaneously.
                 account.write({
                     "company_ids": [Command.link(company.id)],
                     mapping_field: [Command.create({
@@ -298,16 +338,12 @@ class DmcCompanySetupWizard(models.TransientModel):
                         "code": existing_code,
                     })],
                 })
-            elif mapping_field and not existing_code:
-                # No code found for source company — skip adding this company
-                # to avoid creating an account with an empty code.
-                continue
             else:
-                # company_dependent fallback: set code before linking company
-                # so the constraint check finds the value already in place.
-                if existing_code:
-                    account.with_company(company).write({"code": existing_code})
+                # company_dependent fallback: set code first, then link.
+                account.with_company(company).write({"code": existing_code})
                 account.write({"company_ids": [Command.link(company.id)]})
+
+            taken_codes.add(existing_code)
 
     def _step4_copy_taxes_and_groups(self, company):
         titan = self.env["res.company"].sudo().search(
