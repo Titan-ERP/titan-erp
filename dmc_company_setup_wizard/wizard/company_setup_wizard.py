@@ -355,6 +355,23 @@ class DmcCompanySetupWizard(models.TransientModel):
 
             taken_codes.add(existing_code)
 
+    def _rep_line_vals(self, lines):
+        """Build repartition line create-commands without account_id.
+
+        Passing these explicitly in copy() default overrides the auto-copied
+        lines that would carry account_id values from the source company.
+        """
+        result = []
+        for line in lines:
+            vals = {
+                "factor_percent": line.factor_percent,
+                "repartition_type": line.repartition_type,
+            }
+            if line.tag_ids:
+                vals["tag_ids"] = [Command.set(line.tag_ids.ids)]
+            result.append(Command.create(vals))
+        return result
+
     def _step4_copy_taxes_and_groups(self, company):
         source = self.tax_source_company_id
         if not source:
@@ -380,33 +397,26 @@ class DmcCompanySetupWizard(models.TransientModel):
             [("company_id", "=", source.id)]
         )
         for old_tax in source_taxes:
-            default = {
+            copy_vals = {
                 "company_id": company.id,
                 "name": old_tax.name,
+                # Supply repartition lines without account_id. Passing them
+                # explicitly in the copy() default dict replaces what copy_data()
+                # would auto-generate. Odoo's _check_company constraint compares
+                # account.company_id (computed = first in company_ids, still the
+                # source company) against the new tax's company_id, so any
+                # account_id reference causes a cross-company error regardless
+                # of whether the account was shared in Step 3.
+                "invoice_repartition_line_ids": self._rep_line_vals(
+                    old_tax.invoice_repartition_line_ids
+                ),
+                "refund_repartition_line_ids": self._rep_line_vals(
+                    old_tax.refund_repartition_line_ids
+                ),
             }
             if old_tax.tax_group_id and old_tax.tax_group_id.id in group_map:
-                default["tax_group_id"] = group_map[old_tax.tax_group_id.id]
-
-            # copy_data() builds the full dict that copy() would use.
-            # We strip account_id from repartition lines before creating so
-            # Odoo's cross-company constraint doesn't fire (the account's
-            # computed company_id is still the source company even though the
-            # new company was added to its company_ids in Step 3).
-            tax_vals = old_tax.sudo().copy_data(default)[0]
-            for rep_field in ("invoice_repartition_line_ids", "refund_repartition_line_ids"):
-                if rep_field not in tax_vals:
-                    continue
-                cleaned = []
-                for cmd in tax_vals[rep_field]:
-                    if cmd[0] == 0:
-                        line_vals = dict(cmd[2])
-                        line_vals.pop("account_id", None)
-                        cleaned.append(Command.create(line_vals))
-                    else:
-                        cleaned.append(cmd)
-                tax_vals[rep_field] = cleaned
-
-            self.env["account.tax"].sudo().create(tax_vals)
+                copy_vals["tax_group_id"] = group_map[old_tax.tax_group_id.id]
+            old_tax.sudo().copy(copy_vals)
 
     def _step5_create_journals(self, company):
         Journal = self.env["account.journal"].sudo().with_company(company)
