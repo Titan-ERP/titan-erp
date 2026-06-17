@@ -189,13 +189,13 @@ class DmcCompanySetupWizard(models.TransientModel):
                 self._step4_copy_taxes_and_groups(company)
                 self._step5_create_journals(company)
                 self._step6_create_payment_providers(company)
-            self.created_company_id = company
+            self.sudo().created_company_id = company
             tax_line = (
                 "  • Tax groups and taxes (copied from %s)\n" % self.tax_source_company_id.name
                 if self.tax_source_company_id
                 else "  • Taxes: skipped (no source company selected)\n"
             )
-            self.result_message = _(
+            self.sudo().result_message = _(
                 'Company "%s" was created successfully.\n\n'
                 "The following have been set up:\n"
                 "  • Bank chart account\n"
@@ -204,7 +204,7 @@ class DmcCompanySetupWizard(models.TransientModel):
                 "  • Journals (Sales, Purchase, Bank, Miscellaneous)\n"
                 "  • Payment providers (Cash on Delivery, Demo, Wire Transfer)"
             ) % (company.name, tax_line)
-            self.state = "done"
+            self.sudo().state = "done"
         except UserError:
             raise
         except Exception as e:
@@ -446,7 +446,7 @@ class DmcCompanySetupWizard(models.TransientModel):
             if bank_journal:
                 bank_journal.sudo().write({"default_account_id": bank_account.id})
 
-        self.created_journal_ids = [Command.set(created.ids)]
+        self.sudo().created_journal_ids = [Command.set(created.ids)]
 
     def _step6_create_payment_providers(self, company):
         titan = self.env["res.company"].sudo().search(
