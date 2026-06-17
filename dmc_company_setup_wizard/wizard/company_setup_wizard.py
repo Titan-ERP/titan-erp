@@ -47,8 +47,8 @@ class DmcCompanySetupWizard(models.TransientModel):
     parent_id = fields.Many2one("res.company", "Parent Company")
     tax_source_company_id = fields.Many2one(
         "res.company",
-        "Copy Taxes From",
-        help="Optional: copy all tax groups and taxes from this company to the new one. Leave blank to skip.",
+        "Copy Setup From",
+        help="Optional: copy tax groups, taxes, and payment providers from this company to the new one. Leave blank to skip.",
     )
 
     # ── Step 2: Bank Account Setup ───────────────────────────────────────────
@@ -190,20 +190,21 @@ class DmcCompanySetupWizard(models.TransientModel):
                 self._step5_create_journals(company)
                 self._step6_create_payment_providers(company)
             self.sudo().created_company_id = company
-            tax_line = (
-                "  • Tax groups and taxes (copied from %s)\n" % self.tax_source_company_id.name
-                if self.tax_source_company_id
-                else "  • Taxes: skipped (no source company selected)\n"
-            )
+            if self.tax_source_company_id:
+                source_line = (
+                    "  • Tax groups, taxes, and payment providers (copied from %s)\n"
+                    % self.tax_source_company_id.name
+                )
+            else:
+                source_line = "  • Taxes/payment providers: skipped (no source company selected)\n"
             self.sudo().result_message = _(
                 'Company "%s" was created successfully.\n\n'
                 "The following have been set up:\n"
                 "  • Bank chart account\n"
                 "  • Associations with existing shared chart accounts\n"
                 "%s"
-                "  • Journals (Sales, Purchase, Bank, Miscellaneous)\n"
-                "  • Payment providers (Cash on Delivery, Demo, Wire Transfer)"
-            ) % (company.name, tax_line)
+                "  • Journals (Sales, Purchase, Bank, Miscellaneous)"
+            ) % (company.name, source_line)
             self.sudo().state = "done"
         except UserError:
             raise
@@ -449,21 +450,12 @@ class DmcCompanySetupWizard(models.TransientModel):
         self.sudo().created_journal_ids = [Command.set(created.ids)]
 
     def _step6_create_payment_providers(self, company):
-        titan = self.env["res.company"].sudo().search(
-            [("name", "ilike", "TITAN")], limit=1
-        )
-        if not titan:
+        source = self.tax_source_company_id
+        if not source:
             return
 
-        # These are the standard Odoo payment provider codes.
-        # Verify exact values against the live DB before deployment:
-        #   SELECT code, name FROM payment_provider WHERE company_id = <titan_id>;
-        provider_codes = ["custom", "demo", "wire_transfer"]
-
-        for code in provider_codes:
-            titan_provider = self.env["payment.provider"].sudo().search(
-                [("code", "=", code), ("company_id", "=", titan.id)],
-                limit=1,
-            )
-            if titan_provider:
-                titan_provider.sudo().copy({"company_id": company.id})
+        source_providers = self.env["payment.provider"].sudo().search(
+            [("company_id", "=", source.id)]
+        )
+        for provider in source_providers:
+            provider.sudo().copy({"company_id": company.id})

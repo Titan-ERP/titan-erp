@@ -98,7 +98,7 @@
                                 <li>Create the company and its partner record</li>
                                 <li>Create a Bank chart account with the auto-generated code</li>
                                 <li>Add this company to all existing shared chart accounts</li>
-                                <li>Copy all taxes and tax groups from the selected source company (if any)</li>
+                                <li>Copy all taxes, tax groups, and payment providers from the selected source company (if any)</li>
                                 <li>Create Sales, Purchase, Bank, and Misc journals</li>
                                 <li>Create Cash on Delivery, Demo, and Wire Transfer payment providers</li>
                             </ul>
