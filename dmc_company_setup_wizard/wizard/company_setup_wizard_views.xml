@@ -158,19 +158,33 @@
         <field name="context">{"dialog_size": "large"}</field>
     </record>
 
-    <!-- ══ Home Page App Tile ════════════════════════════════════════════════ -->
+    <!-- ══ Home Page App Tile (debug mode only) ═════════════════════════════ -->
     <!--
-        No parent_id → root menu → Odoo home screen tile.
-        application: True in __manifest__.py is required for this to work.
-        Replace web_icon with a real PNG path once an icon is available,
-        or use the color+icon shorthand: "#1c6ea4,fa-building-o"
+        This tile appears on the Odoo home screen ONLY when developer/debug mode
+        is active. It uses base.group_no_one which is the standard Odoo group
+        for debug-only home menu items.
     -->
     <menuitem
-        id="menu_dmc_company_setup_wizard"
+        id="menu_dmc_company_setup_wizard_root"
         name="Company Setup"
         action="action_dmc_company_setup_wizard"
         web_icon="dmc_company_setup_wizard,static/description/icon.png"
         sequence="100"
         groups="base.group_no_one"/>
+
+    <!-- ══ Settings → Technical fallback (guaranteed debug-mode only) ═══════ -->
+    <!--
+        In Odoo 18/19, debug-mode filtering for root app tiles can behave
+        inconsistently. This Settings > Technical entry is the reliable
+        debug-only access point: the entire Technical menu is hidden outside
+        debug mode regardless of group membership.
+    -->
+    <menuitem
+        id="menu_dmc_company_setup_wizard_technical"
+        name="Company Setup Wizard"
+        parent="base.menu_administration"
+        action="action_dmc_company_setup_wizard"
+        groups="base.group_no_one"
+        sequence="100"/>
 
 </odoo>
