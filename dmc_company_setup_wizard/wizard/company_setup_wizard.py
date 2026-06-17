@@ -54,11 +54,6 @@ class DmcCompanySetupWizard(models.TransientModel):
         default=lambda self: self._next_bank_code(),
         help="Auto-generated from the highest existing Bank/Cash account code. Override if needed.",
     )
-    cash_account_name = fields.Char("Cash Account Name")
-    cash_account_code = fields.Char(
-        "Cash Account Code",
-        help="Leave blank to skip. Auto-suggested as Bank Code + 1.",
-    )
     bank_name = fields.Char("Bank Name", help="Optional: name of the physical bank")
 
     # ── Step 3: Journal Prefixes ─────────────────────────────────────────────
@@ -108,23 +103,11 @@ class DmcCompanySetupWizard(models.TransientModel):
                         pass
         return str(max(numeric_codes) + 1) if numeric_codes else "101001"
 
-    @api.onchange("bank_account_code")
-    def _onchange_bank_account_code(self):
-        """Keep cash code suggestion one step ahead of the bank code."""
-        if self.bank_account_code:
-            try:
-                self.cash_account_code = str(int(self.bank_account_code) + 1)
-            except (ValueError, TypeError):
-                pass
-
     @api.onchange("company_name")
     def _onchange_company_name(self):
-        """Auto-fill account names from the company name when the user types it."""
-        if self.company_name:
-            if not self.bank_account_name:
-                self.bank_account_name = f"Bank {self.company_name}"
-            if not self.cash_account_name:
-                self.cash_account_name = f"Cash {self.company_name}"
+        """Auto-fill the bank account name from the company name."""
+        if self.company_name and not self.bank_account_name:
+            self.bank_account_name = f"Bank {self.company_name}"
 
     # ── Navigation ───────────────────────────────────────────────────────────
 
@@ -178,15 +161,6 @@ class DmcCompanySetupWizard(models.TransientModel):
                     _("Account code %s already exists. Please choose a unique code.")
                     % self.bank_account_code
                 )
-            if self.cash_account_code:
-                existing_cash = self.env["account.account"].sudo().search(
-                    [("code", "=", self.cash_account_code)], limit=1
-                )
-                if existing_cash:
-                    raise UserError(
-                        _("Cash account code %s already exists. Please choose a unique code.")
-                        % self.cash_account_code
-                    )
         elif self.state == "journal_prefixes":
             if not all(
                 [
@@ -251,9 +225,8 @@ class DmcCompanySetupWizard(models.TransientModel):
         return self.env["res.company"].sudo().create(vals)
 
     def _step2_create_bank_cash_accounts(self, company):
-        AccountAccount = self.env["account.account"].sudo()
         bank_name = self.bank_account_name or f"Bank {company.name}"
-        AccountAccount.create(
+        self.env["account.account"].sudo().create(
             {
                 "name": bank_name,
                 "code": self.bank_account_code,
@@ -261,16 +234,6 @@ class DmcCompanySetupWizard(models.TransientModel):
                 "company_ids": [Command.set([company.id])],
             }
         )
-        if self.cash_account_code:
-            cash_name = self.cash_account_name or f"Cash {company.name}"
-            AccountAccount.create(
-                {
-                    "name": cash_name,
-                    "code": self.cash_account_code,
-                    "account_type": "asset_cash",
-                    "company_ids": [Command.set([company.id])],
-                }
-            )
 
     def _find_account_code_mapping_field(self):
         """
