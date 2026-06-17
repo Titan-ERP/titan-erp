@@ -171,6 +171,6 @@
         action="action_dmc_company_setup_wizard"
         web_icon="dmc_company_setup_wizard,static/description/icon.png"
         sequence="100"
-        groups="base.group_system"/>
+        groups="base.group_no_one"/>
 
 </odoo>
