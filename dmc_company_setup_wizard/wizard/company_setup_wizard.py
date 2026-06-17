@@ -455,7 +455,10 @@ class DmcCompanySetupWizard(models.TransientModel):
             return
 
         source_providers = self.env["payment.provider"].sudo().search(
-            [("company_id", "=", source.id)]
+            [("company_id", "=", source.id), ("state", "!=", "disabled")]
         )
         for provider in source_providers:
-            provider.sudo().copy({"company_id": company.id})
+            provider.sudo().copy({
+                "company_id": company.id,
+                "state": provider.state,
+            })
