@@ -24,6 +24,7 @@
                             <field name="vat"/>
                             <field name="currency_id" options="{'no_create': True}"/>
                             <field name="parent_id" options="{'no_create': True}"/>
+                            <field name="tax_source_company_id" options="{'no_create': True}"/>
                             <field name="phone"/>
                             <field name="email"/>
                             <field name="website"/>
@@ -79,6 +80,7 @@
                             <field name="company_name" readonly="1"/>
                             <field name="currency_id" readonly="1"/>
                             <field name="parent_id" readonly="1"/>
+                            <field name="tax_source_company_id" readonly="1"/>
                         </group>
                         <group string="Bank Account">
                             <field name="bank_account_name" readonly="1"/>
@@ -96,7 +98,7 @@
                                 <li>Create the company and its partner record</li>
                                 <li>Create a Bank chart account with the auto-generated code</li>
                                 <li>Add this company to all existing shared chart accounts</li>
-                                <li>Copy all taxes and tax groups from TITAN (Main)</li>
+                                <li>Copy all taxes and tax groups from the selected source company (if any)</li>
                                 <li>Create Sales, Purchase, Bank, and Misc journals</li>
                                 <li>Create Cash on Delivery, Demo, and Wire Transfer payment providers</li>
                             </ul>

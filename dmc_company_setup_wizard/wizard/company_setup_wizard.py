@@ -45,6 +45,11 @@ class DmcCompanySetupWizard(models.TransientModel):
     )
     logo = fields.Binary("Logo")
     parent_id = fields.Many2one("res.company", "Parent Company")
+    tax_source_company_id = fields.Many2one(
+        "res.company",
+        "Copy Taxes From",
+        help="Optional: copy all tax groups and taxes from this company to the new one. Leave blank to skip.",
+    )
 
     # ── Step 2: Bank Account Setup ───────────────────────────────────────────
 
@@ -185,15 +190,20 @@ class DmcCompanySetupWizard(models.TransientModel):
                 self._step5_create_journals(company)
                 self._step6_create_payment_providers(company)
             self.created_company_id = company
+            tax_line = (
+                "  • Tax groups and taxes (copied from %s)\n" % self.tax_source_company_id.name
+                if self.tax_source_company_id
+                else "  • Taxes: skipped (no source company selected)\n"
+            )
             self.result_message = _(
                 'Company "%s" was created successfully.\n\n'
                 "The following have been set up:\n"
-                "  • Bank/Cash chart accounts\n"
+                "  • Bank chart account\n"
                 "  • Associations with existing shared chart accounts\n"
-                "  • Tax groups and taxes (copied from TITAN Main)\n"
+                "%s"
                 "  • Journals (Sales, Purchase, Bank, Miscellaneous)\n"
                 "  • Payment providers (Cash on Delivery, Demo, Wire Transfer)"
-            ) % company.name
+            ) % (company.name, tax_line)
             self.state = "done"
         except UserError:
             raise
@@ -346,31 +356,22 @@ class DmcCompanySetupWizard(models.TransientModel):
             taken_codes.add(existing_code)
 
     def _step4_copy_taxes_and_groups(self, company):
-        titan = self.env["res.company"].sudo().search(
-            [("name", "ilike", "TITAN")], limit=1
-        )
-        if not titan:
-            raise UserError(
-                _(
-                    'Could not find TITAN (Main) company to copy taxes from. '
-                    'Please ensure a company with "TITAN" in its name exists.'
-                )
-            )
+        source = self.tax_source_company_id
+        if not source:
+            return
 
-        # Copy tax groups first and build old→new id mapping
         group_map = {}
-        titan_groups = self.env["account.tax.group"].sudo().search(
-            [("company_id", "=", titan.id)]
+        source_groups = self.env["account.tax.group"].sudo().search(
+            [("company_id", "=", source.id)]
         )
-        for old_group in titan_groups:
+        for old_group in source_groups:
             new_group = old_group.sudo().copy({"company_id": company.id})
             group_map[old_group.id] = new_group.id
 
-        # Copy taxes, remapping their tax group to the new company's group
-        titan_taxes = self.env["account.tax"].sudo().search(
-            [("company_id", "=", titan.id)]
+        source_taxes = self.env["account.tax"].sudo().search(
+            [("company_id", "=", source.id)]
         )
-        for old_tax in titan_taxes:
+        for old_tax in source_taxes:
             copy_vals = {
                 "company_id": company.id,
                 "name": old_tax.name,
