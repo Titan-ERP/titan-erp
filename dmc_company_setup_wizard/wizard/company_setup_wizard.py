@@ -365,7 +365,15 @@ class DmcCompanySetupWizard(models.TransientModel):
             [("company_id", "=", source.id)]
         )
         for old_group in source_groups:
-            new_group = old_group.sudo().copy({"company_id": company.id})
+            # Clear the payable/receivable account references to avoid Odoo's
+            # cross-company constraint: the new tax group belongs to the new company
+            # but those accounts' primary company_id is still the source company.
+            new_group = old_group.sudo().copy({
+                "company_id": company.id,
+                "tax_payable_account_id": False,
+                "tax_receivable_account_id": False,
+                "advance_tax_payment_account_id": False,
+            })
             group_map[old_group.id] = new_group.id
 
         source_taxes = self.env["account.tax"].sudo().search(
