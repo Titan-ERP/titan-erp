@@ -380,13 +380,33 @@ class DmcCompanySetupWizard(models.TransientModel):
             [("company_id", "=", source.id)]
         )
         for old_tax in source_taxes:
-            copy_vals = {
+            default = {
                 "company_id": company.id,
                 "name": old_tax.name,
             }
             if old_tax.tax_group_id and old_tax.tax_group_id.id in group_map:
-                copy_vals["tax_group_id"] = group_map[old_tax.tax_group_id.id]
-            old_tax.sudo().copy(copy_vals)
+                default["tax_group_id"] = group_map[old_tax.tax_group_id.id]
+
+            # copy_data() builds the full dict that copy() would use.
+            # We strip account_id from repartition lines before creating so
+            # Odoo's cross-company constraint doesn't fire (the account's
+            # computed company_id is still the source company even though the
+            # new company was added to its company_ids in Step 3).
+            tax_vals = old_tax.sudo().copy_data(default)[0]
+            for rep_field in ("invoice_repartition_line_ids", "refund_repartition_line_ids"):
+                if rep_field not in tax_vals:
+                    continue
+                cleaned = []
+                for cmd in tax_vals[rep_field]:
+                    if cmd[0] == 0:
+                        line_vals = dict(cmd[2])
+                        line_vals.pop("account_id", None)
+                        cleaned.append(Command.create(line_vals))
+                    else:
+                        cleaned.append(cmd)
+                tax_vals[rep_field] = cleaned
+
+            self.env["account.tax"].sudo().create(tax_vals)
 
     def _step5_create_journals(self, company):
         Journal = self.env["account.journal"].sudo().with_company(company)
