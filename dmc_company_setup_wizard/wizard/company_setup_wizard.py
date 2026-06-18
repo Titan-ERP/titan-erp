@@ -521,7 +521,4 @@ class DmcCompanySetupWizard(models.TransientModel):
 
             # Always set test mode regardless of template state — copying a
             # disabled template would create a disabled provider for the new company.
-            new_provider.sudo().write({
-                "state": "test",
-                "active": True,
-            })
+            new_provider.sudo().write({"state": "test"})
