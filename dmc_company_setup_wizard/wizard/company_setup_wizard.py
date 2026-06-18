@@ -298,6 +298,12 @@ class DmcCompanySetupWizard(models.TransientModel):
         return codes
 
     def _step3_associate_shared_accounts(self, company):
+        # When a parent company is set, Odoo automatically inherits the parent's
+        # Chart of Accounts — the child is added to all parent accounts' company_ids.
+        # Running our mapping logic on top of that causes duplicate code errors.
+        if company.parent_id:
+            return
+
         # Only map non-Bank/Cash accounts that are already part of the shared chart.
         shared_accounts = self.env["account.account"].sudo().search(
             [
@@ -501,30 +507,33 @@ class DmcCompanySetupWizard(models.TransientModel):
         else:
             source_providers = self.env["payment.provider"].sudo().browse()
 
-        if source_providers:
-            for provider in source_providers:
-                # Use the canonical name for known codes so we don't inherit
-                # the source company's abbreviation (e.g. "Wire Transfer TI").
-                base_name = self._DEFAULT_PROVIDER_CODES.get(
-                    provider.code, provider.name
-                )
-                new_provider = provider.sudo().copy({
-                    "company_id": company.id,
-                    "name": f"{base_name} {abbrev}",
-                })
-                if new_provider.state != provider.state:
-                    new_provider.sudo().write({"state": provider.state})
-        else:
-            # No source company selected — create the 3 standard providers
-            # by finding any existing record for each code to copy from.
-            for code, base_name in self._DEFAULT_PROVIDER_CODES.items():
-                template = self.env["payment.provider"].sudo().search(
+        templates = source_providers
+        if not templates:
+            # No source selected — gather any existing record for each default code.
+            for code in self._DEFAULT_PROVIDER_CODES:
+                t = self.env["payment.provider"].sudo().search(
                     [("code", "=", code)], limit=1
                 )
-                if template:
-                    new_provider = template.sudo().copy({
-                        "company_id": company.id,
-                        "name": f"{base_name} {abbrev}",
-                    })
-                    if new_provider.state != template.state:
-                        new_provider.sudo().write({"state": template.state})
+                if t:
+                    templates |= t
+
+        for provider in templates:
+            base_name = self._DEFAULT_PROVIDER_CODES.get(provider.code, provider.name)
+            target_state = provider.state or "enabled"
+            # Use copy_data() + create() instead of copy() so we can explicitly
+            # control every field — copy() may silently reset state/active to
+            # defaults when those fields have copy=False in Odoo 19.
+            new_vals = provider.sudo().copy_data({
+                "company_id": company.id,
+                "name": f"{base_name} {abbrev}",
+                "state": target_state,
+                "active": True,
+            })[0]
+            # Ensure these are never left at copy defaults.
+            new_vals.update({
+                "company_id": company.id,
+                "name": f"{base_name} {abbrev}",
+                "state": target_state,
+                "active": True,
+            })
+            self.env["payment.provider"].sudo().create(new_vals)
