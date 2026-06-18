@@ -84,6 +84,10 @@ class DmcCompanySetupWizard(models.TransientModel):
         Scans all existing asset_cash accounts across every company, finds the
         highest numeric code, and returns that number + 1 as a string.
         Falls back to '101001' if no Bank/Cash accounts exist yet.
+
+        Reads from BOTH the Odoo 17+ per-company mapping table AND the
+        company_dependent code field, because accounts created outside the wizard
+        (or before the mapping table existed) may only have the direct field set.
         """
         mapping_field, _ = self._find_account_code_mapping_field()
         accounts = self.env["account.account"].sudo().search(
@@ -91,21 +95,26 @@ class DmcCompanySetupWizard(models.TransientModel):
         )
         numeric_codes = []
         for acc in accounts:
+            raw_codes = set()
+            # Source 1: Odoo 17+ per-company mapping table
             if mapping_field:
                 for mapping in acc[mapping_field]:
-                    try:
-                        if mapping.code:
-                            numeric_codes.append(int(mapping.code.strip()))
-                    except (ValueError, TypeError):
-                        pass
-            else:
-                for company in acc.company_ids:
-                    try:
-                        code = acc.with_company(company).code
-                        if code:
-                            numeric_codes.append(int(code.strip()))
-                    except (ValueError, TypeError):
-                        pass
+                    if mapping.code:
+                        raw_codes.add(mapping.code.strip())
+            # Source 2: company_dependent field (covers manually created accounts
+            # and accounts predating the mapping table)
+            for company in acc.company_ids:
+                try:
+                    code = acc.with_company(company).code
+                    if code:
+                        raw_codes.add(code.strip())
+                except Exception:
+                    pass
+            for code in raw_codes:
+                try:
+                    numeric_codes.append(int(code))
+                except (ValueError, TypeError):
+                    pass
         return str(max(numeric_codes) + 1) if numeric_codes else "101001"
 
     @api.onchange("company_name")
