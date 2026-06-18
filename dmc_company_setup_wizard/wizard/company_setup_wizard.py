@@ -184,10 +184,10 @@ class DmcCompanySetupWizard(models.TransientModel):
         try:
             with self.env.cr.savepoint():
                 company = self._step1_create_company()
-                self._step2_create_bank_cash_accounts(company)
+                bank_account = self._step2_create_bank_cash_accounts(company)
                 self._step3_associate_shared_accounts(company)
                 self._step4_copy_taxes_and_groups(company)
-                self._step5_create_journals(company)
+                self._step5_create_journals(company, bank_account)
                 self._step6_create_payment_providers(company)
             self.sudo().created_company_id = company
             self.sudo().result_message = company.name
@@ -229,7 +229,7 @@ class DmcCompanySetupWizard(models.TransientModel):
 
     def _step2_create_bank_cash_accounts(self, company):
         bank_name = self.bank_account_name or f"Bank {company.name}"
-        self.env["account.account"].sudo().create(
+        return self.env["account.account"].sudo().create(
             {
                 "name": bank_name,
                 "code": self.bank_account_code,
@@ -445,19 +445,8 @@ class DmcCompanySetupWizard(models.TransientModel):
                 copy_vals["tax_group_id"] = group_map[old_tax.tax_group_id.id]
             old_tax.sudo().copy(copy_vals)
 
-    def _step5_create_journals(self, company):
+    def _step5_create_journals(self, company, bank_account=None):
         Journal = self.env["account.journal"].sudo().with_company(company)
-
-        # Resolve the bank account now so we can pass it at creation time.
-        # Passing default_account_id upfront prevents Odoo from auto-creating
-        # a second bank account (code 000001) that would be left orphaned.
-        bank_account = self.env["account.account"].sudo().search(
-            [
-                ("code", "=", self.bank_account_code),
-                ("company_ids", "in", [company.id]),
-            ],
-            limit=1,
-        )
 
         journal_defs = [
             {"name": "Customer Invoices", "type": "sale", "code": self.journal_sales_prefix},
