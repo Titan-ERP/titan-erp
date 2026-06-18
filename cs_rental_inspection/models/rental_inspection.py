@@ -32,6 +32,7 @@ class RentalInspection(models.Model):
         domain="[('product_id', '=', product_id)]",
         compute='_compute_lot_id',
         store=True,
+        readonly=False,
         recursive=True,
     )
 

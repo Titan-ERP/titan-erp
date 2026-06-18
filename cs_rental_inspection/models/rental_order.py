@@ -188,6 +188,39 @@ class RentalOrder(models.Model):
                         'previous_inspection_id': pickup_id,
                     })
 
+            # Assign reserved serial numbers to both pickup and return inspections at confirmation
+            if line.reserved_lot_ids:
+                self._sync_lot_ids_to_inspections(line, line.reserved_lot_ids)
+
+    def _auto_create_serialised_pickup_inspections(self):
+        """
+        Called when pickedup_lot_ids or reserved_lot_ids change on a rental order line.
+        Syncs serial numbers to both pickup and return inspections.
+        Priority: pickedup_lot_ids (actual pickup) > reserved_lot_ids (planning intent).
+        Safe to call repeatedly — reassigns on lot changes, clears on lot removal.
+        """
+        self.ensure_one()
+        for line in self.order_line.filtered('is_rental'):
+            lots = line.pickedup_lot_ids or line.reserved_lot_ids
+            self._sync_lot_ids_to_inspections(line, lots)
+
+    def _sync_lot_ids_to_inspections(self, line, lots):
+        """
+        Assigns the lot to every pickup and return inspection for the given line.
+        For lot-tracked products all units belong to the same lot, so the first
+        (and typically only) lot in the sorted set is applied to all records.
+        Clears lot_id on all inspections when no lots are provided.
+        """
+        self.ensure_one()
+        all_insp = self.inspection_ids.filtered(
+            lambda i: i.product_id == line.product_id
+            and i.state != 'cancelled'
+        )
+        lot = lots.sorted('id')[:1]  # first lot; empty recordset when lots is empty
+        for insp in all_insp:
+            if insp.lot_id != lot:
+                insp.lot_id = lot
+
     # -------------------------------------------------------------------------
     # Actions
     # -------------------------------------------------------------------------
