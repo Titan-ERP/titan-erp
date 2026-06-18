@@ -508,16 +508,26 @@ class DmcCompanySetupWizard(models.TransientModel):
                 )
 
             if template:
-                new_provider = template.sudo().copy({
+                copy_vals = {
                     "company_id": company.id,
                     "name": f"{base_name} {abbrev}",
-                })
-            else:
+                }
+                # custom_mode has copy=False in Odoo 19 but is required for
+                # code='custom' providers — pass it explicitly from the template.
+                if "custom_mode" in template._fields and template.custom_mode:
+                    copy_vals["custom_mode"] = template.custom_mode
+                new_provider = template.sudo().copy(copy_vals)
+            elif code != "custom":
+                # 'custom' providers require a custom_mode field — cannot
+                # create safely without knowing the valid selection value.
+                # Only create from scratch for non-custom codes (e.g. 'demo').
                 new_provider = self.env["payment.provider"].sudo().create({
                     "name": f"{base_name} {abbrev}",
                     "code": code,
                     "company_id": company.id,
                 })
+            else:
+                continue
 
             # Always set test mode regardless of template state — copying a
             # disabled template would create a disabled provider for the new company.
