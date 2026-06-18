@@ -190,21 +190,7 @@ class DmcCompanySetupWizard(models.TransientModel):
                 self._step5_create_journals(company)
                 self._step6_create_payment_providers(company)
             self.sudo().created_company_id = company
-            if self.tax_source_company_id:
-                source_line = (
-                    "  • Tax groups, taxes, and payment providers (copied from %s)\n"
-                    % self.tax_source_company_id.name
-                )
-            else:
-                source_line = "  • Taxes/payment providers: skipped (no source company selected)\n"
-            self.sudo().result_message = _(
-                'Company "%s" was created successfully.\n\n'
-                "The following have been set up:\n"
-                "  • Bank chart account\n"
-                "  • Associations with existing shared chart accounts\n"
-                "%s"
-                "  • Journals (Sales, Purchase, Bank, Miscellaneous)"
-            ) % (company.name, source_line)
+            self.sudo().result_message = company.name
             self.sudo().state = "done"
         except UserError:
             raise
@@ -462,19 +448,9 @@ class DmcCompanySetupWizard(models.TransientModel):
     def _step5_create_journals(self, company):
         Journal = self.env["account.journal"].sudo().with_company(company)
 
-        journal_defs = [
-            {"name": "Customer Invoices", "type": "sale", "code": self.journal_sales_prefix},
-            {"name": "Vendor Bills", "type": "purchase", "code": self.journal_purchase_prefix},
-            {"name": f"Bank {company.name}", "type": "bank", "code": self.journal_bank_prefix},
-            {"name": "Miscellaneous Operations", "type": "general", "code": self.journal_misc_prefix},
-        ]
-
-        created = self.env["account.journal"].sudo()
-        for vals in journal_defs:
-            vals["company_id"] = company.id
-            created |= Journal.create(vals)
-
-        # Link Bank journal to the bank account created in Step 2
+        # Resolve the bank account now so we can pass it at creation time.
+        # Passing default_account_id upfront prevents Odoo from auto-creating
+        # a second bank account (code 000001) that would be left orphaned.
         bank_account = self.env["account.account"].sudo().search(
             [
                 ("code", "=", self.bank_account_code),
@@ -482,10 +458,23 @@ class DmcCompanySetupWizard(models.TransientModel):
             ],
             limit=1,
         )
-        if bank_account:
-            bank_journal = created.filtered(lambda j: j.type == "bank")
-            if bank_journal:
-                bank_journal.sudo().write({"default_account_id": bank_account.id})
+
+        journal_defs = [
+            {"name": "Customer Invoices", "type": "sale", "code": self.journal_sales_prefix},
+            {"name": "Vendor Bills", "type": "purchase", "code": self.journal_purchase_prefix},
+            {
+                "name": f"Bank {company.name}",
+                "type": "bank",
+                "code": self.journal_bank_prefix,
+                **({"default_account_id": bank_account.id} if bank_account else {}),
+            },
+            {"name": "Miscellaneous Operations", "type": "general", "code": self.journal_misc_prefix},
+        ]
+
+        created = self.env["account.journal"].sudo()
+        for vals in journal_defs:
+            vals["company_id"] = company.id
+            created |= Journal.create(vals)
 
         self.sudo().created_journal_ids = [Command.set(created.ids)]
 
@@ -500,40 +489,34 @@ class DmcCompanySetupWizard(models.TransientModel):
         abbrev = self._company_abbrev(company)
         source = self.tax_source_company_id
 
-        if source:
-            source_providers = self.env["payment.provider"].sudo().search(
-                [("company_id", "=", source.id)]
-            )
-        else:
-            source_providers = self.env["payment.provider"].sudo().browse()
-
-        templates = source_providers
-        if not templates:
-            # No source selected — gather any existing record for each default code.
-            for code in self._DEFAULT_PROVIDER_CODES:
-                t = self.env["payment.provider"].sudo().search(
+        for code, base_name in self._DEFAULT_PROVIDER_CODES.items():
+            # Prefer source company's version, then fall back to any company.
+            template = self.env["payment.provider"].sudo().browse()
+            if source:
+                template = self.env["payment.provider"].sudo().search(
+                    [("code", "=", code), ("company_id", "=", source.id)], limit=1
+                )
+            if not template:
+                template = self.env["payment.provider"].sudo().search(
                     [("code", "=", code)], limit=1
                 )
-                if t:
-                    templates |= t
 
-        for provider in templates:
-            base_name = self._DEFAULT_PROVIDER_CODES.get(provider.code, provider.name)
-            target_state = provider.state or "enabled"
-            # Use copy_data() + create() instead of copy() so we can explicitly
-            # control every field — copy() may silently reset state/active to
-            # defaults when those fields have copy=False in Odoo 19.
-            new_vals = provider.sudo().copy_data({
-                "company_id": company.id,
-                "name": f"{base_name} {abbrev}",
-                "state": target_state,
-                "active": True,
-            })[0]
-            # Ensure these are never left at copy defaults.
-            new_vals.update({
-                "company_id": company.id,
-                "name": f"{base_name} {abbrev}",
+            target_state = (template.state if template else False) or "test"
+
+            if template:
+                new_provider = template.sudo().copy({
+                    "company_id": company.id,
+                    "name": f"{base_name} {abbrev}",
+                })
+            else:
+                new_provider = self.env["payment.provider"].sudo().create({
+                    "name": f"{base_name} {abbrev}",
+                    "code": code,
+                    "company_id": company.id,
+                })
+            # Always force state and active — these fields have copy=False
+            # in Odoo 19 and silently reset to 'disabled'/False after copy().
+            new_provider.sudo().write({
                 "state": target_state,
                 "active": True,
             })
-            self.env["payment.provider"].sudo().create(new_vals)

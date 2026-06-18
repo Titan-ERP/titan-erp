@@ -107,11 +107,81 @@
                     </group>
 
                     <!-- ── Step 5: Done ────────────────────────────────────── -->
-                    <group invisible="state != 'done'" string="Setup Complete">
-                        <field name="result_message" readonly="1" nolabel="1"/>
-                        <field name="created_company_id" readonly="1"/>
-                        <field name="created_journal_ids" readonly="1" widget="many2many_tags"/>
-                    </group>
+                    <div invisible="state != 'done'">
+
+                        <!-- Success banner -->
+                        <div class="alert alert-success d-flex align-items-center gap-3 mb-4" role="alert">
+                            <i class="fa fa-check-circle fa-2x"/>
+                            <div>
+                                <strong>Company setup completed successfully!</strong><br/>
+                                <span><field name="created_company_id" readonly="1" nolabel="1" class="fw-bold"/> is ready to use.</span>
+                            </div>
+                        </div>
+
+                        <!-- What was created -->
+                        <div class="row mt-3">
+                            <div class="col-6">
+                                <h6 class="text-muted text-uppercase fw-bold mb-2">
+                                    <i class="fa fa-building-o me-1"/> Company Details
+                                </h6>
+                                <table class="table table-sm table-borderless">
+                                    <tr>
+                                        <td class="text-muted" style="width:45%">Company Name</td>
+                                        <td><field name="company_name" readonly="1" nolabel="1"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">Bank Account Code</td>
+                                        <td><field name="bank_account_code" readonly="1" nolabel="1"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">Copied Setup From</td>
+                                        <td>
+                                            <span invisible="not tax_source_company_id">
+                                                <field name="tax_source_company_id" readonly="1" nolabel="1"/>
+                                            </span>
+                                            <span invisible="tax_source_company_id" class="text-muted fst-italic">None selected</span>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <div class="col-6">
+                                <h6 class="text-muted text-uppercase fw-bold mb-2">
+                                    <i class="fa fa-check me-1"/> What Was Set Up
+                                </h6>
+                                <ul class="list-unstyled">
+                                    <li class="mb-1"><i class="fa fa-check text-success me-2"/>Bank chart account created</li>
+                                    <li class="mb-1"><i class="fa fa-check text-success me-2"/>Shared chart accounts mapped</li>
+                                    <li class="mb-1">
+                                        <span invisible="not tax_source_company_id">
+                                            <i class="fa fa-check text-success me-2"/>Tax groups &amp; taxes copied
+                                        </span>
+                                        <span invisible="tax_source_company_id">
+                                            <i class="fa fa-minus text-muted me-2"/>Taxes skipped (no source)
+                                        </span>
+                                    </li>
+                                    <li class="mb-1"><i class="fa fa-check text-success me-2"/>Journals created</li>
+                                    <li class="mb-1">
+                                        <span invisible="not tax_source_company_id">
+                                            <i class="fa fa-check text-success me-2"/>Payment providers copied
+                                        </span>
+                                        <span invisible="tax_source_company_id">
+                                            <i class="fa fa-check text-success me-2"/>Default payment providers created
+                                        </span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- Created journals -->
+                        <div class="mt-3">
+                            <h6 class="text-muted text-uppercase fw-bold mb-2">
+                                <i class="fa fa-book me-1"/> Created Journals
+                            </h6>
+                            <field name="created_journal_ids" readonly="1" nolabel="1" widget="many2many_tags"/>
+                        </div>
+
+                    </div>
 
                 </sheet>
 
