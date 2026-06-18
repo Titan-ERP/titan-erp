@@ -478,30 +478,36 @@ class DmcCompanySetupWizard(models.TransientModel):
 
         self.sudo().created_journal_ids = [Command.set(created.ids)]
 
-    # Canonical display names for the three standard providers.
-    _DEFAULT_PROVIDER_CODES = {
-        "wire_transfer": "Wire Transfer",
-        "custom": "Cash on Delivery",
-        "demo": "Demo",
-    }
+    # In Odoo 19, payment.provider.code is a Selection with only these valid values:
+    #   'none'   — No Provider Set
+    #   'custom' — Custom  (covers both Wire Transfer AND Cash on Delivery)
+    #   'demo'   — Demo
+    # Wire Transfer and Cash on Delivery share code='custom'; they differ by name only.
+    _DEFAULT_PROVIDERS = [
+        ("custom", "Wire Transfer"),
+        ("custom", "Cash on Delivery"),
+        ("demo", "Demo"),
+    ]
 
     def _step6_create_payment_providers(self, company):
         abbrev = self._company_abbrev(company)
         source = self.tax_source_company_id
 
-        for code, base_name in self._DEFAULT_PROVIDER_CODES.items():
-            # Prefer source company's version, then fall back to any company.
+        for code, base_name in self._DEFAULT_PROVIDERS:
+            # Use the first word of the name to differentiate Wire Transfer
+            # from Cash on Delivery (both share code='custom').
+            name_hint = base_name.split()[0]
+
             template = self.env["payment.provider"].sudo().browse()
             if source:
                 template = self.env["payment.provider"].sudo().search(
-                    [("code", "=", code), ("company_id", "=", source.id)], limit=1
+                    [("code", "=", code), ("company_id", "=", source.id),
+                     ("name", "ilike", name_hint)], limit=1
                 )
             if not template:
                 template = self.env["payment.provider"].sudo().search(
-                    [("code", "=", code)], limit=1
+                    [("code", "=", code), ("name", "ilike", name_hint)], limit=1
                 )
-
-            target_state = (template.state if template else False) or "test"
 
             if template:
                 new_provider = template.sudo().copy({
@@ -509,13 +515,16 @@ class DmcCompanySetupWizard(models.TransientModel):
                     "name": f"{base_name} {abbrev}",
                 })
             else:
+                # No template found — create from scratch using the confirmed
+                # valid code values for Odoo 19.
                 new_provider = self.env["payment.provider"].sudo().create({
                     "name": f"{base_name} {abbrev}",
                     "code": code,
                     "company_id": company.id,
                 })
-            # Always force state and active — these fields have copy=False
-            # in Odoo 19 and silently reset to 'disabled'/False after copy().
+
+            # Always force state and active — both have copy=False in Odoo 19.
+            target_state = (template.state if template else None) or "test"
             new_provider.sudo().write({
                 "state": target_state,
                 "active": True,
