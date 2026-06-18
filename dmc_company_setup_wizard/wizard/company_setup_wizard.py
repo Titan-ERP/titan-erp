@@ -494,19 +494,17 @@ class DmcCompanySetupWizard(models.TransientModel):
         source = self.tax_source_company_id
 
         for code, base_name in self._DEFAULT_PROVIDERS:
-            # Use the first word of the name to differentiate Wire Transfer
-            # from Cash on Delivery (both share code='custom').
-            name_hint = base_name.split()[0]
-
+            # Wire Transfer and Cash on Delivery both use code='custom'.
+            # Search by exact name to tell them apart.
             template = self.env["payment.provider"].sudo().browse()
             if source:
                 template = self.env["payment.provider"].sudo().search(
                     [("code", "=", code), ("company_id", "=", source.id),
-                     ("name", "ilike", name_hint)], limit=1
+                     ("name", "ilike", base_name)], limit=1
                 )
             if not template:
                 template = self.env["payment.provider"].sudo().search(
-                    [("code", "=", code), ("name", "ilike", name_hint)], limit=1
+                    [("code", "=", code), ("name", "ilike", base_name)], limit=1
                 )
 
             if template:
@@ -515,17 +513,15 @@ class DmcCompanySetupWizard(models.TransientModel):
                     "name": f"{base_name} {abbrev}",
                 })
             else:
-                # No template found — create from scratch using the confirmed
-                # valid code values for Odoo 19.
                 new_provider = self.env["payment.provider"].sudo().create({
                     "name": f"{base_name} {abbrev}",
                     "code": code,
                     "company_id": company.id,
                 })
 
-            # Always force state and active — both have copy=False in Odoo 19.
-            target_state = (template.state if template else None) or "test"
+            # Always set test mode regardless of template state — copying a
+            # disabled template would create a disabled provider for the new company.
             new_provider.sudo().write({
-                "state": target_state,
+                "state": "test",
                 "active": True,
             })
