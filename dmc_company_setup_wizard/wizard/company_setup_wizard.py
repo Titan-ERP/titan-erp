@@ -356,6 +356,10 @@ class DmcCompanySetupWizard(models.TransientModel):
 
             taken_codes.add(existing_code)
 
+    def _company_abbrev(self, company):
+        """Return uppercase initials of the company name. e.g. 'Sample Company' → 'SC'."""
+        return "".join(w[0].upper() for w in company.name.split() if w)
+
     def _rep_line_vals(self, lines):
         """Build repartition line create-commands without account_id.
 
@@ -378,11 +382,25 @@ class DmcCompanySetupWizard(models.TransientModel):
         if not source:
             return
 
+        existing_group_names = set(
+            self.env["account.tax.group"].sudo()
+            .search([("company_id", "=", company.id)])
+            .mapped("name")
+        )
+
         group_map = {}
         source_groups = self.env["account.tax.group"].sudo().search(
             [("company_id", "=", source.id)]
         )
         for old_group in source_groups:
+            if old_group.name in existing_group_names:
+                existing = self.env["account.tax.group"].sudo().search(
+                    [("company_id", "=", company.id), ("name", "=", old_group.name)],
+                    limit=1,
+                )
+                if existing:
+                    group_map[old_group.id] = existing.id
+                continue
             # Clear the payable/receivable account references to avoid Odoo's
             # cross-company constraint: the new tax group belongs to the new company
             # but those accounts' primary company_id is still the source company.
@@ -394,13 +412,23 @@ class DmcCompanySetupWizard(models.TransientModel):
             })
             group_map[old_group.id] = new_group.id
 
+        existing_tax_names = set(
+            self.env["account.tax"].sudo()
+            .search([("company_id", "=", company.id)])
+            .mapped("name")
+        )
+
         source_taxes = self.env["account.tax"].sudo().search(
             [("company_id", "=", source.id)]
         )
         for old_tax in source_taxes:
+            tax_name = old_tax.name
+            if tax_name in existing_tax_names:
+                tax_name = f"{old_tax.name} ({self._company_abbrev(company)})"
+            existing_tax_names.add(tax_name)
             copy_vals = {
                 "company_id": company.id,
-                "name": old_tax.name,
+                "name": tax_name,
                 # Supply repartition lines without account_id. Passing them
                 # explicitly in the copy() default dict replaces what copy_data()
                 # would auto-generate. Odoo's _check_company constraint compares
