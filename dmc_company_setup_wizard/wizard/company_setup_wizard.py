@@ -412,9 +412,15 @@ class DmcCompanySetupWizard(models.TransientModel):
             })
             group_map[old_group.id] = new_group.id
 
+        # Include the parent company's taxes in the conflict check.
+        # When parent_id is set, Odoo's uniqueness constraint covers taxes
+        # visible across the company hierarchy, not just company_id = new_company.
+        company_ids_to_check = [company.id]
+        if company.parent_id:
+            company_ids_to_check.append(company.parent_id.id)
         existing_tax_names = set(
             self.env["account.tax"].sudo()
-            .search([("company_id", "=", company.id)])
+            .search([("company_id", "in", company_ids_to_check)])
             .mapped("name")
         )
 
@@ -477,16 +483,48 @@ class DmcCompanySetupWizard(models.TransientModel):
 
         self.sudo().created_journal_ids = [Command.set(created.ids)]
 
-    def _step6_create_payment_providers(self, company):
-        source = self.tax_source_company_id
-        if not source:
-            return
+    # Canonical display names for the three standard providers.
+    _DEFAULT_PROVIDER_CODES = {
+        "wire_transfer": "Wire Transfer",
+        "custom": "Cash on Delivery",
+        "demo": "Demo",
+    }
 
-        source_providers = self.env["payment.provider"].sudo().search(
-            [("company_id", "=", source.id), ("state", "!=", "disabled")]
-        )
-        for provider in source_providers:
-            provider.sudo().copy({
-                "company_id": company.id,
-                "state": provider.state,
-            })
+    def _step6_create_payment_providers(self, company):
+        abbrev = self._company_abbrev(company)
+        source = self.tax_source_company_id
+
+        if source:
+            source_providers = self.env["payment.provider"].sudo().search(
+                [("company_id", "=", source.id)]
+            )
+        else:
+            source_providers = self.env["payment.provider"].sudo().browse()
+
+        if source_providers:
+            for provider in source_providers:
+                # Use the canonical name for known codes so we don't inherit
+                # the source company's abbreviation (e.g. "Wire Transfer TI").
+                base_name = self._DEFAULT_PROVIDER_CODES.get(
+                    provider.code, provider.name
+                )
+                new_provider = provider.sudo().copy({
+                    "company_id": company.id,
+                    "name": f"{base_name} {abbrev}",
+                })
+                if new_provider.state != provider.state:
+                    new_provider.sudo().write({"state": provider.state})
+        else:
+            # No source company selected — create the 3 standard providers
+            # by finding any existing record for each code to copy from.
+            for code, base_name in self._DEFAULT_PROVIDER_CODES.items():
+                template = self.env["payment.provider"].sudo().search(
+                    [("code", "=", code)], limit=1
+                )
+                if template:
+                    new_provider = template.sudo().copy({
+                        "company_id": company.id,
+                        "name": f"{base_name} {abbrev}",
+                    })
+                    if new_provider.state != template.state:
+                        new_provider.sudo().write({"state": template.state})
