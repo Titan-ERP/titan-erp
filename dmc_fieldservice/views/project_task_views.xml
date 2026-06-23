@@ -7,9 +7,9 @@
         <field name="inherit_id" ref="industry_fsm.view_task_form2_inherit"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='under_warranty']" position="after">
-                <field name="dmc_equipment" invisible="not is_fsm" required="is_fsm"/>
-                <field name="dmc_serial_number" invisible="not is_fsm" required="is_fsm"/>
-                <field name="dmc_equipment_run_hours" invisible="not is_fsm" required="is_fsm"/>
+                <field name="dmc_equipment" invisible="not is_fsm" required="is_fsm and not parent_id" readonly="bool(parent_id)"/>
+                <field name="dmc_serial_number" invisible="not is_fsm" required="is_fsm and not parent_id" readonly="bool(parent_id)"/>
+                <field name="dmc_equipment_run_hours" invisible="not is_fsm" required="is_fsm and not parent_id" readonly="bool(parent_id)"/>
             </xpath>
         </field>
     </record>
