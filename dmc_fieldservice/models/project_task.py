@@ -24,6 +24,21 @@ class ProjectTask(models.Model):
                 result['dmc_equipment_run_hours'] = parent.dmc_equipment_run_hours
         return result
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            parent_id = vals.get('parent_id')
+            if not parent_id:
+                continue
+            parent = self.browse(parent_id)
+            if not vals.get('dmc_equipment'):
+                vals['dmc_equipment'] = parent.dmc_equipment
+            if not vals.get('dmc_serial_number'):
+                vals['dmc_serial_number'] = parent.dmc_serial_number
+            if not vals.get('dmc_equipment_run_hours'):
+                vals['dmc_equipment_run_hours'] = parent.dmc_equipment_run_hours
+        return super().create(vals_list)
+
     @api.constrains('dmc_equipment', 'dmc_serial_number', 'dmc_equipment_run_hours', 'project_id')
     def _check_dmc_equipment_fields_required(self):
         for task in self:
