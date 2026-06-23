@@ -39,6 +39,19 @@ class ProjectTask(models.Model):
                 vals['dmc_equipment_run_hours'] = parent.dmc_equipment_run_hours
         return super().create(vals_list)
 
+    _DMC_SYNC_FIELDS = ('dmc_equipment', 'dmc_serial_number', 'dmc_equipment_run_hours')
+
+    def write(self, vals):
+        result = super().write(vals)
+        sync = {f: vals[f] for f in self._DMC_SYNC_FIELDS if f in vals}
+        if sync:
+            subtasks = self.env['project.task'].search([
+                ('parent_id', 'in', self.ids),
+            ])
+            if subtasks:
+                subtasks.write(sync)
+        return result
+
     @api.constrains('dmc_equipment', 'dmc_serial_number', 'dmc_equipment_run_hours', 'project_id')
     def _check_dmc_equipment_fields_required(self):
         for task in self:
