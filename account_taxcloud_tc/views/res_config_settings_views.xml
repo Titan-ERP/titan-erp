@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+ Copyright (c) 2015-2023 Odoo S.A.
+
+ This program is free software; you can redistribute it and/or
+ modify it under the terms of the GNU Lesser General Public
+ License as published by the Free Software Foundation; either
+ version 3 of the License, or (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ Lesser General Public License for more details.
+
+ You should have received a copy of the GNU Lesser General Public License
+ along with this program; if not, write to the Free Software Foundation,
+ Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+-->
+<odoo>
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.account.taxcloud</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="account.res_config_settings_view_form" />
+        <field name="arch" type="xml">
+            <setting id="rounding_method" position="after">
+                <setting
+                    id="taxcloud_tc_settings"
+                    string="TaxCloud TC"
+                    help="Compute tax rates based on U.S. ZIP codes"
+                >
+                    <field name="module_account_taxcloud_tc" />
+
+                    <div class="content-group" invisible="not module_account_taxcloud_tc">
+
+                        <div class="row mt16" invisible="1">
+                            <label
+                                string="API Version"
+                                for="taxcloud_api_version"
+                                class="col-lg-3 o_light_label"
+                            />
+                            <field name="taxcloud_api_version" class="oe_inline" />
+                        </div>
+
+                        <div class="row mt8" invisible="taxcloud_api_version != 'v3'">
+                            <label
+                                string="Connection ID (V3)"
+                                for="taxcloud_api_id_v3"
+                                class="col-lg-3 o_light_label"
+                            />
+                            <field name="taxcloud_api_id_v3" class="oe_inline" />
+                        </div>
+                        <div class="row" invisible="taxcloud_api_version != 'v3'">
+                            <label
+                                string="API Key (V3)"
+                                for="taxcloud_api_key_v3"
+                                class="col-lg-3 o_light_label"
+                            />
+                            <field name="taxcloud_api_key_v3" class="oe_inline" />
+                        </div>
+
+                        <div class="mt8 row">
+                            <label
+                                string="Default Category"
+                                for="tic_category_id"
+                                class="col-lg-3 o_light_label"
+                            />
+                            <field name="tic_category_id" class="oe_inline" />
+                            <button
+                                name="sync_taxcloud_category"
+                                type="object"
+                                class="col-lg-auto btn-link"
+                            >
+                                <i
+                                    title="Import/update TICs from TaxCloud"
+                                    role="img"
+                                    aria-label="Import/update TICs from TaxCloud"
+                                    class="fa fa-refresh fa-fw"
+                                />
+                            </button>
+                        </div>
+                        <div>
+                            <button
+                                name="action_send_notify"
+                                class="btn btn-primary"
+                                id="send_notify"
+                                string="Get Notified about Updates"
+                                type="object"
+                                help="Notify me about updates"
+                                invisible="(taxcloud_api_version == 'v3' and (not taxcloud_api_id_v3 or not taxcloud_api_key_v3)) or notify_email_sent"
+                            />
+                            <field
+                                name="notify_email_sent"
+                                class="oe_inline"
+                                invisible="1"
+                            /> <!-- Technical field used to hide the notification opt-in after it is sent. -->
+                        </div>
+                        <div class="row mt-2">
+                            <field
+                                name="is_default_tax_template"
+                                class="col flex-grow-0 mr0 pe-2"
+                            />
+                            <div class="col ps-0">
+                                <label for="is_default_tax_template" />
+                                <div class="text-muted">Set custom tax configuration for new taxes.</div>
+                            </div>
+                        </div>
+                        <div class="ps-5 mt-2" invisible="not is_default_tax_template">
+                            <label
+                                string="Tax Template"
+                                for="tax_template_id"
+                                class="col-lg-3 o_light_label"
+                            />
+                            <field
+                                name="tax_template_id"
+                                required="is_default_tax_template"
+                            />
+                        </div>
+
+                        <div
+                            class="mt16"
+                            invisible="taxcloud_api_version == 'v3' and taxcloud_api_id_v3 and taxcloud_api_key_v3"
+                        >
+                            <a
+                                href="https://www.odoo.com/documentation/17.0/applications/finance/accounting/taxation/taxes/taxcloud.html"
+                                target="_new"
+                            >
+                                <i class="oi oi-fw oi-arrow-right" />How to Get Credentials
+                            </a>
+                        </div>
+
+                        <div class="row mt-2">
+                            <field
+                                name="is_skip_zero_invoice"
+                                class="col flex-grow-0 mr0 pe-2"
+                            />
+                            <div class="col ps-0">
+                                <label for="is_skip_zero_invoice" />
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <field
+                                name="is_allow_cancel_invoice"
+                                class="col flex-grow-0 mr0 pe-2"
+                            />
+                            <div class="col ps-0">
+                                <label for="is_allow_cancel_invoice" />
+                            </div>
+                        </div>
+                        <div class="row mt-2" invisible="1">
+                            <div class="col">
+                                <label for="taxcloud_api_call_count" string="API Call Count"/>
+                            </div>
+                            <field name="taxcloud_api_call_count" class="col flex-grow-0 mr0 pe-2" />
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col">
+                                <label for="taxcloud_api_threshold_limit" string="API Threshold Limit"/>
+                            </div>
+                            <field name="taxcloud_api_threshold_limit" class="col flex-grow-0 mr0 pe-2" />
+                        </div>
+                        <div>
+                            <div class="col">
+                                <label
+                                    for="taxcloud_api_call_notification_ids"
+                                    string="API Call Notification Recipients"
+                                />
+                            </div>
+                            <field name="taxcloud_api_call_notification_ids"
+                                class="col flex-grow-0 mr0 pe-2"
+                                widget="many2many_tags_email"
+                                placeholder="Add contacts to notify..."
+                                options="{'no_quick_create': True}"
+                                context="{'show_email': True, 'form_view_ref': 'base.view_partner_simple_form'}"
+                            />
+                        </div>
+                    </div>
+                </setting>
+            </setting>
+        </field>
+    </record>
+</odoo>
