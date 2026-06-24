@@ -1,0 +1,51 @@
+<odoo>
+    <record id="taxcloud_log_form_view" model="ir.ui.view">
+        <field name="name">Taxcloud.log.form.view</field>
+        <field name="model">taxcloud.log</field>
+        <field name="type">form</field>
+        <field name="arch" type="xml">
+            <form string="Taxcloud Type" create="0" edit="0">
+                <group>
+                    <field name="taxcloud_request" />
+                    <field name="taxcloud_response" />
+                    <field name="create_date_time" />
+                    <field name="taxcloud_type" />
+                </group>
+            </form>
+        </field>
+    </record>
+
+    <record id="taxcloud_log_list_view" model="ir.ui.view">
+        <field name="name">taxcloud.log.list.view</field>
+        <field name="model">taxcloud.log</field>
+        <field name="type">list</field>
+        <field name="arch" type="xml">
+            <list string="Taxcloud Type" create="0" edit="0">
+                <field name="taxcloud_request" />
+                <field name="taxcloud_response" />
+                <field name="create_date_time" />
+                <field name="taxcloud_type" />
+            </list>
+        </field>
+    </record>
+
+    <record id="taxcloud_log_act_window" model="ir.actions.act_window">
+        <field name="name">Taxcloud Log</field>
+        <field name="res_model">taxcloud.log</field>
+        <field name="binding_view_types">list</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem
+        id="menu_taxcloud_log_group"
+        name="TaxCloud API Log"
+        parent="account.menu_finance_configuration"
+        sequence="11"
+    >
+        <menuitem
+            id="menu_taxcloud_log"
+            name="TaxCloud Log"
+            action="taxcloud_log_act_window"
+        />
+    </menuitem>
+</odoo>
