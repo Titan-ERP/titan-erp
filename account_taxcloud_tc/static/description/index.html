@@ -1,0 +1,880 @@
+<html>
+<body class="c20 c47 doc-content">
+    <center class="c5"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 624.00px; height: auto;"><img
+                alt="" src="images/image6.jpg"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></center><br>
+    <p class="c5 c13"><span class="c19 c27"></span></p>
+    <h2 style="color:#714b67;">Account TaxCloud</h2>
+    <h5 class="c44" id="h.gjdgxs"><span class="c19 c27">Description</span></h5>
+    <p class="c5"><span class="c7">This module connects Odoo with TaxCloud, enabling the automatic computation of sales
+            tax on invoices within the Odoo platform.</span><span class="c10 c11">&nbsp;It is compatible with
+            multi-company environments.</span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c5"><span class="c11">This module is replacing the module that was previously supported by Odoo. See
+        </span><span class="c32 c11"><a class="c23"
+                href="https://www.google.com/url?q=https://www.odoo.com/documentation/17.0/applications/finance/accounting/taxes/taxcloud.html&amp;sa=D&amp;source=editors&amp;ust=1773900356784571&amp;usg=AOvVaw3ApqtJ2eq6d_ICoRuMKU-e">this
+                link</a></span><span class="c11">&nbsp;for an explanation.</span><span class="c6">&nbsp;</span></p>
+    <p class="c5 c13"><span class="c6"></span></p>
+    <p class="c5"><span class="c11">Odoo released the code to TaxCloud, and Sodexis is maintaining it. Bug fixing and
+            new features will only be added to this module going forward. &nbsp;If users are already using the Odoo
+            module and want to benefit from those bug fixes and new features, they can transition to this module; see
+            the instructions below. They must </span><span class="c7">make sure to test this transition before doing it
+            in production.</span></p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <p class="c5"><span class="c10 c7">If they are not currently using the Odoo connector, they can install this module
+            as any other module.</span></p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <p class="c5"><span class="c7">For previous versions of Odoo (&lt;V17), they should migrate to V17 before
+            transitioning to this new module. If they need any help with the migration, they can contact Sodexis at
+        </span><span class="c32 c7"><a class="c23" href="mailto:info@sodexis.com">info@sodexis.com</a></span><span
+            class="c10 c7">, and a full team of business analysts and developers will be available to help them.</span>
+    </p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <p class="c5"><span class="c7">If they have any questions about sales taxes, they can feel free to reach out to the
+            TaxCloud team </span><span class="c7 c32"><a class="c23"
+                href="https://www.google.com/url?q=https://taxcloud.com/contact-sales/&amp;sa=D&amp;source=editors&amp;ust=1773900356786028&amp;usg=AOvVaw0xa_8dsLe1k64o8U90IoWy">here</a></span><span
+            class="c7">. If they&#39;re interested in learning how TaxCloud can automate their Odoo sales tax
+            collection, they can find more information at </span><span class="c32 c7"><a class="c23"
+                href="https://www.google.com/url?q=https://taxcloud.com/integrations/odoo/&amp;sa=D&amp;source=editors&amp;ust=1773900356786337&amp;usg=AOvVaw2mQyJED9Wstmip_Jzocp2R">https://taxcloud.com/integrations/odoo/</a></span><span
+            class="c10 c7">.</span></p>
+    <b class="c44" id="h.99xambkljc0l"><span class="c19 c27">About TaxCloud</span></b>
+    <p class="c5"><span class="c7">TaxCloud (</span><span class="c32 c7"><a class="c23"
+                href="https://www.google.com/url?q=https://taxcloud.com/&amp;sa=D&amp;source=editors&amp;ust=1773900356786558&amp;usg=AOvVaw2DXLw0gmWhAV01orPqHBFY">https://taxcloud.com/</a></span><span
+            class="c10 c7">) is a sales tax compliance solution with over 15 years of experience in tax technology.
+            Trusted by more than 4,000 companies, TaxCloud streamlines the management of sales taxes from collection and
+            calculation to filing. It supports e-commerce businesses in navigating complex U.S. tax regulations across
+            all 50 states and over 13,000 jurisdictions. With TaxCloud, businesses can accurately calculate taxes,
+            reduce the hassle of keeping up with changing tax laws, and ensure effortless compliance. Say goodbye to the
+            stress and frustration of sales tax with TaxCloud.</span></p><a id="kix.xgh6bbp4jhy4"></a>
+    <b class="c44" id="h.wh6y4fzeswla"><span class="c43">Module Installation</span></b>
+    <ul class="c14 lst-kix_nfmzrkthkxo6-0 start">
+        <li class="c5 c22 c40 li-bullet-0"><span class="c7">Users must download all the official TaxCloud modules listed
+                below from the Odoo</span><span class="c4 c20">&nbsp;</span><span class="c7">Apps Store</span><span
+                class="c4 c20">&nbsp;</span><span class="c7">before proceeding with the installation process, even if
+                they don&rsquo;t use the related Odoo TaxCloud modules. This ensures they get all the TaxCloud features
+                and proper data transmission. If they use </span><b class="c4 c20">&ldquo;Deploy on Odoo.sh&rdquo;
+            </b><span class="c10 c7">in the Apps Store, they must deploy all the modules listed below.</span></li>
+    </ul>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <ul><ul class="c14 lst-kix_nfmzrkthkxo6-1 start">
+        <li class="c5 c34 li-bullet-0"><span class="c32 c7"><a class="c23"
+                    href="https://www.google.com/url?q=https://apps.odoo.com/apps/modules/17.0/sale_account_taxcloud_tc/&amp;sa=D&amp;source=editors&amp;ust=1773900356787798&amp;usg=AOvVaw0XXXk8oLxxsamm-q-UCIJK">Account
+                    TaxCloud - Sale</a></span></li>
+        <li class="c5 c34 li-bullet-0"><span class="c32 c7"><a class="c23"
+                    href="https://www.google.com/url?q=https://apps.odoo.com/apps/modules/17.0/sale_loyalty_taxcloud_tc/&amp;sa=D&amp;source=editors&amp;ust=1773900356787990&amp;usg=AOvVaw3XMR6KLiWytM88L5wah-vU">Account
+                    Taxcloud - Sale (loyalty)</a></span></li>
+        <li class="c5 c34 li-bullet-0"><span class="c32 c7"><a class="c23"
+                    href="https://www.google.com/url?q=https://apps.odoo.com/apps/modules/17.0/sale_loyalty_taxcloud_delivery_tc/&amp;sa=D&amp;source=editors&amp;ust=1773900356788211&amp;usg=AOvVaw0ffhBjhyQ_VigvFzwSSvto">Account
+                    Taxcloud - Sale (loyalty) - Delivery</a></span></li>
+        <li class="c5 c34 li-bullet-0"><span class="c32 c7"><a class="c23"
+                    href="https://www.google.com/url?q=https://apps.odoo.com/apps/modules/17.0/website_sale_account_taxcloud_tc/&amp;sa=D&amp;source=editors&amp;ust=1773900356788398&amp;usg=AOvVaw1_A0h2BA4CUL0pB660vB15">Account
+                    TaxCloud - Ecommerce</a></span></li>
+        <li class="c5 c34 li-bullet-0"><span class="c32 c7"><a class="c23"
+                    href="https://www.google.com/url?q=https://apps.odoo.com/apps/modules/17.0/sale_subscription_taxcloud_tc/&amp;sa=D&amp;source=editors&amp;ust=1773900356788561&amp;usg=AOvVaw0DP6ALlRW39MwG4yQg3K1E">TaxCloud
+                    and Subscriptions</a></span></li>
+        <li class="c5 c34 li-bullet-0"><span class="c32 c7"><a class="c23"
+                    href="https://www.google.com/url?q=https://apps.odoo.com/apps/modules/17.0/sale_amazon_taxcloud_tc/&amp;sa=D&amp;source=editors&amp;ust=1773900356788697&amp;usg=AOvVaw1ivazljUQ98bPPOrgWhStv">Amazon/TaxCloud
+                    Bridge</a></span></li>
+    </ul></ul>
+    <p class="c3"><span class="c10 c7"></span></p>
+    <ul class="c14 lst-kix_nfmzrkthkxo6-0">
+        <li class="c5 c22 c40 li-bullet-0"><span class="c7">For example, suppose users have not installed the
+                Subscription app but have installed the Sales app. In that case, they are still recommended to download
+                all the official TaxCloud modules before installing the </span><b class="c4 c20">&ldquo;Account
+                TaxCloud&rdquo;</b><span class="c7">&nbsp;module. The </span><b class="c4 c20">&ldquo;Account
+                TaxCloud - Sale&rdquo;</b><span class="c7">&nbsp;modules are installed based on the installed modules
+                list. In the future, installing the Subscription app will automatically install the needed </span><b
+                class="c4 c20">&ldquo;TaxCloud and Subscription&rdquo;</b><span class="c10 c7">&nbsp;module. This
+                ensures they do not miss any of the TaxCloud features.</span></li>
+    </ul>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <ul class="c14 lst-kix_nfmzrkthkxo6-0">
+        <li class="c5 c22 c40 li-bullet-0"><b class="c19 c4 c20">Users did not use the Odoo TaxCloud Modules:</b>
+        </li>
+    </ul>
+    <ul><ul class="c14 lst-kix_nfmzrkthkxo6-1 start">
+        <li class="c5 c34 li-bullet-0"><span class="c7">If users are not currently using the Odoo module, they can
+                install this module by simply clicking the </span><b
+                class="c4 c20">&ldquo;Activate&rdquo;</b><span class="c10 c7">&nbsp;button and following the
+                configuration steps below.</span></li>
+    </ul></ul>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <ul class="c14 lst-kix_nfmzrkthkxo6-0">
+        <li class="c5 c22 c40 li-bullet-0"><b class="c19 c4 c20">Using Odoo TaxCloud Modules:</b></li>
+    </ul>
+   <ul><ul class="c14 lst-kix_nfmzrkthkxo6-1 start">
+        <li class="c5 c34 li-bullet-0"><b class="c19 c4 c20">Switching from the Odoo TaxCloud module to our connector
+                in odoo V17</b></li>
+    <ul><ul class="c14 lst-kix_nfmzrkthkxo6-2 start">
+        <li class="c5 c31 li-bullet-0"><span class="c7">If users are currently using the Odoo TaxCloud module, then they
+            </span><b class="c4 c20">should not uninstall</b><span class="c7">&nbsp;the current module before
+                installing this module; otherwise, they will lose all of their data. This module will take care of the
+            </span><b class="c4 c20">configuration &amp;</b><span class="c7">&nbsp;</span><b
+                class="c4 c20">data</b><span class="c7">&nbsp;</span><b class="c4 c20">transmission from the
+                existing module and automatic uninstallation of the Odoo TaxCloud module</b><span
+                class="c10 c7">&nbsp;once installed. It is not necessary to reinstall the Odoo TaxCloud module.</span>
+        </li>
+    </ul></ul>
+    </ul>
+    <ul class="c14 lst-kix_nfmzrkthkxo6-1">
+        <li class="c5 c34 li-bullet-0"><b class="c19 c4 c20">Migrating from Odoo 17 to Odoo 19 or from Earlier
+                Versions to Odoo 19</b></li>
+    </ul>
+    <ul><ul class="c14 lst-kix_nfmzrkthkxo6-2 start">
+        <li class="c33 c31 li-bullet-0"><b class="c43">Migrating from Odoo 17 to Odoo 19</b></li>
+    </ul>
+    <ul><ul class="c14 lst-kix_nfmzrkthkxo6-3 start">
+        <li class="c5 c35 li-bullet-0"><span class="c10 c7">First, switch to the official connector in Odoo 17 to
+                prevent data loss. Then, proceed with the migration to Odoo 19 using our connector.</span></li>
+    </ul></ul>
+    <ul class="c14 lst-kix_nfmzrkthkxo6-2">
+        <li class="c5 c31 li-bullet-0"><b class="c19 c20 c43 c58">Migrating from earlier versions to Odoo 19</b>
+        </li>
+    </ul>
+    <ul class="c14 lst-kix_nfmzrkthkxo6-3 start">
+    <ul><li class="c5 c35 li-bullet-0"><span class="c10 c7">First, migrate to Odoo V17 using our official connector.
+                Then migrate to Odoo 19 to ensure all data is retained.</span></li>
+        <li class="c5 c35 li-bullet-0"><span class="c10 c7">Alternatively, the module can be installed directly in Odoo
+                19 as a fresh installation and configured from scratch.</span></li>
+    </ul></ul></ul></ul>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <ul class="c14 lst-kix_n5opjfrh8tzo-0 start">
+        <li class="c5 c22 c40 li-bullet-0"><b class="c4">TaxCloud Migration _tc modules (V17 to V19):</b></li>
+    </ul>
+    <ul><ul class="c14 lst-kix_n5opjfrh8tzo-1 start">
+        <li class="c5 c34 li-bullet-0"><b class="c4">Steps after Migration:</b></li>
+    </ul>
+    <ul><ul class="c14 lst-kix_n5opjfrh8tzo-2 start">
+        <li class="c5 c31 li-bullet-0"><b class="c19 c4">Source code:</b></li>
+    </ul>
+    <ul><ul class="c14 lst-kix_n5opjfrh8tzo-3 start">
+        <li class="c5 c35 li-bullet-0"><span class="c11">Please download the V19 version of the TaxCloud apps and use
+                them.</span></li>
+    </ul></ul>
+    <ul class="c14 lst-kix_n5opjfrh8tzo-2">
+        <li class="c5 c31 li-bullet-0"><b class="c19 c4">DB Fixes:</b></li>
+    </ul>
+    <ul><ul class="c14 lst-kix_n5opjfrh8tzo-3 start">
+        <li class="c5 c35 li-bullet-0"><span class="c10 c11">In V19, activate the inactive TaxCloud views.</span></li>
+    </ul>
+    <ul><ul class="c14 lst-kix_n5opjfrh8tzo-4 start">
+        <li class="c5 c15 li-bullet-0"><span class="c10 c11">Enable Developer Mode</span></li>
+        <li class="c5 c15 li-bullet-0"><span class="c10 c11">In the &quot;Technical&quot; section (which appears only in
+                developer mode), find and click on &quot;User Interface&quot; -&gt; &quot;Views.</span></li>
+        <li class="c5 c15 li-bullet-0"><span class="c11">In the search bar at the top of the &quot;Views&quot; list,
+                type &quot;taxcloud,&quot; and in the filter, apply for the inact</span><span
+                class="c10 c11">ive.</span></li>
+        <li class="c5 c15 li-bullet-0"><span class="c10 c11">Activate those views.</span></li>
+    </ul></ul></ul></ul></ul>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c33"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image9.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <ul class="c14 lst-kix_dbk6o0dlucm2-0 start">
+        <li class="c2 c35 li-bullet-0"><span class="c10 c11">In Accounting/Settings, set the TaxCloud API credentials
+                and the Default Category.</span></li>
+    </ul>
+    <p class="c9"><span class="c10 c11"></span></p>
+    <p class="c33"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image18.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <p class="c9"><span class="c10 c11"></span></p>
+    <ul class="c14 lst-kix_w4g58ceunlh4-0 start">
+        <li class="c2 c35 li-bullet-0"><span class="c11">Enable the &ldquo;Use TaxCloud API&rdquo; boolean in the Fiscal
+                position, same as in V18.</span></li>
+    </ul>
+    <p class="c9 c50"><span class="c10 c11"></span></p>
+    <p class="c33"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image26.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <p class="c9"><span class="c10 c11"></span></p>
+    <p class="c5 c13"><span class="c19 c4"></span></p>
+    <p class="c5"><span class="c11">For any technical queries or support, contact us at &#128231;</span><span
+            class="c32 c11"><a class="c23" href="mailto:taxcloud@sodexis.com">taxcloud@sodexis.com</a></span><span
+            class="c11">&nbsp;or visit the website at &#127760;</span><span class="c32 c11"><a class="c23"
+                href="https://www.google.com/url?q=http://sodexis.com/taxcloud&amp;sa=D&amp;source=editors&amp;ust=1773900356792915&amp;usg=AOvVaw2UG1u32okK5kqDFzeiX-P8">sodexis.com/taxcloud</a></span><span
+            class="c10 c11">. Free support for the installation to the first few customers will be provided.</span></p>
+    <h5 class="c37" id="h.p3pyeb3869ba"><span class="c19 c27">Configuration</span></h5>
+    <p class="c5"><span class="c11">Navigate to the </span><b class="c4">Accounting</b><span class="c11">&nbsp;app
+            and under the </span><b class="c4">Configuration</b><span class="c11">&nbsp;menu, select the
+        </span><b class="c4">Settings </b><span class="c11">option. In the Settings view, locate the </span><b
+            class="c4">TaxCloud TC</b><span class="c10 c11">&nbsp;boolean and enable it.</span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c5"><span class="c11">Enter the API (Application Programming Interface) credentials derived from the
+            TaxCloud site into the fields under the TaxCloud </span><span class="c7">TC </span><span
+            class="c10 c11">section. These steps are required to integrate Odoo with TaxCloud.</span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c5"><span class="c11">The credentials include the API Version, API Login ID, API Key, and Default
+            Category.</span></p>
+    <ol class="c14 lst-kix_4fjiijejut60-0 start" start="1">
+        <li class="c5 c22 c40 li-bullet-0"><span class="c11">The refresh button under the Default Category is used to
+                import the TIC &nbsp;(Taxability Information Codes) product categories from TaxCloud. </span></li>
+        <li class="c5 c22 c40 li-bullet-0"><span class="c11">The </span><b class="c4">Default Category</b><span
+                class="c11">&nbsp;is applied when no TaxCloud Category is set on both the products and product
+                categories</span><span class="c6">.</span></li>
+        <li class="c22 c40 c45 li-bullet-0"><span class="c11">When the boolean </span><span class="c4">&ldquo;Skip Zero
+                Invoice&rdquo;</span><span class="c10 c11">&nbsp;is enabled, the invoice line with a &ldquo;0&rdquo;
+                price is not sent to TaxCloud. Because, even if it is sent to TaxCloud, the computing tax is going to be
+                zero.</span></li>
+        <li class="c17 li-bullet-0"><span class="c7">When the boolean</span><b class="c4 c20">&nbsp;&ldquo;Allow
+                Cancel Invoice&rdquo;</b><span class="c7">&nbsp;is enabled, users will be able to cancel
+                invoices.</span></li>
+        <li class="c5 c22 c40 li-bullet-0"><span class="c7">When the boolean </span><b class="c4 c20">&ldquo;Skip
+                Zero Orders&rdquo;</b><span class="c7">&nbsp;is enabled, the sale order line with &ldquo;0&rdquo;
+                price is not sent to Taxcloud. Because, even if it is sent to TaxCloud the computing tax is going to be
+                zero.</span></li>
+        <li class="c5 c22 c40 li-bullet-0"><span class="c7">A scheduled action named </span><b
+                class="c4 c20">&ldquo;TaxCloud: Daily TIC Category Sync&rdquo;</b><span class="c7">&nbsp;has been
+                introduced. This scheduled job updates the </span><sbpan class="c4 c20">TIC (Taxability Information Code)
+                categories</sbpan><span class="c7">&nbsp;available in TaxCloud on a daily basis. The synchronization runs
+                automatically and processes the TIC codes alphabetically from </span><b class="c4 c20">A to
+                Z</b><span class="c7">, ensuring that the categories remain up to date in Odoo.</span></li>
+    </ol>
+    <p class="c5 c13 c22"><span class="c6"></span></p>
+    <p class="c5"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image15.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c5"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image3.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <b class="c24" id="h.iz21786ny7ma"><span class="c19 c25 c20">To be Notified About Updates</span></b>
+    <p class="c5"><span class="c7">The button </span><b class="c4 c20">&ldquo;Get Notified about
+            Updates&rdquo;</b><span class="c10 c7">&nbsp;allows users to be notified about major updates and bug
+            fixes. </span></p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <p class="c5"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image7.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <p class="c5"><span class="c10 c7">Clicking the button opens the Compose Email wizard. From the wizard, users can
+            compose and send a confirmation email to receive notifications from the team regarding major updates and bug
+            fixes.</span></p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <p class="c5"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image21.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c5"><span class="c7">The </span><b class="c4 c20">&ldquo;Default Tax Template&rdquo; </b><span
+            class="c7">boolean is found under the Default Category field. When the </span><b
+            class="c4 c20">&ldquo;Default Tax Template&rdquo;</b><span class="c7">&nbsp;boolean is enabled, a new
+            field, </span><b class="c4 c20">&ldquo;Tax Template,&rdquo;</b><span class="c10 c7">&nbsp;appears.
+        </span></p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <p class="c5"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image5.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <p class="c5"><span class="c7">Once the Default Tax is set, any tax created through the API will use this template
+            to generate new taxes. However, fields such as </span><b class="c4 c20">Tax Name</b><span class="c7">,
+        </span><b class="c4 c20">Amount</b><span class="c7">, and </span><b class="c4 c20">Label on
+            Invoices</b><span class="c10 c7">&nbsp;are left to override. </span></p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <b class="c24" id="h.yhbvzfqk495z"><span class="c20 c43">API Usage Monitoring &amp; Alerts</span></b>
+    <p class="c45 c13"><span class="c6"></span></p>
+    <p class="c5"><span class="c7">The </span><b class="c4 c20">&ldquo;API Threshold Limit&rdquo;</b><span
+            class="c7">&nbsp;and</span><b class="c4 c20">&nbsp;&ldquo;API Call Notification
+            Recipients&rdquo;</b><span class="c10 c7">&nbsp;fields are used to set the threshold and specify the
+            recipients for alerts. </span></p>
+    <p class="c5 c13"><span class="c7 c10"></span></p>
+    <p class="c5"><span class="c7">When the scheduled action </span><b class="c4 c20">&ldquo;TaxCloud API Call
+            Counter&rdquo;</b><span class="c7">&nbsp;is triggered, it reviews the records from the past 24 hours and
+            calculates the API call count. If the count exceeds the defined threshold, an alert will be sent to the
+            recipients specified in the </span><b class="c4 c20">&ldquo;API Call Notification
+            Recipients&rdquo;</b><span class="c10 c7">&nbsp;field.</span></p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <p class="c5"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image4.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <p class="c5"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image13.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <p class="c45 c13"><span class="c6"></span></p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <b class="c24" id="h.ktpsbhd4zb9k"><span class="c43">Discover more about keeping your business compliant with sales
+            tax regulations.</span></b>
+    <ul class="c14 lst-kix_lafmgx92owo5-0 start">
+        <li class="c5 c22 c40 li-bullet-0"><span class="c11">Explore TaxCloud Taxability Information Codes (TICs) for
+                detailed product tax classifications: </span><span class="c32 c11"><a class="c23"
+                    href="https://www.google.com/url?q=https://app.taxcloud.com/tic&amp;sa=D&amp;source=editors&amp;ust=1773900356798972&amp;usg=AOvVaw3AwnkiERqNwJOtzq6WBV_l">https://app.taxcloud.com/tic</a></span>
+        </li>
+        <li class="c5 c22 c40 li-bullet-0"><span class="c11">Access TaxCloud&#39;s comprehensive resources, including a
+                tax rate threshold map, tax rate lookup tool, and state-specific sales tax guides: </span><span
+                class="c32 c11"><a class="c23"
+                    href="https://www.google.com/url?q=https://taxcloud.com/state-guides/&amp;sa=D&amp;source=editors&amp;ust=1773900356799293&amp;usg=AOvVaw1zFluBk62CgPq5bVIPMSbs">State
+                    Guides</a></span></li>
+    </ul>
+    <b class="c24" id="h.jczuih6i5xqw"><span class="c19 c25">Rounding Method</span></b>
+    <p class="c5"><span class="c11">Navigate to the </span><b class="c4">Accounting</b><span class="c11">&nbsp;app
+            and select </span><b class="c4">Settings </b><span class="c11">under the </span><b
+            class="c4">Configuration</b><span class="c11">&nbsp;menu. In the Settings view, locate the </span><b
+            class="c4">Taxes</b><span class="c11">&nbsp;section and under the Taxes, set the Rounding Method to
+        </span><b class="c4">Round Per Tax</b><span class="c10 c11">&nbsp;to round the tax values.</span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c5"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image14.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <b class="c24" id="h.b27kzm7rzi18"><span class="c19 c25">Setting TaxCloud Categories on Products</span></b>
+    <p class="c5"><span class="c11">To view the list of </span><b class="c4">TaxCloud Categories, </b><span
+            class="c11">ensure that the developer mode is activated. Navigate to the </span><b
+            class="c4 c20">Accounting </b><span class="c11">app and under the </span><b
+            class="c4">Configuration</b><span class="c11">&nbsp;menu locate </span><b
+            class="c4">Accounting</b><span class="c11">&nbsp;to select </span><b class="c4">TaxCloud
+            Categories</b><span class="c10 c11">.</span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c5"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image16.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c5"><span class="c10 c11">If a TaxCloud Category is set on a product and another on its Product Category,
+            Odoo only considers the TaxCloud Category found on the product itself.</span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c5"><span class="c10 c11">If the TaxCloud Category is not set on a product, then Odoo considers the
+            TaxCloud category set on its Product Category.</span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c5"><span class="c11">If the TaxCloud Category is not set on both the product and the Product Category,
+            then Odoo considers the </span><b class="c4">Default Category</b><span class="c10 c11">&nbsp;set in
+            the Accounting Settings.</span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c5"><span class="c11">The TaxCloud Category set on a parent product category does not apply to its child
+            product categories and vice versa. For example, if the TaxCloud Category is set to the </span><b
+            class="c4">&ldquo;All&rdquo;</b><span class="c11">&nbsp;Product Category, then it is not applied to
+            the</span><b class="c4">&nbsp;&ldquo;All/Sales&rdquo;</b><span class="c10 c11">&nbsp;Product Category,
+            and vice versa.</span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c5"><span class="c10 c7">Set the TaxCloud category for the Shipping Products and Down Payment Products to
+            get the right tax computation.</span></p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <p class="c5"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image2.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <p class="c5"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image8.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <p class="c5"><span class="c7">In the </span><b class="c4 c20">Accounting</b><span class="c7">&nbsp;app,
+            navigate to the </span><b class="c4 c20">Configuration</b><span class="c7">&nbsp;menu to locate the
+            Accounting section and select the </span><b class="c4 c20">Fiscal Positions</b><span
+            class="c7">&nbsp;option. Ensure the</span><b class="c4 c20">&nbsp;&#39;Use TaxCloud API&#39; </b><span
+            class="c7">boolean</span><span class="c4 c20">&nbsp;</span><span class="c10 c7">is enabled.</span></p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <p class="c5"><span class="c7">To automatically set the Fiscal Position, enable the </span><b
+            class="c4 c20">&#39;Detect Automatically&#39;</b><span class="c7">&nbsp;boolean in the Fiscal Position.
+            When &#39;Detect Automatically&#39; is enabled, the options such as</span><b class="c4 c20">&nbsp;VAT
+            required, Country Group, Federal States, and Zip Range</b><span class="c10 c7">&nbsp;can be configured
+            based on the requirements.</span></p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <p class="c5"><span class="c7">Here, set</span><span class="c7">&nbsp;the</span><span class="c7">&nbsp;</span><b
+            class="c4 c20">&ldquo;Country&rdquo;</b><span class="c7">&nbsp;field as </span><b
+            class="c4 c20">&quot;United States&quot;</b><span class="c10 c7">. If the delivery address in the sales
+            order/invoice is the United States, then the Fiscal Position (Automatic Tax Mapping (TaxCloud)) will be
+            applied automatically.</span></p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <p class="c5"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image20.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <h5 class="c44" id="h.zh2x6pvyddz7"><span class="c43">Functionality</span></h5>
+    <p class="c5"><span class="c11">Navigate to the </span><b class="c4">Accounting</b><span class="c11">&nbsp;app
+            and select</span><span class="c4">&nbsp;Invoices </span><span class="c11">nested under the </span><b
+            class="c4">Customers</b><span class="c11">&nbsp;menu</span><span class="c4">. </span><span
+            class="c10 c11">Create a new Invoice.</span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c5"><span class="c11">Under the </span><b class="c4">Other Info</b><span class="c11">&nbsp;tab, set
+        </span><b class="c4">&ldquo;Automatic Tax Mapping (TaxCloud)&rdquo; </b><span class="c11">in the
+        </span><b class="c4">Fiscal position</b><span class="c11">&nbsp;field. The taxes are computed based on the
+        </span><b class="c4">&ldquo;Fiscal Position&rdquo; </b><span class="c10 c11">which was configured
+            initially.</span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c5"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image23.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c5"><span class="c10 c11">Confirm the invoice to get it posted. It can be seen that the computed tax from
+            TaxCloud is applied in the invoice, as shown below.</span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c5"><b class="c4">Note</b><span class="c10 c11">: The taxes cannot be computed before the invoice is
+            posted.</span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c5"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image22.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c5"><span class="c11">TaxCloud uses the destination from the </span><b class="c4">&quot;Delivery
+            Address&quot;</b><span class="c11">&nbsp;and the customer from the </span><b class="c4">&quot;Customer
+            ID&quot;</b><span class="c11">&nbsp;on the invoice</span><span class="c6">. </span></p>
+    <p class="c5 c13"><span class="c6"></span></p>
+    <p class="c5"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image12.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <p class="c5 c13"><span class="c6"></span></p>
+    <p class="c5"><span class="c11">Log in to the TaxCloud website, locate the </span><b class="c4">Transactions
+        </b><span class="c11">menu,</span><span class="c4">&nbsp;</span><span class="c11">and select the</span><b
+            class="c4">&nbsp;Reports </b><span class="c10 c11">option, which shows the recent transactions in
+            Odoo.</span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c5"><span class="c11">The status of the invoice on the TaxCloud website is seen as</span><b
+            class="c4">&nbsp;&ldquo;Captured&rdquo;</b><span class="c10 c11">&nbsp;when the invoice is posted in
+            Odoo.</span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <b class="c24" id="h.iv1y6nvz928h"><span class="c43">Canceling the Invoice</span></b>
+    <p class="c5 c13"><span class="c6"></span></p>
+    <p class="c5"><span class="c11">A new invoice cancellation process has been implemented based on the
+            boolean</span><b class="c4">&nbsp;&ldquo;Allow Cancel Invoice&rdquo;</b><span class="c11">&nbsp;in
+            Accounting settings.</span></p>
+    <p class="c5 c13"><span class="c6"></span></p>
+    <p class="c5"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image28.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <p class="c5 c13"><span class="c6"></span></p>
+    <p class="c5"><span class="c11">When enabled, the standard </span><b class="c4">&quot;Reset to
+            Draft&quot;</b><span class="c11">&nbsp;button will be hidden for invoices with fiscal positions linked to
+            TaxCloud. Instead, a new </span><b class="c4">&quot;Cancel&quot; </b><span class="c10 c11">button is
+            introduced. Clicking this button triggers a cancellation request via TaxCloud&#39;s Return API. </span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c5"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image25.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c28"><span class="c10 c11">If the API call fails, a pop-up will notify the user of the failure and suggest
+            manually creating a credit note. If successful, the invoice will be reset to draft and the TaxCloud
+            transaction will be cancelled simultaneously.</span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c16"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image17.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <p class="c28"><span class="c10 c11">When reconfirming the invoice, a new TaxCloud transaction is created with a
+            suffix pattern (e.g., 195-1, 195-2) appended to the original transaction ID.</span></p>
+    <p class="c5"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image10.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <p class="c5 c13"><span class="c10 c11"></span></p>
+    <p class="c16"><span class="c10 c11">If the invoice is cancelled again, the system ensures that the transaction ID
+            is managed correctly by incrementing the suffix.</span></p>
+    <p class="c16"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image1.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <p class="c16"><span class="c10 c11">Additionally, when a credit note is created from an invoice with a transaction
+            ID like 195-2, the same ID will be used to create the corresponding Return on TaxCloud. </span></p>
+    <p class="c16"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image27.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <p class="c16 c13"><span class="c10 c11"></span></p>
+    <p class="c5"><span class="c4">Note:</span><span class="c10 c11">&nbsp;This integration only supports cancellation
+            of invoices, not credit notes, since TaxCloud does not allow changes to a transaction once a Return has been
+            processed.</span></p>
+    <p class="c5"><span class="c11">Also, if the tax for that period has already been filed, the process remains valid
+            as long as a proper return date is provided and the return is correctly submitted, ensuring accurate
+            reporting in TaxCloud.</span></p>
+    <b class="c24" id="h.tvu734xmbcuw"><span class="c19 c25">Credit Note</span></b>
+    <p class="c5"><span class="c11">To reverse the invoice, create a credit note using the </span><b
+            class="c4">&ldquo;Credit Note&rdquo;</b><span class="c11">&nbsp;button on the invoice.</span><span
+            class="c7">&nbsp;When a credit note is created for the posted invoice, TaxCloud updates the tax and the
+            total as </span><span class="c4 c20">&ldquo;0&rdquo; </span><span class="c7">on the original record with the
+            status as </span><b class="c4 c20">&ldquo;Returned&rdquo;</b><span class="c10 c7">&nbsp;as shown
+            below.</span></p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <p class="c45"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image24.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <p class="c5"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 100%; max-width: 1000.00px; height: auto;"><img
+                alt="" src="images/image11.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <p class="c5"><b class="c4">Note:</b><span class="c10 c11">&nbsp;This release resolves an issue where users
+            could incorrectly create credit notes under the TaxCloud fiscal position without referencing an existing
+            invoice. These credit notes were not reported to TaxCloud, leading to inaccuracies.</span></p>
+    <p class="c28"><span class="c10 c11">Going forward, credit notes with the TaxCloud fiscal position can only be
+            created as reversals of existing invoices, ensuring that all credit notes are accurately tracked and
+            reported to TaxCloud.</span></p>
+    <p class="c28"><span class="c10 c11">If a user attempts to post a credit note not linked to an original invoice, the
+            system will now throw an invalid operation error as shown in the screenshot below.</span></p>
+    <p class="c28 c13"><span class="c10 c11"></span></p>
+    <p class="c28"><span
+            style="overflow: hidden; display: inline-block; margin: 0.00px 0.00px; border: 0.00px solid #000000; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px); width: 624.00px; height: 282.67px;"><img
+                alt="" src="images/image19.png"
+                style="width: 100%; height: auto; margin-left: 0.00px; margin-top: 0.00px; transform: rotate(0.00rad) translateZ(0px); -webkit-transform: rotate(0.00rad) translateZ(0px);"
+                title=""></span></p>
+    <b class="c56" id="h.u6yzv61ec0it"><span class="c43">Frequently Asked Questions:</span></b>
+    <p class="c9"><span class="c6"></span></p>
+    <p class="c2"><b class="c19 c4 c20">Which version is the app available for, and where can I find it?
+            &nbsp;</b></p>
+    <ul><ul class="c14 lst-kix_jk9adectw1il-0 start">
+        <li class="c0 li-bullet-0"><span class="c7">The app is available for versions V17, V18 and V19. You can find it
+                in the Odoo App Store.</span></li>
+    </ul></ul>
+    <p class="c2 c13"><span class="c10 c7"></span></p>
+    <p class="c2"><b class="c19 c4 c20">Is there a specific installation procedure for integrating TaxCloud with Odoo
+            17 V18 and V19?</b></p>
+    <ul><ul class="c14 lst-kix_ljwredloxk7-0 start">
+        <li class="c0 li-bullet-0"><span class="c7">The steps are detailed and explained in the Account TaxCloud
+                Documentation under the Module Installation section.</span><span class="c10 c7"><br></span></li>
+    </ul></ul>
+    <p class="c2"><b class="c4 c20">What Odoo edition is the TaxCloud module compatible with? </b></p>
+    <ul><ul class="c14 lst-kix_odziu5m6fc8r-0 start">
+        <li class="c55 c22 c40 li-bullet-0"><b class="c19 c4 c20">Customers who are self-hosted or hosted on Odoo.sh
+                can install the modules. </b></li>
+        <li class="c55 c22 c40 li-bullet-0"><span class="c7">However, it is </span><b class="c4 c20">not
+                compatible</b><span class="c7">&nbsp;with </span><b class="c4 c20">Odoo Online (SaaS)</b><span
+                class="c7">&nbsp;&mdash; because Odoo Online does </span><b class="c4 c20">not allow the installation
+                of third-party modules</b><span class="c10 c7">, including the TaxCloud connector</span></li>
+        <li class="c22 c40 c55 li-bullet-0"><span class="c7">Customers on Odoo Online hosting who are currently on a
+                &ldquo;minor&rdquo; version, such as v19.1, would need to downgrade to a stable version like v19.0 and
+                then switch to Odoo.sh hosting before they can install the Sodexis TaxCloud connector (or any other
+                third-party module).</span></li>
+    </ul></ul>
+    <p class="c2 c13 c22"><span class="c10 c7"></span></p>
+    <p class="c2"><b class="c19 c4">What can I do if I need support and assistance with installing and using the
+            module?</b></p>
+    <ul><ul class="c14 lst-kix_3bjjx660fgq-0 start">
+        <li class="c0 li-bullet-0"><span class="c11">For help with the TaxCloud module, you can purchase an onboarding
+                package directly from TaxCloud, which includes support from their team. Alternatively, you can purchase
+                a Sodexis Success Pack through this link, which provides additional resources and personalized
+                assistance from our team for installation, setup, and ongoing functionality.</span><span
+                class="c10 c11"><br></span></li>
+    </ul></ul>
+    <p class="c2"><b class="c4">What is the standard timeline to go live with the TaxCloud connector after onboarding
+            begins?</b></p>
+    <ul><ul class="c14 lst-kix_fm1tvt1gnxw0-0 start">
+        <li class="c26 c22 li-bullet-0"><span class="c11">Once we receive all the required information, including your
+                TaxCloud credentials and answers to the initial onboarding questionnaire, our team typically completes
+                the setup and testing within </span><b class="c4">5 business days</b><span class="c10 c11">. This
+                includes:<br></span></li>
+    </ul>
+    <ul><ul class="c14 lst-kix_fm1tvt1gnxw0-1 start">
+        <li class="c51 c34 li-bullet-0"><b class="c19 c4">Install our TaxCloud Connectors in the Staging</b></li>
+        <li class="c51 c34 li-bullet-0"><b class="c19 c4">Configuration to Integrate TaxCloud with Staging</b>
+        </li>
+        <li class="c51 c34 li-bullet-0"><b class="c19 c4">Testing the flow and transaction in TaxCloud</b></li>
+        <li class="c34 c51 li-bullet-0"><b class="c19 c4">Assistance with moving the configuration to
+                production</b></li>
+    </ul></ul>
+    <ul class="c14 lst-kix_fm1tvt1gnxw0-0">
+        <li class="c26 c22 li-bullet-0"><span class="c7">Once you approve the go-live after completing the above testing
+                in your staging environment, we can move to production within </span><span class="c4 c20">3 business
+                days</span><span class="c10 c7">.</span></li>
+    </ul></ul>
+    <p class="c9"><span class="c6"></span></p>
+    <p class="c2"><b class="c19 c4">Does it support Multi-Website and Multi-Company?</b></p>
+    <ul class="c14 lst-kix_o6hs5bvq7hw0-0 start">
+        <li class="c0 li-bullet-0"><span class="c10 c11">Yes, the module supports Multi-Website and Multi-Company
+                configurations. API credentials in the settings are company-specific, and each website uses the
+                credentials based on the company on it.</span></li>
+    </ul>
+    <p class="c9"><b class="c10 c4 c5">How is the tax rate percentage calculated and displayed?</b></p>
+    <ul class="c16 lst-kix_o6hs5bvq7hw0-0">
+            <li class="c9 c24 li-bullet-0"><span class="c1">Previously, TaxCloud only provided the tax amount, and
+                            the system recalculated the tax rate from that amount. This could lead to minor rounding
+                            differences which caused confusion.</span></li>
+            <li class="c22 li-bullet-0"><span class="c1">With the move to TaxCloud V3 API, this issue has been
+                            addressed. TaxCloud now provides both the tax rate and the tax amount.</span></li>
+            <li class="c22 li-bullet-0"><span class="c4">Internally, the tax rate is still recomputed from the tax
+                            amount to maintain precision.</span>
+            </li>
+    </ul>
+    <p class="c2 c13"><span class="c10 c11"></span></p>
+    <p class="c2"><b class="c19 c4 c20">Can I cancel an invoice after it&rsquo;s sent to TaxCloud?</b></p>
+    <ul><ul class="c14 lst-kix_milckzsxjmmb-0 start">
+        <li class="c0 li-bullet-0"><span class="c7">Yes, you can cancel the invoice after it&rsquo;s sent to TaxCloud.
+                If you want to allow invoice cancellation, enable the boolean </span><b class="c4 c20">&ldquo;Allow
+                Cancel Invoice&rdquo;</b><span class="c7">&nbsp;option in the Accounting Settings. To enable this
+                feature, make sure you have installed the latest version of the </span><b
+                class="c4 c20">account_taxcloud_tc</b><span class="c10 c7">&nbsp;module.</span></li>
+        <li class="c0 li-bullet-0"><span class="c7">This allows canceling invoices only; credit notes are not supported
+                for cancellation with this option.</span></li>
+    </ul></ul>
+    <p class="c2 c13 c22"><span class="c10 c7"></span></p>
+    <p class="c2"><b class="c19 c4 c20">Why am I getting an error when posting an invoice created from a sales order
+            after making a return?</b></p>
+    <p class="c2 c13"><span class="c19 c4 c20"></span></p>
+    <p class="c2"><span class="c7">This error occurs because TaxCloud now blocks the creation of credit notes using the
+        </span><span class="c7 c54">TaxCloud fiscal position</span><span class="c7">&nbsp;unless they are generated
+            directly from an existing invoice. When a return is processed, attempting to create a new standalone invoice
+            or credit note (instead of referencing the original invoice) triggers this restriction.</span></p>
+    <p class="c2 c13"><span class="c10 c7"></span></p>
+    <p class="c2"><b class="c19 c4 c20">Why aren&rsquo;t taxes updating in Odoo after changing the TIC in
+            TaxCloud?</b></p>
+    <p class="c2 c13"><span class="c19 c4 c20"></span></p>
+    <ul><ul class="c14 lst-kix_tau96mf72s0e-0 start">
+        <li class="c0 li-bullet-0"><span class="c10 c7">Taxes in Odoo are calculated at the time a sales order is
+                created, using the TIC (Taxability Information Code) that was active in TaxCloud at that moment.</span>
+        </li>
+        <li class="c0 li-bullet-0"><span class="c10 c7">If the TIC is later updated in TaxCloud, the change will not
+                apply to existing sales orders because Odoo does not recalculate past transactions automatically.</span>
+        </li>
+        <li class="c0 li-bullet-0"><span class="c10 c7">To correct taxes when the wrong TIC was initially set, you can
+                either:</span></li>
+    </ul>
+    <ul><ul class="c14 lst-kix_tau96mf72s0e-1 start">
+        <li class="c2 c34 li-bullet-0"><span class="c10 c7">Click Update Taxes on the existing sales order to recompute
+                taxes using the new TIC, or</span></li>
+        <li class="c2 c34 li-bullet-0"><span class="c7">Cancel and recreate the sales order so taxes are calculated with
+                the corrected TIC.</span><span class="c11"><br></span></li>
+    </ul></ul></ul>
+    <p class="c12 c42"><b class="c36 c4 c30">I process Standalone Credit Notes, will that work with TaxCloud?</b>
+    </p>
+    <ul class="c14 lst-kix_ccugjl00gac-0 start">
+        <li class="c29 c22 c12 li-bullet-0"><span class="c21 c11">Standalone credit notes in Odoo are not yet integrated
+                with TaxCloud. If this is something you need, please contact us&mdash;we&rsquo;d be happy to explore
+                building a custom connector tailored to your requirements.</span></li>
+    </ul>
+    <p class="c2 c13 c22"><span class="c10 c11"></span></p>
+    <p class="c2"><b class="c19 c4">On which address is the calculation of tax based?</b></p>
+    <ul class="c14 lst-kix_dxnuvh7o3ps9-0 start">
+        <li class="c0 li-bullet-0"><span class="c10 c11">It is based on the Delivery Address with the correct Zip code,
+                state, and country.</span></li>
+    </ul>
+    <p class="c2 c13"><span class="c10 c11"></span></p>
+    <p class="c2"><b class="c19 c4">How do I manage the taxability of shipping charges?</b></p>
+    <ul class="c14 lst-kix_e0fp3wy2p0z-0 start">
+        <li class="c0 li-bullet-0"><span class="c10 c11">You need to set up the TaxCloud category on the shipping
+                product.</span></li>
+    </ul>
+    <p class="c2 c13 c22"><span class="c10 c11"></span></p>
+    <p class="c2"><b class="c19 c4">Will an invoice line or sales order line with a zero amount be sent to
+            TaxCloud?</b></p>
+    <ul class="c14 lst-kix_e0fp3wy2p0z-0">
+        <li class="c0 li-bullet-0"><span class="c10 c11">Yes, it is sent to TaxCloud. If you don&rsquo;t want to send
+                those, enable the boolean &ldquo;Skip Zero Invoices&rdquo; or &ldquo;Skip Zero Orders&rdquo; option in
+                the Accounting Settings.</span></li>
+    </ul>
+    <p class="c9"><span class="c10 c11"></span></p>
+    <p class="c2"><b class="c4 c19">Does TaxCloud compute tax for Amazon orders?</b></p>
+    <ul class="c14 lst-kix_e0fp3wy2p0z-0">
+        <li class="c0 li-bullet-0"><span class="c10 c11">Yes. However, if you don&rsquo;t want to compute tax for sales
+                orders created from Amazon, enable the &ldquo;Don&rsquo;t Compute Tax for Amazon Orders&rdquo; option in
+                Accounting Settings.<br></span></li>
+    </ul>
+    <p class="c12"><b class="c2 c25 c4">Can I use TaxCloud with my POS?</b></p>
+    <ul class="c14 lst-kix_iudzb92bebey-0">
+        <li class="c5 li-bullet-0"><span class="c2">Yes, you can use TaxCloud with Odoo POS using our dedicated
+            </span><span class="c24 c2"><a class="c23"
+                    href="https://www.google.com/url?q=https://apps.odoo.com/apps/modules/17.0/taxcloud_pos_tc&amp;sa=D&amp;source=editors&amp;ust=1778842676467576&amp;usg=AOvVaw3DpA2Rdk9nJnG6FbBJucfq">module</a></span></li>
+        <li class="c5 li-bullet-0"><span class="c2">This module enables TaxCloud integration directly with Odoo POS,
+                allowing you to calculate sales tax seamlessly during POS transactions.</span></li>
+    </ul>
+    <p class="c2"><b class="c19 c4">How do you set up accounts for the taxes created via API?</b></p>
+    <ul class="c14 lst-kix_e0fp3wy2p0z-0">
+        <li class="c0 li-bullet-0"><span class="c11">A default Tax can be set in the &ldquo;Default Tax Template&rdquo;
+                field on the Settings. </span><span class="c7">Once configured, any tax created through the API will use
+                this template. However, fields such as </span><b class="c4 c20">Tax Name</b><span class="c7">,
+            </span><b class="c4 c20">Amount</b><span class="c7">, and </span><b class="c4 c20">Label on
+                Invoices</b><span class="c10 c7">&nbsp;are left to override.</span></li>
+    </ul>
+    <p class="c9"><span class="c10 c7"></span></p>
+    <p class="c2"><b class="c19 c4">Why does the &ldquo;Update Taxes&rdquo; button not show up in the sales
+            order?</b></p>
+    <ul class="c14 lst-kix_e0fp3wy2p0z-0">
+        <li class="c0 li-bullet-0"><span class="c10 c11">If all the apps are installed properly, check whether the
+                &ldquo;Use TaxCloud API&rdquo; boolean is enabled in the fiscal position set on the Sales Order.</span>
+        </li>
+    </ul>
+    <p class="c9"><span class="c10 c11"></span></p>
+    <p class="c2"><b class="c19 c4">How do I set the Fiscal Position automatically?</b></p>
+    <ul class="c14 lst-kix_e0fp3wy2p0z-0">
+        <li class="c0 li-bullet-0"><span class="c10 c11">Enable the &ldquo;Detect Automatically&rdquo; boolean in the
+                Fiscal Position.</span></li>
+    </ul>
+    <p class="c12 c13"><span class="c3 c2"></span></p>
+    <p class="c12"><b class="c15 c2 c4">Is there a way to avoid every quote reaching out to TaxCloud for tax
+            calculation?</b></p>
+    <ul class="c14 lst-kix_ed8scqkqgwo-0 start">
+        <li class="c12 c22 li-bullet-0"><span class="c2">Yes. This can be controlled using the Fiscal Position
+                configuration in Odoo, specifically the &ldquo;Detect Automatically&rdquo; option. If the TaxCloud
+                fiscal position is only applied to specific states/countries, TaxCloud will only be triggered for those
+                customers.</span><span class="c3 c2"><br></span></li>
+    </ul>
+    <p class="c2 c13"><span class="c10 c11"></span></p>
+    <p class="c2"><b class="c19 c4 c20">How do we handle out-of-the-country customers?</b></p>
+    <ul class="c14 lst-kix_gio703emzryn-0 start">
+        <li class="c0 li-bullet-0"><span class="c7">For international customers, you can either configure a separate
+            </span><b class="c4 c20">Non-Taxable</b><span class="c7">&nbsp;or rely on default tax rules. Since
+                TaxCloud fiscal position can be limited to US states only, international customers will not trigger
+                TaxCloud and can remain non-taxable.</span></li>
+    </ul>
+    <p class="c2 c13"><span class="c10 c11"></span></p>
+    <p class="c2"><b class="c19 c4">Can we configure a customer for tax exemption during the sales order creation
+            process in the TaxCloud Odoo?</b></p>
+    <ul class="c14 lst-kix_e0kgyimeoi8h-0 start">
+        <li class="c0 li-bullet-0"><span class="c11">No, tax exemption cannot be configured directly in the sales order.
+                A separate Exemption menu is available in both the Sales and Accounting modules, where you can manage
+                customer tax exemptions.</span></li>
+    </ul>
+    <p class="c2 c13"><span class="c10 c11"></span></p>
+    <p class="c2"><b class="c19 c4 c20">If I set an exemption for the parent contact, will it apply to child
+            contacts?</b></p>
+    <ul class="c14 lst-kix_kjnn59gk3co9-0 start">
+        <li class="c0 li-bullet-0"><span class="c10 c7">Yes, when an exemption is set for the parent contact, it
+                automatically applies to all its child contacts whose delivery state matches the exemption state.</span>
+        </li>
+        <li class="c0 li-bullet-0"><span class="c10 c7">However, if an exemption is set for a child contact, it applies
+                only to that contact and does not extend to its parent or child contacts.</span></li>
+    </ul>
+    <p class="c9"><span class="c10 c11"></span></p>
+    <p class="c2"><b class="c19 c4">Why does the create button for Exemption not show up?</b></p>
+    <ul class="c14 lst-kix_e0fp3wy2p0z-0">
+        <li class="c0 li-bullet-0"><span class="c10 c11">Ensure the &ldquo;Manage TaxCloud Exemption&rdquo; user group
+                is enabled for the relevant users.</span></li>
+    </ul>
+    <p class="c9"><span class="c10 c11"></span></p>
+    <p class="c2"><b class="c19 c4">Will TaxCloud still compute tax for the Exemption applied invoice/order
+            line?</b></p>
+    <ul class="c14 lst-kix_e0fp3wy2p0z-0">
+        <li class="c0 li-bullet-0"><span class="c10 c11">Yes, for some specific TIC codes.</span></li>
+    </ul>
+    <p class="c2"><span class="c11"><br></span><b class="c36 c4 c30 c12">Is the TaxCloud system and connector capable
+            of handling partial sales tax calculations?</b></p>
+    <ul class="c14 lst-kix_5cvteopedpig-0 start">
+        <li class="c0 li-bullet-0"><span class="c21 c11 c12">Yes, using the exemption module, a valid exemption
+                certificate that includes a specific exemption reason will ensure the correct tax rate is
+                applied.</span></li>
+    </ul>
+    <p class="c2 c13 c22"><span class="c10 c11"></span></p>
+    <p class="c2"><b class="c19 c4">&nbsp;Why is the tax not computed for all states?</b></p>
+    <ul class="c14 lst-kix_ohl6k9zc1rgo-0 start">
+        <li class="c0 li-bullet-0"><span class="c10 c11">To enable tax collection for states, please make sure those
+                states are enabled to collect the taxes in the TaxCloud account.</span></li>
+    </ul>
+    <p class="c2 c13 c22"><span class="c10 c11"></span></p>
+    <p class="c2"><b class="c19 c4">Do I need to configure the threshold manually?</b></p>
+    <ul class="c14 lst-kix_9zbodr4ft2yy-0 start">
+        <li class="c0 li-bullet-0"><span class="c10 c11">The threshold is available in the TaxCloud account; there is no
+                configuration for it in Odoo. The threshold will be set automatically.</span></li>
+    </ul>
+    <p class="c2"><b class="c4">Does the creation of a sales order also generate a </b><b
+            class="c4">transition</b><b class="c19 c4">&nbsp;in the TaxCloud account, or can we limit it to only
+            those related to the actual invoice? </b></p>
+    <ul class="c14 lst-kix_xvgvwq1cwc9a-0 start">
+        <li class="c33 c22 c40 li-bullet-0"><span class="c10 c11">Yes, this transaction is necessary to maintain
+                consistent tax between the invoice and SO.</span></li>
+    </ul>
+    <p class="c9 c22"><span class="c10 c11"></span></p>
+    <p class="c2"><b class="c19 c4">Why do some of the transactions in TaxCloud show no cart ID? How can we check
+            which order this transaction was created in?</b></p>
+    <ul class="c14 lst-kix_foyw8ai3q5g6-0 start">
+        <li class="c0 li-bullet-0"><span class="c10 c11">This was resolved. Please make sure you are using the latest
+                version of the app.</span></li>
+    </ul>
+    <p class="c2 c13 c22"><span class="c10 c11"></span></p>
+    <p class="c2"><b class="c4">How does the transition status get updated?</b></p>
+    <ul class="c14 lst-kix_e0fp3wy2p0z-0">
+        <li class="c0 li-bullet-0"><span class="c10 c11">The status will be updated as &ldquo;lookup&rdquo; for the
+                quotation, &ldquo;captured&rdquo; for the invoice, and returned for a credit note. For the confirmed
+                invoice, the transaction is authorized and then captured, so we don&rsquo;t see the transaction in the
+                authorized state.<br></span></li>
+    </ul>
+    <p class="c2 c12"><b class="c4 c30">What are the current limitations of the TaxCloud-Odoo
+            Connector?</b>></p>
+    <ul class="c14 lst-kix_e0fp3wy2p0z-0">
+        <li class="c1 li-bullet-0"><span class="c36 c21 c11">Inability to cancel a Credit Note after it has been
+                submitted to TaxCloud.</span></li>
+        <li class="c1 li-bullet-0"><span class="c36 c21 c11">An &quot;Update Tax&quot; feature on Invoices/Credit Notes
+                to verify the tax amount prior to submission to TaxCloud.</span></li>
+        <li class="c1 li-bullet-0"><span class="c36 c21 c11">Odoo sometimes applies discounts using negative line items,
+                which the TaxCloud API does not support at this time.</span></li>
+        <li class="c1 li-bullet-0"><span class="c36 c21 c11">Supports <b>only accrual-based tax reporting</b> and does not 
+                support cash basis accounting. Taxes are reported based on transaction events, 
+                not on payment collection.</span></li>
+    </ul>
+    <p class="c12 c52"><b class="c4 c30 c12">I previously used a different tax calculation software, and now I need
+            to process a refund/return for an order that wasn&rsquo;t handled through TaxCloud. I&#39;m getting
+            errors&mdash;did I do something wrong?</b></p>
+    <ul class="c14 lst-kix_e0fp3wy2p0z-0">
+        <li class="c33 c22 c40 c12 li-bullet-0"><span class="c21 c11">No. TaxCloud now restricts the creation of credit
+                notes with the TaxCloud fiscal position to only those generated from </span><b
+                class="c4 c30">existing invoices</b><span class="c21 c11 c36">. This ensures that all records using
+                the TaxCloud fiscal position are properly reported to TaxCloud.</span></li>
+        <li class="c33 c22 c40 c12 li-bullet-0"><span class="c36 c21 c11">We&#39;re also rolling out a new release that
+                addresses a bug that previously allowed users to create standalone credit notes with the TaxCloud fiscal
+                position. However, those credit notes weren&rsquo;t being transmitted to TaxCloud, since TaxCloud only
+                accepts credit notes as reversals of existing, reported invoices.</span></li>
+        <li class="c33 c22 c40 c12 li-bullet-0"><span class="c21 c11">To get this update, please download and install
+                the latest version of the TaxCloud connector.</span></li>
+    </ul>
+    <p class="c52 c13 c22 c12"><span class="c36 c21 c11"></span></p>
+    <p class="c2"><b class="c19 c4">What do I do if I have more questions?</b></p>
+    <ul class="c14 lst-kix_u122tg9xblyg-0 start">
+        <li class="c0 li-bullet-0"><span class="c11">Emai</span><span class="c11">l </span><span class="c32 c11"><a
+                    class="c23" href="mailto:taxcloud@sodexis.com">taxcloud@sodexis.com</a></span><span
+                class="c10 c11">&nbsp;for any additional questions or issues.<br></span></li>
+    </ul>
+    <p class="c2 c13"><span class="c10 c11"></span></p>
+    <p class="c2"><b class="c19 c4">What do I do if the instructions included in these FAQs do not work?</b></p>
+    <ul class="c14 lst-kix_hab0bdkr0ely-0">
+        <li class="c0 li-bullet-0"><span class="c11">Check to make sure you&#39;re using the most recent version of the
+                TaxCloud connector. If necessary, update the module and try again.<br></span></li>
+    </ul>
+    <p class="c2 c13"><span class="c10 c7"></span></p>
+    <p class="c5 c13"><span class="c10 c7"></span></p>
+    <h2 class="c20 c46" id="h.3znysh7"><span class="c19 c27">Credits</span></h2>
+    <h5 class="c20 c38" id="h.2et92p0"><span class="c19 c25">Contributors</span></h5>
+    <p class="c45"><span class="c10 c11">For additional information or inquiries regarding TaxCloud, feel free to reach
+            out to us at</span></p>
+    <p class="c45"><span class="c11">Sodexis &lt;&#128231;</span><span class="c32 c11"><a class="c23"
+                href="mailto:taxcloud@sodexis.com">taxcloud@sodexis.com</a></span><span class="c11">&gt; or visit our
+            website at &lt;&#127760;</span><span class="c32 c11"><a class="c23"
+                href="https://www.google.com/url?q=http://sodexis.com/taxcloud&amp;sa=D&amp;source=editors&amp;ust=1773900356825969&amp;usg=AOvVaw1k0_RHNtL-kMYaWww3qUqv">sodexis.com/taxcloud</a></span><span
+            class="c10 c11">&gt;</span></p>
+    <p class="c45 c13"><span class="c10 c11"></span></p>
+    <p class="c45"><span class="c11">This module is maintained by Sodexis.</span></p>
+</body>
+
+</html>
