@@ -1,0 +1,21 @@
+<odoo noupdate="1">
+    <record id="ir_cron_taxcloud_api_call_counter" model="ir.cron">
+        <field name="name">TaxCloud API Call Counter</field>
+        <field name="model_id" ref="account_taxcloud_tc.model_taxcloud_log" />
+        <field name="state">code</field>
+        <field name="code">model.taxcloud_api_call_counter()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="active" eval="False" />
+    </record>
+
+    <record id="ir_cron_sync_taxcloud_tic_categories" model="ir.cron">
+        <field name="name">TaxCloud: Daily TIC Category Sync</field>
+        <field name="model_id" ref="base.model_res_company"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_sync_taxcloud_tic_categories()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="active" eval="True"/>
+    </record>
+</odoo>
