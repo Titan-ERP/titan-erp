@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field
+            name="name"
+        >res.config.settings.view.form.inherit.sale.amazon.taxcloud</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="account_taxcloud_tc.res_config_settings_view_form" />
+        <field name="arch" type="xml">
+            <xpath expr="//setting[@id='taxcloud_tc_settings']//div[field[@name='is_allow_cancel_invoice']]" position="after">
+                <div class="row mt-2">
+                    <field
+                        name="is_skip_zero_orders"
+                        class="col flex-grow-0 mr0 pe-2"
+                    />
+                    <div class="col ps-0">
+                        <label for="is_skip_zero_orders" />
+                    </div>
+                </div>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

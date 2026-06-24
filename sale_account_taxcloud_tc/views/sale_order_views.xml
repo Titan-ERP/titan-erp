@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+ Copyright (c) 2015-2023 Odoo S.A.
+
+ This program is free software; you can redistribute it and/or
+ modify it under the terms of the GNU Lesser General Public
+ License as published by the Free Software Foundation; either
+ version 3 of the License, or (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ Lesser General Public License for more details.
+
+ You should have received a copy of the GNU Lesser General Public License
+ along with this program; if not, write to the Free Software Foundation,
+ Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+-->
+<odoo>
+    <record id="taxcloud_view_order_form_inherit" model="ir.ui.view">
+        <field name="name">taxcloud.sale.order.form</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form" />
+        <field name="arch" type="xml">
+            <form position="inside">
+                <field name="is_taxcloud" invisible="1" /> <!-- Technical field used by TaxCloud button, line, and warning visibility expressions. -->
+                <field name="is_taxcloud_configured" invisible="1" /> <!-- Technical field used to show the TaxCloud credentials warning. -->
+            </form>
+            <xpath expr="//list/field[@name='tax_ids']" position="attributes">
+                <attribute name="readonly">parent.is_taxcloud or qty_invoiced &gt; 0 or is_downpayment</attribute>
+            </xpath>
+            <!-- <xpath expr="//list/field[@name='price_tax']" position="replace" />
+            <xpath expr="//list/field[@name='tax_id']" position="after">
+                <field
+                    name="price_tax"
+                    string="Tax"
+                    column_invisible="not parent.is_taxcloud"
+                />
+            </xpath> -->
+            <xpath expr="//header" position="after">
+                <div
+                    class="alert alert-info text-center"
+                    role="alert"
+                    invisible="is_taxcloud_configured or not is_taxcloud"
+                >
+                    Please enter your Taxcloud credentials to compute tax rates automatically.
+                    <a
+                        class="alert-link"
+                        href="/web#action=account.action_account_config"
+                        role="button"
+                    >Go to Settings.</a>
+                </div>
+            </xpath>
+            <div name="so_button_below_order_lines" position="attributes">
+                <attribute name="invisible">0</attribute>
+            </div>
+            <div name="so_button_below_order_lines" position="inside">
+                <button
+                    name="validate_taxes_on_sales_order"
+                    string="Update taxes"
+                    type="object"
+                    invisible="not is_taxcloud"
+                />
+            </div>
+        </field>
+    </record>
+</odoo>
