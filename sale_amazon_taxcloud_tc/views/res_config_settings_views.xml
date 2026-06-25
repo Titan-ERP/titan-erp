@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field
+            name="name"
+        >res.config.settings.view.form.inherit.sale.amazon.taxcloud</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="account.res_config_settings_view_form" />
+        <field name="arch" type="xml">
+            <setting id="taxcloud_tc_settings" position="inside">
+                <div class="row mt-2">
+                    <field
+                        name="is_dont_compute_tax_for_amazon_orders"
+                        class="col flex-grow-0 mr0 pe-2"
+                    />
+                    <div class="col ps-0">
+                        <label for="is_dont_compute_tax_for_amazon_orders" />
+                    </div>
+                </div>
+            </setting>
+        </field>
+    </record>
+
+</odoo>
