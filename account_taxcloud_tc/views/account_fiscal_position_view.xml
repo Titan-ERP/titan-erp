@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+ Copyright (c) 2015-2023 Odoo S.A.
+
+ This program is free software; you can redistribute it and/or
+ modify it under the terms of the GNU Lesser General Public
+ License as published by the Free Software Foundation; either
+ version 3 of the License, or (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ Lesser General Public License for more details.
+
+ You should have received a copy of the GNU Lesser General Public License
+ along with this program; if not, write to the Free Software Foundation,
+ Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+-->
+<odoo>
+
+    <record id="account_position_taxcloud_inherit_from_view" model="ir.ui.view">
+        <field name="name">account.fiscal.position.form.inherit</field>
+        <field name="model">account.fiscal.position</field>
+        <field name="inherit_id" ref="account.view_account_position_form" />
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="before">
+                <field name="is_taxcloud_configured" invisible="1" /> <!-- Technical field used to show the TaxCloud credentials warning. -->
+                <div
+                    class="alert alert-info text-center"
+                    role="alert"
+                    invisible="is_taxcloud_configured or not is_taxcloud"
+                >
+                    Please enter your Taxcloud credentials to compute tax rates automatically.
+                    <a
+                        class="alert-link"
+                        href="/web#action=account.action_account_config"
+                        role="button"
+                    >Go to Settings.</a>
+                    <div invisible="auto_apply">
+                        Enable <b
+                        >Detect Automatically</b> to automatically use TaxCloud when selling to American customers.
+                    </div>
+                </div>
+            </xpath>
+            <xpath expr="//field[@name='name']" position="after">
+                <field
+                    name="is_taxcloud"
+                    invisible="'US' not in fiscal_country_codes"
+                />
+            </xpath>
+            <xpath expr="//sheet" position="after">
+                <chatter/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
