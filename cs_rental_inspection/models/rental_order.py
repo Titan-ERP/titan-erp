@@ -189,10 +189,10 @@ class RentalOrder(models.Model):
                     })
 
     def _auto_create_serialised_pickup_inspections(self):
-        """Sync pickedup_lot_ids → lot_id on inspections after pickup wizard validation."""
+        """Sync lot_id on inspections from pickedup_lot_ids (priority) or reserved_lot_ids."""
         self.ensure_one()
         for line in self.order_line.filtered('is_rental'):
-            lots = line.pickedup_lot_ids
+            lots = line.pickedup_lot_ids or line.reserved_lot_ids
             if not lots:
                 continue
             insp_for_line = self.inspection_ids.filtered(
