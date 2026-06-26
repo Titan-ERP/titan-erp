@@ -82,18 +82,6 @@
         </field>
     </record>
 
-    <!-- Filter reserved_lot_ids dropdown to RENTL/Stock location only -->
-    <record id="view_order_line_reserved_lots_domain" model="ir.ui.view">
-        <field name="name">sale.order.line.reserved.lots.rentl.domain</field>
-        <field name="model">sale.order</field>
-        <field name="inherit_id" ref="sale_renting.rental_order_primary_form_view"/>
-        <field name="arch" type="xml">
-            <xpath expr="//field[@name='order_line']//list//field[@name='reserved_lot_ids']" position="attributes">
-                <attribute name="domain">[('product_id', '=', product_id), ('quant_ids.location_id.complete_name', 'ilike', 'RENTL/Stock')]</attribute>
-            </xpath>
-        </field>
-    </record>
-
     <!-- Action: Inspections from Rental Order -->
     <record id="action_rental_order_inspections" model="ir.actions.act_window">
         <field name="name">Rental Inspections</field>
