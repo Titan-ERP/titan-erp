@@ -188,6 +188,22 @@ class RentalOrder(models.Model):
                         'previous_inspection_id': pickup_id,
                     })
 
+    def _auto_create_serialised_pickup_inspections(self):
+        """Sync pickedup_lot_ids → lot_id on inspections after pickup wizard validation."""
+        self.ensure_one()
+        for line in self.order_line.filtered('is_rental'):
+            lots = line.pickedup_lot_ids
+            if not lots:
+                continue
+            insp_for_line = self.inspection_ids.filtered(
+                lambda i: i.product_id == line.product_id and i.state != 'cancelled'
+            ).sorted('unit_number')
+            sorted_lots = lots.sorted('id')
+            for idx, insp in enumerate(insp_for_line):
+                lot = sorted_lots[idx] if idx < len(sorted_lots) else sorted_lots[-1]
+                if insp.lot_id != lot:
+                    insp.lot_id = lot
+
     # -------------------------------------------------------------------------
     # Actions
     # -------------------------------------------------------------------------
