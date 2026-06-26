@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Rental Equipment Inspections',
-    'version': '19.0.1.0.11',
+    'version': '19.0.1.0.12',
     'category': 'Inventory/Rental',
     'summary': 'Equipment condition inspections for rental pickups and returns',
     'description': """
@@ -20,6 +20,7 @@ Rental Equipment Inspection Management
         'sale_renting',
         'product',
         'mail',
+        'purchase',
     ],
     'data': [
         'security/inspection_security.xml',
