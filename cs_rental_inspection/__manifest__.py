@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Rental Equipment Inspections',
-    'version': '19.0.1.0.4',
+    'version': '19.0.1.0.7',
     'category': 'Inventory/Rental',
     'summary': 'Equipment condition inspections for rental pickups and returns',
     'description': """
@@ -15,6 +15,10 @@ Rental Equipment Inspection Management
 
 Changelog
 ---------
+19.0.1.0.7
+  - Reverted: removed reserved_lot_ids RENTL/Stock location filter and
+    sale_stock_renting dependency added in 19.0.1.0.5/1.0.6
+
 19.0.1.0.4
   - Changed: at order confirmation, the reserved lot (reserved_lot_ids) is now
     automatically assigned to all pickup and return inspection records for the
