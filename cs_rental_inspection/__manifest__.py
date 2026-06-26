@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Rental Equipment Inspections',
-    'version': '19.0.1.0.7',
+    'version': '19.0.1.0.8',
     'category': 'Inventory/Rental',
     'summary': 'Equipment condition inspections for rental pickups and returns',
     'description': """
@@ -12,26 +12,6 @@ Rental Equipment Inspection Management
 * Track equipment issues and damage
 * Digital signature capture
 * Photo attachments for condition records
-
-Changelog
----------
-19.0.1.0.7
-  - Reverted: removed reserved_lot_ids RENTL/Stock location filter and
-    sale_stock_renting dependency added in 19.0.1.0.5/1.0.6
-
-19.0.1.0.4
-  - Changed: at order confirmation, the reserved lot (reserved_lot_ids) is now
-    automatically assigned to all pickup and return inspection records for the
-    line; previously only pickup inspections were synced and only when
-    pickedup_lot_ids was already populated
-  - Changed: lot assignment now applies to both pickup and return inspections
-    for a line; all units belonging to the same lot receive the same serial
-    number, matching Odoo's lot-tracked product behaviour
-  - Changed: post-confirmation lot sync is now triggered when reserved_lot_ids
-    changes in addition to pickedup_lot_ids, keeping inspection serial numbers
-    in step with reservation updates
-  - Fixed: lot_id on rental.inspection now declares readonly=False, allowing
-    the field to be written programmatically and edited in the form view
     """,
     'author': 'Cyder Solutions',
     'website': 'https://www.cyder.com.au',
