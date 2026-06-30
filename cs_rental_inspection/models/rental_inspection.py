@@ -36,7 +36,7 @@ class RentalInspection(models.Model):
         recursive=True,
     )
 
-    @api.depends('previous_inspection_id', 'previous_inspection_id.lot_id')
+    @api.depends('type', 'previous_inspection_id', 'previous_inspection_id.lot_id')
     def _compute_lot_id(self):
         for inspection in self:
             if inspection.type == 'return' and inspection.previous_inspection_id:

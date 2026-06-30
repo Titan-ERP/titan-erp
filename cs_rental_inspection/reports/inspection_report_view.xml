@@ -53,7 +53,7 @@
                                             <td><span t-field="item.type"/></td>
                                             <td>
                                                 <span t-field="item.result"
-                                                      t-att-class="'badge badge-' + ('success' if item.result == 'pass' else 'danger' if item.result == 'fail' else 'secondary')"/>
+                                                      t-att-class="'badge ' + ('bg-success' if item.result == 'pass' else 'bg-danger' if item.result == 'fail' else 'bg-secondary')"/>
                                             </td>
                                             <td><span t-field="item.note"/></td>
                                         </tr>
@@ -181,7 +181,7 @@
                                                 <td><span t-field="item.type"/></td>
                                                 <td>
                                                     <span t-field="item.result"
-                                                          t-att-class="'badge badge-' + ('success' if item.result == 'pass' else 'danger' if item.result == 'fail' else 'secondary')"/>
+                                                          t-att-class="'badge ' + ('bg-success' if item.result == 'pass' else 'bg-danger' if item.result == 'fail' else 'bg-secondary')"/>
                                                 </td>
                                                 <td><span t-field="item.note"/></td>
                                             </tr>

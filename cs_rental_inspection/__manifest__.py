@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Rental Equipment Inspections',
-    'version': '19.0.1.0.12',
+    'version': '19.0.1.0.13',
     'category': 'Inventory/Rental',
     'summary': 'Equipment condition inspections for rental pickups and returns',
     'description': """
@@ -17,8 +17,7 @@ Rental Equipment Inspection Management
     'website': 'https://www.cyder.com.au',
     'license': 'OPL-1',
     'depends': [
-        'sale_renting',
-        'product',
+        'sale_stock_renting',
         'mail',
         'purchase',
     ],

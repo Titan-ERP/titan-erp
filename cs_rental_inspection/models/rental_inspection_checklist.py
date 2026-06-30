@@ -42,12 +42,20 @@ class RentalInspectionChecklist(models.Model):
     
     @api.depends('inspection_id.previous_inspection_id', 'name')
     def _compute_previous_item(self):
+        self.previous_item_id = False
+        by_prev_insp = {}
         for item in self:
-            if item.inspection_id.previous_inspection_id:
-                previous = self.search([
-                    ('inspection_id', '=', item.inspection_id.previous_inspection_id.id),
-                    ('name', '=', item.name)
-                ], limit=1)
-                item.previous_item_id = previous.id
-            else:
-                item.previous_item_id = False
+            prev_insp = item.inspection_id.previous_inspection_id
+            if prev_insp:
+                by_prev_insp.setdefault(prev_insp.id, []).append(item)
+        for prev_insp_id, items in by_prev_insp.items():
+            names = list({item.name for item in items})
+            previous_checks = self.search([
+                ('inspection_id', '=', prev_insp_id),
+                ('name', 'in', names),
+            ])
+            name_map = {}
+            for check in previous_checks:
+                name_map.setdefault(check.name, check)
+            for item in items:
+                item.previous_item_id = name_map.get(item.name, False)
