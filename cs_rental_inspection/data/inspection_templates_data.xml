@@ -176,10 +176,6 @@
             <field name="require_note">true</field>
         </record>
 
-        <!-- MY STUFF -->
-        <!-- MY STUFF -->
-        <!-- MY STUFF -->
-        <!-- MY STUFF -->
         <record id="basic_condition_pickup_template" model="rental.inspection.template">
             <field name="name">Basic Condition Pickup Inspection</field>
             <field name="type">pickup</field>

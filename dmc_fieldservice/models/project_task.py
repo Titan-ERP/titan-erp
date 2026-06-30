@@ -35,7 +35,7 @@ class ProjectTask(models.Model):
                 vals['dmc_equipment'] = parent.dmc_equipment
             if not vals.get('dmc_serial_number'):
                 vals['dmc_serial_number'] = parent.dmc_serial_number
-            if not vals.get('dmc_equipment_run_hours'):
+            if 'dmc_equipment_run_hours' not in vals:
                 vals['dmc_equipment_run_hours'] = parent.dmc_equipment_run_hours
         return super().create(vals_list)
 
@@ -62,8 +62,6 @@ class ProjectTask(models.Model):
                 missing.append(_('Equipment'))
             if not task.dmc_serial_number:
                 missing.append(_('Serial Number'))
-            if not task.dmc_equipment_run_hours:
-                missing.append(_('Equipment Run Hours'))
             if missing:
                 raise ValidationError(_(
                     'The following fields are required on Field Service tasks:\n%s'
