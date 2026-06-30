@@ -1,0 +1,9 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_rental_inspection_user,rental.inspection.user,model_rental_inspection,sales_team.group_sale_salesman,1,1,1,0
+access_rental_inspection_manager,rental.inspection.manager,model_rental_inspection,sales_team.group_sale_manager,1,1,1,1
+access_rental_inspection_template_user,rental.inspection.template.user,model_rental_inspection_template,sales_team.group_sale_salesman,1,0,0,0
+access_rental_inspection_template_manager,rental.inspection.template.manager,model_rental_inspection_template,sales_team.group_sale_manager,1,1,1,1
+access_rental_inspection_checklist_user,rental.inspection.checklist.user,model_rental_inspection_checklist,sales_team.group_sale_salesman,1,1,1,0
+access_rental_inspection_checklist_manager,rental.inspection.checklist.manager,model_rental_inspection_checklist,sales_team.group_sale_manager,1,1,1,1
+access_rental_inspection_template_item_user,rental.inspection.template.item.user,model_rental_inspection_template_item,sales_team.group_sale_salesman,1,0,0,0
+access_rental_inspection_template_item_manager,rental.inspection.template.item.manager,model_rental_inspection_template_item,sales_team.group_sale_manager,1,1,1,1

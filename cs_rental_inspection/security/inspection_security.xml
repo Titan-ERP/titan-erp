@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright (C) 2024 Cyder Solutions - All Rights Reserved -->
+<odoo>
+    <!-- Record Rules for Rental Inspections -->
+    <record id="inspection_comp_rule" model="ir.rule">
+        <field name="name">Rental Inspection: Multi-company Rule</field>
+        <field name="model_id" ref="model_rental_inspection"/>
+        <field name="domain_force">['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
+        <field name="global" eval="True"/>
+    </record>
+
+    <record id="rental_inspection_personal_rule" model="ir.rule">
+        <field name="name">Personal Inspections</field>
+        <field name="model_id" ref="model_rental_inspection"/>
+        <field name="domain_force">[
+            '|',
+                ('rental_order_id.user_id', '=', user.id),
+                ('inspector_id', '=', user.id)
+        ]</field>
+        <field name="groups" eval="[(4, ref('sales_team.group_sale_salesman'))]"/>
+    </record>
+
+    <record id="rental_inspection_manager_rule" model="ir.rule">
+        <field name="name">All Inspections</field>
+        <field name="model_id" ref="model_rental_inspection"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('sales_team.group_sale_manager'))]"/>
+    </record>
+
+    <!-- Record Rules for Templates -->
+    <record id="inspection_template_comp_rule" model="ir.rule">
+        <field name="name">Rental Inspection Template: Multi-company Rule</field>
+        <field name="model_id" ref="model_rental_inspection_template"/>
+        <field name="domain_force">['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
+        <field name="global" eval="True"/>
+    </record>
+
+    <record id="rental_inspection_template_personal_rule" model="ir.rule">
+        <field name="name">Template Read-Only Rule</field>
+        <field name="model_id" ref="model_rental_inspection_template"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+        <field name="groups" eval="[(4, ref('sales_team.group_sale_salesman'))]"/>
+    </record>
+
+    <record id="rental_inspection_template_manager_rule" model="ir.rule">
+        <field name="name">Template Full Access Rule</field>
+        <field name="model_id" ref="model_rental_inspection_template"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('sales_team.group_sale_manager'))]"/>
+    </record>
+</odoo>

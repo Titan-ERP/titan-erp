@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright (C) 2024 Cyder Solutions - All Rights Reserved -->
+<odoo>
+    <data noupdate="1">
+        <!-- Product Categories -->
+        <record id="heavy_equipment_category" model="product.category">
+            <field name="name">Heavy Equipment</field>
+        </record>
+
+        <record id="small_equipment_category" model="product.category">
+            <field name="name">Small Equipment</field>
+        </record>
+
+        <!-- Heavy Equipment Pickup Template -->
+        <record id="heavy_equipment_pickup_template" model="rental.inspection.template">
+            <field name="name">Heavy Equipment Pickup Inspection</field>
+            <field name="type">pickup</field>
+            <field name="sequence">10</field>
+        </record>
+
+        <!-- Link Template to Category -->
+        <record id="heavy_equipment_category" model="product.category">
+            <field name="pickup_template_id" ref="heavy_equipment_pickup_template"/>
+        </record>
+
+        <!-- Heavy Equipment Pickup Checklist Items -->
+        <record id="heavy_pickup_engine" model="rental.inspection.template.item">
+            <field name="template_id" ref="heavy_equipment_pickup_template"/>
+            <field name="name">Engine Operation</field>
+            <field name="type">operation</field>
+            <field name="description">Check engine starts smoothly, no unusual noises, proper idle</field>
+            <field name="sequence">10</field>
+            <field name="require_note">true</field>
+        </record>
+
+        <record id="heavy_pickup_fluid" model="rental.inspection.template.item">
+            <field name="template_id" ref="heavy_equipment_pickup_template"/>
+            <field name="name">Fluid Levels</field>
+            <field name="type">safety</field>
+            <field name="description">Check oil, hydraulic fluid, coolant, and fuel levels</field>
+            <field name="sequence">20</field>
+            <field name="require_note">true</field>
+        </record>
+
+        <record id="heavy_pickup_body" model="rental.inspection.template.item">
+            <field name="template_id" ref="heavy_equipment_pickup_template"/>
+            <field name="name">Body Condition</field>
+            <field name="type">condition</field>
+            <field name="description">Inspect for dents, scratches, and damage</field>
+            <field name="sequence">30</field>
+            <field name="require_photo">true</field>
+            <field name="require_note">true</field>
+        </record>
+
+        <!-- Heavy Equipment Return Template -->
+        <record id="heavy_equipment_return_template" model="rental.inspection.template">
+            <field name="name">Heavy Equipment Return Inspection</field>
+            <field name="type">return</field>
+            <field name="sequence">20</field>
+        </record>
+
+        <!-- Link Return Template to Category -->
+        <record id="heavy_equipment_category" model="product.category">
+            <field name="return_template_id" ref="heavy_equipment_return_template"/>
+        </record>
+
+        <!-- Heavy Equipment Return Checklist Items -->
+        <record id="heavy_return_damage" model="rental.inspection.template.item">
+            <field name="template_id" ref="heavy_equipment_return_template"/>
+            <field name="name">New Damage Assessment</field>
+            <field name="type">damage</field>
+            <field name="description">Check for any new damage since pickup</field>
+            <field name="sequence">10</field>
+            <field name="require_photo">true</field>
+            <field name="require_note">true</field>
+        </record>
+
+        <record id="heavy_return_hours" model="rental.inspection.template.item">
+            <field name="template_id" ref="heavy_equipment_return_template"/>
+            <field name="name">Hour Meter Reading</field>
+            <field name="type">measurement</field>
+            <field name="description">Record final hour meter reading</field>
+            <field name="sequence">20</field>
+            <field name="require_note">true</field>
+        </record>
+
+        <record id="heavy_return_fuel" model="rental.inspection.template.item">
+            <field name="template_id" ref="heavy_equipment_return_template"/>
+            <field name="name">Fuel Level</field>
+            <field name="type">measurement</field>
+            <field name="description">Check and record fuel level</field>
+            <field name="sequence">30</field>
+            <field name="require_note">true</field>
+        </record>
+
+        <!-- Small Equipment Templates -->
+        <record id="small_equipment_pickup_template" model="rental.inspection.template">
+            <field name="name">Small Equipment Pickup Inspection</field>
+            <field name="type">pickup</field>
+            <field name="sequence">30</field>
+        </record>
+
+        <!-- Link Pickup Template to Small Equipment Category -->
+        <record id="small_equipment_category" model="product.category">
+            <field name="pickup_template_id" ref="small_equipment_pickup_template"/>
+        </record>
+
+        <!-- Small Equipment Pickup Items -->
+        <record id="small_pickup_operation" model="rental.inspection.template.item">
+            <field name="template_id" ref="small_equipment_pickup_template"/>
+            <field name="name">General Operation</field>
+            <field name="type">operation</field>
+            <field name="description">Test operation and functionality</field>
+            <field name="sequence">10</field>
+            <field name="require_note">true</field>
+        </record>
+
+        <record id="small_pickup_physical" model="rental.inspection.template.item">
+            <field name="template_id" ref="small_equipment_pickup_template"/>
+            <field name="name">Physical Condition</field>
+            <field name="type">condition</field>
+            <field name="description">Check for damage or wear</field>
+            <field name="sequence">20</field>
+            <field name="require_photo">true</field>
+            <field name="require_note">true</field>
+        </record>
+
+        <record id="small_pickup_accessories" model="rental.inspection.template.item">
+            <field name="template_id" ref="small_equipment_pickup_template"/>
+            <field name="name">Accessories/Attachments</field>
+            <field name="type">other</field>
+            <field name="description">Verify all required accessories are present</field>
+            <field name="sequence">30</field>
+            <field name="require_note">true</field>
+        </record>
+
+        <!-- Small Equipment Return Template -->
+        <record id="small_equipment_return_template" model="rental.inspection.template">
+            <field name="name">Small Equipment Return Inspection</field>
+            <field name="type">return</field>
+            <field name="sequence">40</field>
+        </record>
+
+        <!-- Link Return Template to Small Equipment Category -->
+        <record id="small_equipment_category" model="product.category">
+            <field name="return_template_id" ref="small_equipment_return_template"/>
+        </record>
+
+        <!-- Small Equipment Return Items -->
+        <record id="small_return_damage" model="rental.inspection.template.item">
+            <field name="template_id" ref="small_equipment_return_template"/>
+            <field name="name">Damage Assessment</field>
+            <field name="type">damage</field>
+            <field name="description">Check for any new damage or excessive wear</field>
+            <field name="sequence">10</field>
+            <field name="require_photo">true</field>
+            <field name="require_note">true</field>
+        </record>
+
+        <record id="small_return_operation" model="rental.inspection.template.item">
+            <field name="template_id" ref="small_equipment_return_template"/>
+            <field name="name">Final Operation Check</field>
+            <field name="type">operation</field>
+            <field name="description">Verify equipment still functions properly</field>
+            <field name="sequence">20</field>
+            <field name="require_note">true</field>
+        </record>
+
+        <record id="small_return_clean" model="rental.inspection.template.item">
+            <field name="template_id" ref="small_equipment_return_template"/>
+            <field name="name">Cleanliness</field>
+            <field name="type">cleanliness</field>
+            <field name="description">Check if equipment needs cleaning</field>
+            <field name="sequence">30</field>
+            <field name="require_photo">true</field>
+            <field name="require_note">true</field>
+        </record>
+
+        <record id="basic_condition_pickup_template" model="rental.inspection.template">
+            <field name="name">Basic Condition Pickup Inspection</field>
+            <field name="type">pickup</field>
+            <field name="sequence">60</field>
+        </record>
+        <record id="basic_condition_return_template" model="rental.inspection.template">
+            <field name="name">Basic Condition Return Inspection</field>
+            <field name="type">return</field>
+            <field name="sequence">70</field>
+        </record>
+
+        <record id="basic_pickup_condition" model="rental.inspection.template.item">
+            <field name="template_id" ref="basic_condition_pickup_template"/>
+            <field name="name">Condition</field>
+            <field name="type">condition</field>
+            <field name="description">Simple check over</field>
+            <field name="sequence">10</field>
+            <field name="require_photo">false</field>
+            <field name="require_note">false</field>
+        </record>
+
+        <record id="basic_return_condition" model="rental.inspection.template.item">
+            <field name="template_id" ref="basic_condition_return_template"/>
+            <field name="name">Condition</field>
+            <field name="type">condition</field>
+            <field name="description">Simple check over</field>
+            <field name="sequence">10</field>
+            <field name="require_photo">false</field>
+            <field name="require_note">false</field>
+        </record>
+
+        <record id="basic_home_improve_pickup_template" model="rental.inspection.template">
+            <field name="name">Home Improvement Pickup Inspection</field>
+            <field name="type">pickup</field>
+            <field name="sequence">80</field>
+        </record>
+        <record id="basic_home_improve_return_template" model="rental.inspection.template">
+            <field name="name">Home Improvement Return Inspection</field>
+            <field name="type">return</field>
+            <field name="sequence">90</field>
+        </record>
+
+        <record id="home_pickup_equipment" model="rental.inspection.template.item">
+            <field name="template_id" ref="basic_home_improve_pickup_template"/>
+            <field name="name">DIY Tooling Condition</field>
+            <field name="type">condition</field>
+            <field name="description">Simple check over</field>
+            <field name="sequence">10</field>
+            <field name="require_photo">false</field>
+            <field name="require_note">false</field>
+        </record>
+
+        <record id="home_return_equipment" model="rental.inspection.template.item">
+            <field name="template_id" ref="basic_home_improve_return_template"/>
+            <field name="name">DIY Tooling Condition</field>
+            <field name="type">condition</field>
+            <field name="description">Simple check over</field>
+            <field name="sequence">10</field>
+            <field name="require_photo">false</field>
+            <field name="require_note">false</field>
+        </record>
+
+        <record id="home_pickup_equipment_photo" model="rental.inspection.template.item">
+            <field name="template_id" ref="basic_home_improve_pickup_template"/>
+            <field name="name">DIY Tooling photo</field>
+            <field name="type">condition</field>
+            <field name="description">Take a photo of the item</field>
+            <field name="sequence">10</field>
+            <field name="require_photo">true</field>
+            <field name="require_note">false</field>
+        </record>
+
+        <record id="home_return_equipment_photo" model="rental.inspection.template.item">
+            <field name="template_id" ref="basic_home_improve_return_template"/>
+            <field name="name">DIY Tooling photo</field>
+            <field name="type">condition</field>
+            <field name="description">Take a photo of the item</field>
+            <field name="sequence">10</field>
+            <field name="require_photo">true</field>
+            <field name="require_note">false</field>
+        </record>
+    </data>
+</odoo>
