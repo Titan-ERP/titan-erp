@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rental Equipment Inspections - User Guide</title>
+    <link rel="stylesheet" href="user-guide.css">
+</head>
+<body>
+<div class="container">
+
+    <div class="header-container">
+        <a href="https://www.cyder.com.au">
+            <img src="https://lib.cyder.com.au/logo.png" alt="Cyder Solutions Logo" height="40px" width="auto"
+                style="position:absolute;right:20px;top:20px;"
+                class="logo">
+        </a>
+        <h1>Rental Equipment Inspections — User Guide</h1>
+    </div>
+
+    <div class="toc">
+        <strong>Contents</strong>
+        <ul>
+            <li><a href="#overview">1. Overview</a></li>
+            <li><a href="#understanding">2. Understanding Inspections</a></li>
+            <li><a href="#creating">3. Creating an Inspection from a Rental Order</a></li>
+            <li><a href="#conducting">4. Conducting the Inspection</a></li>
+            <li><a href="#how-created">5. How Inspections and Checklists Are Generated</a></li>
+            <li><a href="#signatures">6. Signatures and Finalising an Inspection</a></li>
+            <li><a href="#monitoring">7. Monitoring and Managing Inspections</a></li>
+            <li><a href="#workflows">8. Standard Workflows</a></li>
+            <li><a href="#troubleshooting">9. Troubleshooting</a></li>
+        </ul>
+    </div>
+
+    <!-- 1. OVERVIEW -->
+    <h2 id="overview">1. Overview</h2>
+
+    <p>The Rental Equipment Inspections module provides a structured, documented process for recording equipment condition at the point of pickup and return. It is designed to protect both the business and the customer by creating an evidence trail — complete with photos, inspector notes, pass/fail results, and dual digital signatures — that confirms the agreed condition of equipment at each end of a rental.</p>
+
+    <p>Inspections are initiated directly from a rental order. The checklist that drives each inspection is automatically built from a template pre-configured for the equipment category, meaning the inspector follows the same structured assessment every time rather than relying on memory or informal checks. Completed inspections produce a printed report that can be issued to the customer at pickup or return.</p>
+
+    <div class="feature-box">
+        <strong>Integration with Rental Orders:</strong> This module extends Odoo's native rental order (Sale Order with rental lines). All inspections are created from and linked to a rental order. You will not find a standalone Inspections menu separate from the rental workflow — the process is intentionally embedded in the rental lifecycle.
+    </div>
+
+    <!-- 2. UNDERSTANDING INSPECTIONS -->
+    <h2 id="understanding">2. Understanding Inspections</h2>
+
+    <h3>Inspection Types</h3>
+    <p>Every inspection is one of two types: <strong>Pickup</strong> or <strong>Return</strong>. A pickup inspection documents equipment condition before it leaves the yard. A return inspection documents condition when it comes back, and automatically cross-references the corresponding pickup inspection so any changes in condition are immediately visible.</p>
+
+    <p>An important rule governs the sequence: return inspections cannot be created until all pickup inspections on the same rental order are in <strong>Completed</strong> status. This prevents a return being recorded against equipment that was never formally inspected at pickup.</p>
+
+    <h3>Inspection Status</h3>
+    <p>Each inspection moves through four statuses. Understanding where an inspection sits in that progression matters because certain actions — capturing signatures, printing the report — are only meaningful once the right status has been reached.</p>
+
+    <p><strong>Draft</strong> — The inspection record exists but the checklist has not been generated and no assessment work has started. The inspector is assigned and details can be reviewed, but no checklist items are present yet.</p>
+
+    <p><strong>In Progress</strong> — The inspector clicked <em>Start Inspection</em>. The checklist items have been generated from the template and are ready for assessment. This is the active working status.</p>
+
+    <p><strong>Completed</strong> — The inspection is finished. All checklist items have been assessed, signatures captured, and the record is locked for the audit trail.</p>
+
+    <p><strong>Cancelled</strong> — The inspection was voided. Cancelled inspections do not count toward the pickup/return completion logic and do not appear in the inspection count shown on the rental order.</p>
+
+    <h3>Checklist Item Results</h3>
+    <p>Each item on the inspection checklist has three possible outcomes: <strong>Pass</strong>, <strong>Fail</strong>, or <strong>Not Applicable</strong>. Items default to Not Applicable when the checklist is first generated. An inspector must consciously set each item to Pass or Fail — leaving items at Not Applicable where that is a deliberate judgment is acceptable, but it should be an active decision rather than an oversight.</p>
+
+    <p>Some checklist items are configured to require a photo, a note, or both before the inspection can be considered complete. These requirements are set in the template by your administrator and reflect the business need to document certain checks with evidence rather than a simple pass/fail tick.</p>
+
+    <h3>Previous Inspection Comparison</h3>
+    <p>When conducting a return inspection, each checklist item shows the result recorded for the same item during the pickup inspection. This allows the inspector to see at a glance whether something that passed at pickup is now failing, without needing to open the pickup inspection separately.</p>
+
+    <!-- 3. CREATING AN INSPECTION -->
+    <h2 id="creating">3. Creating an Inspection from a Rental Order</h2>
+
+    <p>Inspections are always created from the rental order, not from the Inspections list view. Open the relevant rental order and look at the button bar at the top of the form. Depending on the state of the order and its existing inspections, you will see one or more of the following buttons.</p>
+
+    <h3>Pickup Inspection Button</h3>
+    <p>The <em>Create Pickup Inspection</em> button appears when the rental order contains equipment whose product category has a pickup inspection template configured. The button will not appear if none of the rented products are in a category set up for inspections. Clicking it creates one inspection record per qualifying product line and opens the inspection form immediately (or the inspection list if more than one was created).</p>
+
+    <div class="warning">
+        <strong>One inspection per product per type:</strong> If a pickup inspection already exists for a product on this order (and it hasn't been cancelled), the system will not create a duplicate. The button will only create inspections for products that genuinely lack one.
+    </div>
+
+    <h3>Return Inspection Button</h3>
+    <p>The <em>Create Return Inspection</em> button operates under the same logic but is additionally gated: it will not function until every pickup inspection on the order is in Completed status. If any pickup inspection is still in Draft or In Progress, the return button either will not appear or will not respond. Complete all outstanding pickup inspections first.</p>
+
+    <h3>Inspection Count Smart Button</h3>
+    <p>The <em>Inspections</em> smart button in the top right of the rental order form shows the number of active (non-cancelled) inspections linked to the order. Clicking it opens the full list of inspections for that order, from which you can access any individual inspection record.</p>
+
+    <h3>Manually Creating an Inspection</h3>
+    <p>You can also navigate to <strong>Rentals → Inspections → Equipment Inspections</strong> and create a record manually by specifying the rental order, product, and type. This is generally only necessary when correcting an unusual situation, as the buttons on the rental order handle the normal workflow.</p>
+
+    <!-- 4. CONDUCTING THE INSPECTION -->
+    <h2 id="conducting">4. Conducting the Inspection</h2>
+
+    <h3>Starting the Inspection</h3>
+    <p>When you first open a Draft inspection, the checklist is empty. Click <strong>Start Inspection</strong> to generate the checklist items from the template and move the status to In Progress. The checklist is built at this point — it is a snapshot of the template as it exists today, meaning any future changes to the template will not affect an inspection that has already been started.</p>
+
+    <div class="warning">
+        <strong>Template not configured:</strong> If the equipment's product category does not have an appropriate template assigned, clicking <em>Start Inspection</em> will produce an error. Contact your administrator to have the template configured before proceeding.
+    </div>
+
+    <h3>Completing Checklist Items</h3>
+    <p>Work through each checklist item in sequence. For each item, set the result to Pass, Fail, or Not Applicable. Items that require a note will show a note field — enter your observations. Items that require a photo will show a photo upload field — attach the relevant image before moving on.</p>
+
+    <p>For Measurement-type checklist items (such as Hour Meter Reading or Fuel Level), enter the recorded value in the measurement field and select the appropriate unit of measure. This captures numerical data alongside the pass/fail assessment.</p>
+
+    <p>On return inspections, the <em>Previous Result</em> column shows what was recorded for each item at pickup. Use this to identify any condition changes that warrant further documentation or a Fail result.</p>
+
+    <h3>Damage Found Flag</h3>
+    <p>The inspection header includes a <strong>Damage Found</strong> checkbox. If any damage is identified during the inspection — whether discovered through a checklist item or observed separately — tick this checkbox and complete the <em>Damage Description</em> field. This flag is highlighted in the printed report and makes damage immediately visible when reviewing inspection records from the rental order.</p>
+
+    <h3>Overall Inspection Notes</h3>
+    <p>The <em>Notes</em> field at the bottom of the inspection form accepts free-form HTML content and is separate from individual checklist item notes. Use this for any observations that apply to the inspection as a whole rather than to a specific check item.</p>
+
+    <h3>Equipment Hours / Odometer</h3>
+    <p>The <em>Equipment Hours/Odometer</em> field on the inspection header records the meter reading at the time of the inspection. Complete this field on both the pickup and return inspection to establish actual usage during the rental period.</p>
+
+    <!-- 5. HOW INSPECTIONS ARE GENERATED -->
+    <h2 id="how-created">5. How Inspections and Checklists Are Generated</h2>
+
+    <p>Understanding how the system builds inspections helps avoid confusion when things don't appear as expected.</p>
+
+    <p>When you click <em>Create Pickup Inspection</em> or <em>Create Return Inspection</em> on a rental order, the system evaluates each rental line. For each product whose category has the appropriate template assigned, it checks whether a non-cancelled inspection of that type already exists. If not, it creates one. The inspection is created in Draft status — the checklist is not generated yet.</p>
+
+    <p>The checklist is only generated when <em>Start Inspection</em> is clicked. At that point, the system reads the template linked to the product's category and copies all template items into the inspection as live checklist records. These records are independent copies — editing a template after this point does not alter an in-progress inspection.</p>
+
+    <p>For return inspections, the system automatically identifies the completed pickup inspection for the same product and rental order and links it as the <em>Previous Inspection</em>. This link is what powers the previous result comparison on each checklist item.</p>
+
+    <div class="feature-box">
+        <strong>Template-driven consistency:</strong> Because the checklist is built from a template, every inspector assessing the same type of equipment on the same type of inspection will be working from an identical set of items. This consistency is what makes the records defensible and comparable over time.
+    </div>
+
+    <!-- 6. SIGNATURES AND FINALISING -->
+    <h2 id="signatures">6. Signatures and Finalising an Inspection</h2>
+
+    <h3>Digital Signatures</h3>
+    <p>The inspection form includes two signature sections: one for the customer and one for the inspector. These are digital signature fields — each party signs directly on the form using a mouse, stylus, or touchscreen. The customer name field is pre-populated from the rental order but can be edited if the person signing is a representative rather than the customer contact on file.</p>
+
+    <p>Both signature fields record the date and time the signature was captured. The signatures and their timestamps are included in the printed inspection report and form part of the permanent record.</p>
+
+    <div class="warning">
+        <strong>Signature dates are set at record creation:</strong> The signature date fields are initialised when the inspection record is first created. Ensure signatures are captured at the actual time of the inspection rather than retrospectively, so the timestamps accurately reflect when the agreement was made.
+    </div>
+
+    <h3>Completing the Inspection</h3>
+    <p>Once all checklist items have been assessed, notes and photos captured where required, and signatures obtained, click <strong>Complete Inspection</strong>. The status moves to Completed and the record is finalised. A completed inspection cannot be re-opened for editing through the standard interface.</p>
+
+    <h3>Printing the Inspection Report</h3>
+    <p>From a completed inspection, use the <strong>Print</strong> menu to generate the Equipment Inspection Report. The report includes the inspection header details (reference, type, date, inspector, equipment, serial/reference, hours/odometer reading), the full checklist with results and notes, any photos attached to checklist items, the damage report section if damage was flagged, overall notes, and both signatures with names and dates.</p>
+
+    <p>When multiple inspections need to be printed together — for example, both the pickup and return inspection for the same rental — select them in the list view and use the combined report action, which consolidates the information into a single document organised by inspection type.</p>
+
+    <!-- 7. MONITORING AND MANAGEMENT -->
+    <h2 id="monitoring">7. Monitoring and Managing Inspections</h2>
+
+    <h3>Inspection List View</h3>
+    <p>Navigate to <strong>Rentals → Inspections → Equipment Inspections</strong> to access the inspections list. By default, this view is filtered to show only your own inspections (those where you are the assigned inspector). Remove the <em>My Inspections</em> filter to see all inspections, subject to your access permissions.</p>
+
+    <p>The list can be filtered by type (Pickup or Return), status (Draft, In Progress, Done), inspector, rental order, or product. It can also be grouped by any of these fields to get a summary view — for example, grouping by status gives a quick count of inspections still in progress.</p>
+
+    <h3>Access to Inspections</h3>
+    <p>Sales staff can see and work on inspections where they are either the assigned inspector or the responsible salesperson on the linked rental order. Sales Managers have access to all inspections across the business. If you cannot see an inspection you expect to find, it is likely because it is assigned to a different inspector and you do not have manager-level access.</p>
+
+    <h3>Cancelling an Inspection</h3>
+    <p>If an inspection was created in error or needs to be voided, use <strong>Cancel Inspection</strong>. Cancelled inspections are excluded from the inspection count on the rental order and from the pending inspection logic — meaning if you cancel a pickup inspection and the product still requires one, the rental order will show a pickup as pending again. Only managers can delete inspection records; standard users can only cancel.</p>
+
+    <!-- 8. STANDARD WORKFLOWS -->
+    <h2 id="workflows">8. Standard Workflows</h2>
+
+    <h3>Workflow: Equipment Pickup with Single Item</h3>
+    <p><em>Scenario: A customer arrives to collect a single piece of heavy equipment. The rental order is confirmed and the equipment is ready.</em></p>
+
+    <div class="step">Step 1: Open the confirmed rental order for this customer.</div>
+    <div class="step">Step 2: Click <strong>Create Pickup Inspection</strong>. The inspection form opens directly for the single piece of equipment.</div>
+    <div class="step">Step 3: Confirm the <em>Inspector</em> field is set to yourself (or assign the appropriate person).</div>
+    <div class="step">Step 4: Record the current <em>Equipment Hours/Odometer</em> reading from the machine.</div>
+    <div class="step">Step 5: Click <strong>Start Inspection</strong>. The checklist generates from the configured template.</div>
+    <div class="step">Step 6: Work through each checklist item. Set each result to Pass, Fail, or Not Applicable. Add notes and attach photos where the item requires them or where you wish to document the condition.</div>
+    <div class="step">Step 7: If any damage is present on the equipment before it leaves, tick <em>Damage Found</em> and describe it in the Damage Description field. Take photos of all damage and attach them to the relevant checklist items.</div>
+    <div class="step">Step 8: Have the customer sign the <em>Customer Signature</em> field. Confirm or correct the customer name. Sign the <em>Inspector Signature</em> field yourself.</div>
+    <div class="step">Step 9: Click <strong>Complete Inspection</strong>.</div>
+    <div class="step">Step 10: Print the Equipment Inspection Report and provide a copy to the customer before they leave.</div>
+
+    <h3>Workflow: Equipment Return</h3>
+    <p><em>Scenario: A customer returns a piece of equipment. The pickup inspection for this item was completed at the start of the rental.</em></p>
+
+    <div class="step">Step 1: Open the rental order. Confirm all pickup inspections show as Completed (check the Inspections smart button — all linked inspections should be in Done status).</div>
+    <div class="step">Step 2: Click <strong>Create Return Inspection</strong>.</div>
+    <div class="step">Step 3: Record the <em>Equipment Hours/Odometer</em> reading from the returned machine. Compare this to the pickup reading to confirm hours used.</div>
+    <div class="step">Step 4: Click <strong>Start Inspection</strong>. The checklist generates. Note the <em>Previous Result</em> column showing each item's status at pickup.</div>
+    <div class="step">Step 5: Work through each checklist item, comparing condition to the previous result where relevant. Any item that was Pass at pickup but is now Fail must be documented — set the result to Fail, add a note explaining the change, and attach a photo.</div>
+    <div class="step">Step 6: If new damage is found, tick <em>Damage Found</em> and complete the Damage Description. This will appear prominently in the report.</div>
+    <div class="step">Step 7: Capture customer and inspector signatures.</div>
+    <div class="step">Step 8: Click <strong>Complete Inspection</strong>.</div>
+    <div class="step">Step 9: Print the report. If there is damage or a dispute, print both the pickup and return inspections for a side-by-side record.</div>
+
+    <h3>Workflow: Rental with Multiple Equipment Items</h3>
+    <p><em>Scenario: A rental order contains three different pieces of equipment, each in the same equipment category.</em></p>
+
+    <div class="step">Step 1: Click <strong>Create Pickup Inspection</strong> on the rental order. Because there are three qualifying products, the system creates three inspection records and opens the inspection list view filtered to this order.</div>
+    <div class="step">Step 2: Open each inspection in turn and complete it through to Completed status following the standard pickup workflow above.</div>
+    <div class="step">Step 3: All three pickups must be Completed before the <em>Create Return Inspection</em> button becomes functional. If only two are done, the button will not create return inspections.</div>
+    <div class="step">Step 4: When all equipment is returned, click <strong>Create Return Inspection</strong> to generate return inspections for all three items simultaneously. Complete each as per the standard return workflow.</div>
+
+    <!-- 9. TROUBLESHOOTING -->
+    <h2 id="troubleshooting">9. Troubleshooting</h2>
+
+    <h3>"Create Pickup Inspection" button does nothing or does not appear</h3>
+    <p>This means none of the products on the rental order are in a category that has a pickup inspection template configured. Either the products are in unconfigured categories, or the order does not contain rental lines (non-rental order lines are ignored). Contact your administrator to have the product category configured with the appropriate template.</p>
+
+    <h3>"Create Return Inspection" is not available after all equipment has been returned</h3>
+    <p>The system requires every pickup inspection on the order to be in <strong>Completed</strong> (Done) status before return inspections can be created. Open the Inspections list for the order and check for any pickup inspection still in Draft or In Progress. Complete those first. If a pickup inspection was cancelled and no replacement exists, a new pickup inspection may need to be created and completed before returns will unlock.</p>
+
+    <h3>Start Inspection produces an error about a missing template</h3>
+    <p>The product on this inspection is in a category that does not have the appropriate inspection template assigned. The inspection type (pickup or return) determines which template is required. Notify your administrator — they need to assign the correct template to the product category. You cannot proceed with this inspection until the template is in place.</p>
+
+    <h3>Cannot see another inspector's inspection</h3>
+    <p>Standard salesperson access restricts visibility to inspections where you are either the inspector or the salesperson on the linked rental order. To see all inspections across all inspectors, Sales Manager access is required. If you need to manage an inspection assigned to a colleague, a manager can reassign the inspector field or access it directly.</p>
+
+    <h3>Checklist items appear without the previous result on a return inspection</h3>
+    <p>The previous result comparison relies on a completed pickup inspection existing for the same product and rental order. If the pickup inspection was cancelled, or if it has not yet been marked as Completed, the previous inspection link will not be set and the previous result column will be empty. Ensure the pickup inspection is in Completed status.</p>
+
+    <h3>Photo or note field is mandatory and blocking completion</h3>
+    <p>Certain checklist items are configured to require a photo, a note, or both before the inspection can be finalised. These requirements are defined in the inspection template by your administrator and reflect a deliberate documentation policy. You must provide the required content on those specific items. If the requirement is incorrect for your situation, speak to your administrator about adjusting the template — this change will apply to future inspections.</p>
+
+</div>
+
+<footer class="copyright-footer"><hr><center>&copy; 2018 Cyder Solutions. All rights reserved. | <a href="https://www.cyder.com.au">www.cyder.com.au</a></center></footer>
+
+</body>
+</html>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright (C) 2024 Cyder Solutions - All Rights Reserved -->
+<odoo>
+    <record id="view_category_form_inherit_rental_inspection" model="ir.ui.view">
+        <field name="name">product.category.form.inherit.rental.inspection</field>
+        <field name="model">product.category</field>
+        <field name="inherit_id" ref="product.product_category_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group[@name='first']" position="after">
+                <group string="Rental Inspections" name="rental_inspections">
+                    <field name="pickup_template_id" options="{'no_create': True, 'no_edit': True}" domain="[('type', '=', 'pickup')]"/>
+                    <field name="return_template_id" options="{'no_create': True, 'no_edit': True}" domain="[('type', '=', 'return')]"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>

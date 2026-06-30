@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright (C) 2024 Cyder Solutions - All Rights Reserved -->
+<odoo>
+    <!-- Main menu item under Rentals -->
+    <menuitem id="menu_rental_inspection_root"
+              name="Inspections"
+              parent="sale_renting.rental_menu_root"
+              sequence="8"/>
+
+    <!-- Primary Inspections Menu -->
+    <menuitem id="menu_rental_inspection"
+              name="Inspections"
+              parent="menu_rental_inspection_root"
+              action="action_rental_inspection"
+              sequence="10"/>
+
+    <!-- Templates Menu -->
+    <menuitem id="menu_rental_inspection_template"
+              name="Inspection Templates"
+              parent="menu_rental_inspection_root"
+              action="action_rental_inspection_template"
+              sequence="20"/>
+
+    <!-- Configuration Menu -->
+    <menuitem id="menu_rental_inspection_config"
+              name="Configuration"
+              parent="menu_rental_inspection_root"
+              sequence="100"
+              groups="sales_team.group_sale_manager"/>
+</odoo>
