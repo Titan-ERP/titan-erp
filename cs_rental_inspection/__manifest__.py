@@ -31,7 +31,6 @@ Rental Equipment Inspection Management
         'views/rental_inspection_template_views.xml',
         'views/product_views.xml',
         'views/sale_views.xml',
-        'views/rental_wizard_inherit_views.xml',
         'views/menu_views.xml',
     ],
     'demo': [
