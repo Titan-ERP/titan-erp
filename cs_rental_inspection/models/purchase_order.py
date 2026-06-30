@@ -30,5 +30,5 @@ class PurchaseOrder(models.Model):
                     continue
                 lot = lots.sorted('id')[:1]
                 for move in line.move_ids.filtered(lambda m: m.state not in ('done', 'cancel')):
-                    for move_line in move.move_line_ids.filtered(lambda ml: not ml.lot_id):
-                        move_line.lot_id = lot
+                    if lot not in move.lot_ids:
+                        move.lot_ids = [(4, lot.id)]
