@@ -18,6 +18,7 @@
 
     'data': [
         'views/sale_order_views.xml',
+        'views/account_move_views.xml',
         'report/sale_order_report.xml',
     ],
 
