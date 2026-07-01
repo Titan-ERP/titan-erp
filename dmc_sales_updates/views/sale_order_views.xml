@@ -11,24 +11,13 @@
                 <field name="include_shop_supply"/>
             </field>
 
-            <!-- Shop Supply's info in the left (notes) area of the totals section -->
-            <field name="note" position="after">
-                <div colspan="2"
-                     invisible="not include_shop_supply"
-                     class="mt-2 pt-2 border-top">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span class="fw-bold">Shop Supply's</span>
-                        <field name="shop_supply_amount"
-                               nolabel="1"
-                               widget="monetary"
-                               readonly="1"
-                               class="fw-bold"/>
-                    </div>
-                    <small class="text-muted">
-                        3% of untaxed total, max $200.00
-                    </small>
-                </div>
-            </field>
+            <!-- Shop Supply's in the totals column (oe_subtotal_footer), below Total -->
+            <group name="sale_total" position="inside">
+                <field name="shop_supply_amount"
+                       invisible="not include_shop_supply"
+                       readonly="1"
+                       widget="monetary"/>
+            </group>
 
         </field>
     </record>
