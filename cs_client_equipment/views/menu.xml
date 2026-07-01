@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem
+            id="menu_client_equipment"
+            name="Client Equipment"
+            web_icon="cs_client_equipment,static/description/icon.png"
+            sequence="10"/>
+
+  <menuitem
+            id="menu_configuration"
+            name="Configurations"
+            parent="menu_client_equipment"
+            sequence="20"/>
+
+</odoo>

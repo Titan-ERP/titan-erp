@@ -1,0 +1,16 @@
+<?xml version="1.0" ?>
+<odoo>
+    <!-- Create a user group   -->
+    <record id="group_client_equipment_user" model="res.groups">
+        <field name="name">Client Equipment User</field>
+        <field name="comment">Access to client equipment module</field>
+    </record>
+
+    <!-- Create an admin group   -->
+    <record id="group_client_equipment_administrator" model="res.groups">
+        <field name="name">Client Equipment Administrator</field>
+        <field name="comment">Full access to client equipment module</field>
+        <field name="implied_ids" eval="[(4, ref('group_client_equipment_user'))]"/>
+        <field name="user_ids" eval="[(4, ref('base.user_root')), (4, ref('base.user_admin'))]"/>
+    </record>
+</odoo>
