@@ -11,12 +11,27 @@
                 <field name="include_shop_supply"/>
             </field>
 
-            <!-- Shop Supply's in the totals column (oe_subtotal_footer), below Total -->
+            <!--
+                Mirror the exact DOM structure of the tax_totals widget:
+                <table class="float-end"> with o_td_label / o_list_monetary cells.
+                This keeps the label and amount on the same row, right-aligned,
+                matching the Untaxed Amount and Total rows above.
+            -->
             <group name="sale_total" position="inside">
-                <field name="shop_supply_amount"
-                       invisible="not include_shop_supply"
-                       readonly="1"
-                       widget="monetary"/>
+                <div invisible="not include_shop_supply">
+                    <table class="float-end">
+                        <tbody>
+                            <tr>
+                                <td class="o_td_label">
+                                    <label class="o_form_label o_tax_total_label">Shop Supply's</label>
+                                </td>
+                                <td class="o_list_monetary">
+                                    <field name="shop_supply_amount" nolabel="1" widget="monetary" readonly="1"/>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </group>
 
         </field>
