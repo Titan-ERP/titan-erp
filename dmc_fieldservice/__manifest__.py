@@ -15,8 +15,8 @@ Features
 - All fields tracked in the chatter
 """,
 
-    'author': "Cyder Solutions",
-    'website': "https://www.cyder.com.au",
+    'author': "DMC Strategict It",
+    'website': "https://www.dmcstrategicit.com",
 
     'version': '19.0.1.0.0',
 

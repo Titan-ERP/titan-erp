@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Inherit sale.document_tax_totals to add a Shop Supply's row
+        after the Untaxed Amount row. The outer `doc` context is
+        accessible here because QWeb t-call inherits the caller's scope.
+    -->
+    <template id="report_saleorder_document_tax_totals"
+              inherit_id="sale.document_tax_totals">
+        <xpath expr="//tr[hasclass('o_subtotal')]" position="after">
+            <tr t-if="doc and doc.include_shop_supply" class="o_subtotal">
+                <td>
+                    <span>Shop Supply's</span>
+                </td>
+                <td class="text-end">
+                    <span class="text-nowrap"
+                          t-out="doc.shop_supply_amount"
+                          t-options="{'widget': 'monetary', 'display_currency': currency}">
+                        200.00
+                    </span>
+                </td>
+            </tr>
+        </xpath>
+    </template>
+</odoo>

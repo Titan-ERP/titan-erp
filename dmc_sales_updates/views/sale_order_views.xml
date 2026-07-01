@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_order_form_dmc_sales" model="ir.ui.view">
+        <field name="name">sale.order.form.dmc.sales</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+
+            <!-- Include Shop Supply's checkbox in header, below Payment Terms -->
+            <field name="payment_term_id" position="after">
+                <field name="include_shop_supply"/>
+            </field>
+
+            <!-- Shop Supply's info in the left (notes) area of the totals section -->
+            <field name="note" position="after">
+                <div colspan="2"
+                     invisible="not include_shop_supply"
+                     class="mt-2 pt-2 border-top">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="fw-bold">Shop Supply's</span>
+                        <field name="shop_supply_amount"
+                               nolabel="1"
+                               widget="monetary"
+                               readonly="1"
+                               class="fw-bold"/>
+                    </div>
+                    <small class="text-muted">
+                        3% of untaxed total, max $200.00
+                    </small>
+                </div>
+            </field>
+
+        </field>
+    </record>
+</odoo>
