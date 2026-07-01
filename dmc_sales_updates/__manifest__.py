@@ -20,4 +20,10 @@
         'views/sale_order_views.xml',
         'report/sale_order_report.xml',
     ],
+
+    'assets': {
+        'web.assets_backend': [
+            'dmc_sales_updates/static/src/components/tax_totals_patch.xml',
+        ],
+    },
 }

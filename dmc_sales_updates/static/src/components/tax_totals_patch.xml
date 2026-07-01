@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates xml:space="preserve">
+
+    <!--
+        Extend the tax totals widget to render a description row immediately
+        after the Shop Supply's amount row, mirroring the PDF report layout.
+        The shop_supply_description key is present only on the injected entry.
+    -->
+    <t t-name="dmc_sales_updates.TaxTotalsFieldPatch"
+       t-inherit="account.TaxTotalsField"
+       t-inherit-mode="extension">
+        <xpath expr="//TaxGroupComponent" position="after">
+            <tr t-if="taxGroup.shop_supply_description">
+                <td colspan="2" class="text-muted fst-italic small ps-2">
+                    <t t-out="taxGroup.shop_supply_description"/>
+                </td>
+            </tr>
+        </xpath>
+    </t>
+
+</templates>
