@@ -6,11 +6,11 @@
         <field name="inherit_id" ref="account.view_move_form"/>
         <field name="arch" type="xml">
 
-            <!-- Include Shop Supply's checkbox next to Payment Terms in the invoice header -->
-            <field name="invoice_payment_term_id" position="after">
+            <!-- Include Shop Supply's checkbox in the right header group, below Payment Terms -->
+            <div name="due_date" position="after">
                 <field name="include_shop_supply"
                        invisible="move_type not in ('out_invoice', 'out_refund')"/>
-            </field>
+            </div>
 
         </field>
     </record>
