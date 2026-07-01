@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+#################################################################################
+# Author      : Cyder Solutions (<www.cyder.com.au>)                            #
+# Copyright(c): 2018-present                                                    #
+# All Rights Reserved.                                                          #
+#                                                                               #
+# This module is copyright property of the author mentioned above.              #
+# You can't redistribute/reshare/recreate it for any purpose.                   #
+#################################################################################
+-->
+<odoo>
+
+    <record id="view_equipment_details_list" model="ir.ui.view">
+        <field name="name">equipment.details.list</field>
+        <field name="model">equipment.details</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="category_id" optional="hide"/>
+                <field name="client" optional="show"/>
+                <field name="manufacturer_id" optional="show"/>
+                <field name="product_id" optional="show"/>
+                <field name="ref" optional="show"/>
+                <field name="model" optional="show"/>
+                <field name="asset_tag" optional="show"/>
+                <field name="serial_no" optional="show"/>
+                <field name="location" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_equipment_details_form" model="ir.ui.view">
+        <field name="name">equipment.details.form</field>
+        <field name="model">equipment.details</field>
+        <field name="arch" type="xml">
+            <form>
+                <header/>
+                <sheet>
+                    <div class="oe_button_box" name="button_box"/>
+                    <field name="image" widget="image" class="oe_avatar"/>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name" string="Name" placeholder="e.g. LED Monitor"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="client" string="Owner"/>
+                            <label for="street" string="Equipment Address"/>
+                            <div class="o_address_format">
+                                <field name="street" placeholder="Street..." class="o_address_street"/>
+                                <field name="street2" placeholder="Street 2..." class="o_address_street"/>
+                                <field name="city" placeholder="City" class="o_address_city"/>
+                                <field name="state" class="o_address_state" placeholder="State" options='{"no_open": True}'/>
+                                <field name="zip" placeholder="ZIP" class="o_address_zip"/>
+                                <field name="country" placeholder="Country" class="o_address_country" options='{"no_open": True, "no_create": True}'/>
+                            </div>
+                            <field name="location" placeholder="i.e.. Rear wall next to the door"/>
+                        </group>
+                        <group>
+                            <field name="manufacturer_id"/>
+                            <field name="ref"/>
+                            <field name="model"/>
+                            <field name="asset_tag"/>
+                            <field name="serial_no"/>
+                            <field name="site_contact"/>
+                            <field name="site_phone"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Notes" name="notes">
+                            <field name="note" placeholder="Enter Equipment Notes"/>
+                        </page>
+                        <page string="Documents" name="documents">
+                            <field name="file_ids" widget="many2many_binary"/>
+                        </page>
+                        <page string="Service History" name="history">
+                           <div invisible="jobs">
+                               No jobs found.<br/>
+                               This area stores historic servicing data if the <strong>Client Equipment Field Repairs</strong> module has been installed <strong>and</strong> jobs have been created.
+                           </div>
+                            <group>
+                                <field name="jobs" readonly="1" nolabel="1" invisible="not jobs"/>
+                            </group>
+                        </page>
+                        <page string="Other Info" name="other_info">
+                            <group>
+                                <group>
+                                    <field name="category_id" string="Category" help="Group of like equipment. If the calibration inspections module is installed, this category is where to set up the calibration points"/>
+                                    <field name="product_id"/>
+                                </group>
+                                <group>
+                                    <field name="system_id" domain="[('client_id', '=', client)]"/>
+                                    <field name="latitude" widget="maps"/>
+                                    <field name="longitude" widget="maps"/>
+                                </group>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter class="oe_chatter">
+                    <field name="message_follower_ids" groups="base.group_user"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </chatter>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_equipment_category_form" model="ir.ui.view">
+        <field name="name">equipment.category.form</field>
+        <field name="model">equipment.category</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name" string="Name" placeholder="e.g.Monitors"/></h1>
+                    </div>
+                    <group>
+                    </group>
+                </sheet>
+                <chatter class="oe_chatter">
+                    <field name="message_follower_ids" groups="base.group_user"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </chatter>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_equipment_manufacturer_form" model="ir.ui.view">
+        <field name="name">equipment.manufacturer.form</field>
+        <field name="model">equipment.manufacturer</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name" string="Name" placeholder="e.g. AUS LABS"/></h1>
+                    </div>
+                    <group>
+                    </group>
+                </sheet>
+                <chatter class="oe_chatter">
+                    <field name="message_follower_ids" groups="base.group_user"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </chatter>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_client_equipment_search" model="ir.ui.view">
+        <field name="name">equipment.details.search</field>
+        <field name="model">equipment.details</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="client"/>
+                <field name="serial_no"/>
+                <field name="location"/>
+                <field name="product_id"/>
+                <filter name="group_by_client" context="{'group_by': 'client'}"/>
+                <filter name="group_by_system" string="System" context="{'group_by': 'system_id'}"/>
+                <filter name="group_by_manufacturer" context="{'group_by': 'manufacturer_id'}"/>
+                <filter name="group_by_product" context="{'group_by': 'product_id'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_equipment_details" model="ir.actions.act_window">
+        <field name="name">Equipment Details</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">equipment.details</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_group_by_client': 1}</field>
+        <field name="help" type="html">
+            <p class="'o_view_nocontent_smiling_face">
+                Add your Equipment!
+            </p>
+        </field>
+    </record>
+
+    <record id="action_equipment_category" model="ir.actions.act_window">
+        <field name="name">Equipment Category</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">equipment.category</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{}</field>
+        <field name="help" type="html">
+            <p class="'o_view_nocontent_smiling_face">
+                Add your Category!
+            </p>
+        </field>
+    </record>
+
+    <record id="action_equipment_manufacturer" model="ir.actions.act_window">
+        <field name="name">Equipment Manufacturer</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">equipment.manufacturer</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{}</field>
+        <field name="help" type="html">
+            <p class="'o_view_nocontent_smiling_face">
+                Add your Manufacturer!
+            </p>
+        </field>
+    </record>
+
+    <menuitem
+            id="menu_equipment_details"
+            name="Client Equipment"
+            action="action_equipment_details"
+            parent="menu_client_equipment"
+            sequence="10"/>
+
+    <menuitem
+            id="menu_equipment_category"
+            name="Categories"
+            action="action_equipment_category"
+            parent="menu_configuration"
+            sequence="1"/>
+
+    <menuitem
+            id="menu_equipment_manufacturer"
+            name="Manufacturers"
+            action="action_equipment_manufacturer"
+            parent="menu_configuration"
+            sequence="2"/>
+
+</odoo>
