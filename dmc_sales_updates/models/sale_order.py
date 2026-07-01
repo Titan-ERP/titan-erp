@@ -17,7 +17,35 @@ class SaleOrder(models.Model):
     def _compute_shop_supply_amount(self):
         for order in self:
             if order.include_shop_supply:
-                amount = order.amount_untaxed * 0.03
-                order.shop_supply_amount = min(amount, 200.0)
+                order.shop_supply_amount = min(order.amount_untaxed * 0.03, 200.0)
             else:
                 order.shop_supply_amount = 0.0
+
+    @api.depends_context('lang')
+    @api.depends(
+        'order_line.price_subtotal', 'currency_id', 'company_id', 'payment_term_id',
+        'include_shop_supply', 'shop_supply_amount',
+    )
+    def _compute_tax_totals(self):
+        super()._compute_tax_totals()
+        for order in self:
+            if not order.include_shop_supply or not order.shop_supply_amount:
+                continue
+            tax_totals = order.tax_totals
+            if not tax_totals or not tax_totals.get('subtotals'):
+                continue
+            # Inject as the first tax_group entry so it appears immediately
+            # after "Untaxed Amount" in both the form widget and the report.
+            tax_totals['subtotals'][0]['tax_groups'].insert(0, {
+                'id': 0,
+                'involved_tax_ids': [],
+                'tax_amount_currency': order.shop_supply_amount,
+                'tax_amount': order.shop_supply_amount,
+                'base_amount_currency': 0.0,
+                'base_amount': 0.0,
+                'display_base_amount_currency': False,
+                'display_base_amount': False,
+                'group_name': "Shop Supply's",
+                'group_label': "Shop Supply's",
+            })
+            order.tax_totals = tax_totals
