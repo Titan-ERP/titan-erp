@@ -1,2 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<odoo/>
+<odoo>
+    <!--
+        Inherit the sale PDF tax totals template to render a description sub-row
+        immediately after the Shop Supply's amount row.  The shop_supply_description
+        key is set only on the injected entry, so the extra <tr> appears only there.
+    -->
+    <template id="shop_supply_desc_row" inherit_id="sale.document_tax_totals">
+        <xpath expr="//tr[hasclass('o_taxes')]" position="after">
+            <tr t-if="tax_group.get('shop_supply_description')">
+                <td colspan="2" class="text-muted fst-italic small ps-2">
+                    <span t-out="tax_group['shop_supply_description']"/>
+                </td>
+            </tr>
+        </xpath>
+    </template>
+</odoo>

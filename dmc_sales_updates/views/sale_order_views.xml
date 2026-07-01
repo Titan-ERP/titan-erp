@@ -11,6 +11,14 @@
                 <field name="include_shop_supply"/>
             </field>
 
+            <!-- Description shown below the shop supply amount in the totals column -->
+            <group name="sale_total" position="inside">
+                <div invisible="not include_shop_supply"
+                     class="text-muted fst-italic small text-end">
+                    Shop Supply's will be 3% of the untaxed total. The max amount will be $200.
+                </div>
+            </group>
+
         </field>
     </record>
 </odoo>

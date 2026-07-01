@@ -11,6 +11,7 @@ class SaleOrder(models.Model):
         compute='_compute_shop_supply_amount',
         store=True,
         currency_field='currency_id',
+        help="Shop Supply's will be 3% of the untaxed total. The max amount will be $200.",
     )
 
     @api.depends('amount_untaxed', 'include_shop_supply')
@@ -47,5 +48,6 @@ class SaleOrder(models.Model):
                 'display_base_amount': False,
                 'group_name': "Shop Supply's",
                 'group_label': "Shop Supply's",
+                'shop_supply_description': "Shop Supply's will be 3% of the untaxed total. The max amount will be $200.",
             })
             order.tax_totals = tax_totals
