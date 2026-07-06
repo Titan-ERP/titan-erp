@@ -24,7 +24,7 @@ class TestDumpDb(TransactionCase):
         return m
 
     def test_dump_db_calls_pg_dump(self):
-        """_dump_db must invoke pg_dump with --no-owner, --format=p, and the db name."""
+        """_dump_db must invoke pg_dump with --no-owner and the db name."""
         import os
         import tempfile
 
@@ -34,16 +34,253 @@ class TestDumpDb(TransactionCase):
         try:
             with patch('subprocess.run', side_effect=self._fake_pg_dump) as mock_run, \
                  patch.object(self.service.__class__, '_find_pg_dump', return_value='pg_dump'), \
-                 patch('odoo.service.db.exec_pg_environ', return_value={}):
+                 patch('odoo.tools.misc.exec_pg_environ', return_value={}):
                 self.service._dump_db(self.env.cr.dbname, zip_path)
 
             args = mock_run.call_args[0][0]
             self.assertEqual(args[0], 'pg_dump')
             self.assertIn('--no-owner', args)
-            self.assertIn('--format=p', args)
             self.assertIn(self.env.cr.dbname, args)
         finally:
             os.unlink(zip_path)
+
+    def test_dump_db_zip_contains_empty_filestore_entry(self):
+        """_dump_db zip must contain dump.sql first, manifest.json, and an empty filestore/ — no filestore files."""
+        import os
+        import tempfile
+        import zipfile
+
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tf:
+            zip_path = tf.name
+
+        try:
+            with patch('subprocess.run', side_effect=self._fake_pg_dump), \
+                 patch.object(self.service.__class__, '_find_pg_dump', return_value='pg_dump'), \
+                 patch('odoo.tools.misc.exec_pg_environ', return_value={}):
+                self.service._dump_db(self.env.cr.dbname, zip_path)
+
+            with zipfile.ZipFile(zip_path) as zf:
+                names = zf.namelist()
+
+            self.assertEqual(names[0], 'dump.sql', 'dump.sql must be the first entry')
+            self.assertIn('manifest.json', names)
+            self.assertIn('filestore/', names)
+            filestore_files = [n for n in names if n.startswith('filestore/') and n != 'filestore/']
+            self.assertFalse(filestore_files, f'No filestore files expected, found: {filestore_files}')
+        finally:
+            os.unlink(zip_path)
+
+    def test_python_dump_disables_triggers_and_uses_delete(self):
+        """Python dump must use DELETE FROM ONLY (not TRUNCATE CASCADE) and DISABLE/ENABLE TRIGGER ALL per table.
+
+        TRUNCATE ... CASCADE would cascade to already-loaded tables when the
+        referenced table is truncated later (alphabetical order does not respect
+        FK dependency order).
+
+        ONLY is required to prevent PostgreSQL native-inheritance cascade.  Odoo 19
+        uses PG INHERITS for the action tables (ir_act_window, ir_act_client, etc.
+        INHERIT from ir_actions in base_data.sql).  Without ONLY, DELETE FROM
+        ir_actions cascades and wipes all child tables that were already COPYed
+        earlier in the alphabetical pass → all action tables end up empty after
+        restore → "The action 'N' does not exist" on every login.
+
+        No explicit BEGIN/COMMIT in the data section: if psql uses
+        --single-transaction, an explicit COMMIT inside the dump prematurely
+        ends psql's outer transaction and causes subsequent statements to run
+        in auto-commit, potentially leaving the restore in a broken state.
+        """
+        import os
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix='.sql', delete=False) as tf:
+            dump_path = tf.name
+
+        try:
+            self.service._write_python_sql_dump(dump_path)
+            with open(dump_path, 'r', encoding='utf-8') as f:
+                sql = f.read()
+
+            # No standalone transaction wrapper in the data section
+            self.assertNotIn('BEGIN;', sql,
+                             'BEGIN; must not appear in _write_python_sql_dump output '
+                             '(conflicts with psql --single-transaction)')
+
+            # DELETE FROM ONLY instead of plain DELETE FROM or TRUNCATE CASCADE.
+            # ONLY prevents PG-native-inheritance cascade through ir_actions.
+            self.assertIn('DELETE FROM ONLY', sql,
+                          'DELETE FROM ONLY must be used to prevent PG-inheritance cascade '
+                          'through ir_actions wiping ir_act_window/ir_act_client/etc.')
+            self.assertNotIn('TRUNCATE TABLE', sql,
+                             'TRUNCATE TABLE must not be in dump (CASCADE would wipe '
+                             'previously loaded tables on existing schemas)')
+
+            # DISABLE/ENABLE TRIGGER ALL present and balanced
+            disable_count = sql.count('DISABLE TRIGGER ALL')
+            enable_count  = sql.count('ENABLE TRIGGER ALL')
+            self.assertGreater(disable_count, 0, 'No DISABLE TRIGGER ALL found in dump')
+            self.assertEqual(disable_count, enable_count,
+                             'DISABLE/ENABLE TRIGGER ALL count mismatch')
+
+            self.assertIn('COPY ', sql, 'Expected COPY statements in dump')
+        finally:
+            os.unlink(dump_path)
+
+    def test_python_dump_constraints_are_idempotent(self):
+        """ADD CONSTRAINT must use DO blocks and CREATE INDEX must use IF NOT EXISTS.
+
+        Odoo SH may restore a dump into an existing schema (not a fresh drop+create),
+        so bare ADD CONSTRAINT fails with 'already exists' and stops psql
+        (ON_ERROR_STOP=1).  Wrapping in DO blocks and using IF NOT EXISTS on
+        CREATE INDEX makes the post-data section idempotent on any target.
+        """
+        import os, re, tempfile
+
+        with tempfile.NamedTemporaryFile(suffix='.sql', delete=False) as tf:
+            dump_path = tf.name
+
+        try:
+            self.service._write_python_sql_dump(dump_path)
+            with open(dump_path, 'r', encoding='utf-8') as f:
+                sql = f.read()
+
+            # ADD CONSTRAINT must be inside DO blocks, not bare ALTER TABLE statements
+            self.assertIn('DO $$ BEGIN ALTER TABLE', sql,
+                          'ADD CONSTRAINT must be wrapped in DO $$ BEGIN...EXCEPTION...END $$ block')
+            bare_add = re.findall(r'^ALTER TABLE[^;\n]*ADD CONSTRAINT[^;\n]*;',
+                                  sql, re.MULTILINE)
+            self.assertEqual(bare_add, [],
+                             f'Bare ADD CONSTRAINT found outside DO block: {bare_add[:1]}')
+
+            # CREATE INDEX must use IF NOT EXISTS
+            for stmt in re.findall(r'CREATE (?:UNIQUE )?INDEX[^;]+;', sql):
+                self.assertIn('IF NOT EXISTS', stmt,
+                              f'CREATE INDEX without IF NOT EXISTS: {stmt[:120]}')
+        finally:
+            os.unlink(dump_path)
+
+    def test_python_dump_emits_inherit_statements(self):
+        """Python dump must emit ALTER TABLE ... INHERIT ... for PG native-inheritance tables.
+
+        Odoo 19 creates ir_act_client, ir_act_window, ir_act_server, ir_act_url, and
+        ir_act_report_xml with INHERITS (ir_actions) in base_data.sql.  Our CREATE TABLE
+        IF NOT EXISTS does NOT include the INHERITS clause — on a fresh database the
+        hierarchy is absent.  Without it, SELECT FROM ir_actions WHERE id=N returns nothing
+        even though the row lives in a child table, causing "The action 'N' does not exist"
+        on every navigation.  The dump must emit ALTER TABLE child INHERIT parent (wrapped
+        in DO blocks to be idempotent when --init base already set up INHERITS).
+        """
+        import os, tempfile
+
+        with tempfile.NamedTemporaryFile(suffix='.sql', delete=False) as tf:
+            dump_path = tf.name
+
+        try:
+            self.service._write_python_sql_dump(dump_path)
+            with open(dump_path, 'r', encoding='utf-8') as f:
+                sql = f.read()
+
+            self.assertIn('ALTER TABLE', sql,
+                          'Dump must contain ALTER TABLE statements')
+            self.assertIn('INHERIT', sql,
+                          'Dump must contain INHERIT keyword to restore PG inheritance hierarchy')
+            # Must be inside DO blocks (idempotent)
+            self.assertIn('EXCEPTION WHEN others THEN NULL', sql,
+                          'INHERIT statements must be wrapped in DO blocks with EXCEPTION handler')
+            # Inheritance section must appear before the first COPY (schema before data)
+            first_inherit = sql.index('INHERIT') if 'INHERIT' in sql else len(sql)
+            first_copy = sql.index('\nCOPY ') if '\nCOPY ' in sql else len(sql)
+            self.assertLess(first_inherit, first_copy,
+                            'INHERIT statements must appear before COPY data blocks')
+        finally:
+            os.unlink(dump_path)
+
+    def test_python_dump_skip_large_tables(self):
+        """skip_tables omits DELETE FROM + COPY for those tables but keeps a comment."""
+        import os, tempfile
+
+        with tempfile.NamedTemporaryFile(suffix='.sql', delete=False) as tf:
+            dump_path = tf.name
+
+        skip = frozenset({'ir_attachment', 'mail_message', 'mail_mail'})
+        try:
+            self.service._write_python_sql_dump(dump_path, skip_tables=skip)
+            with open(dump_path, 'r', encoding='utf-8') as f:
+                sql = f.read()
+
+            for tbl in skip:
+                self.assertIn(
+                    f'-- Skipped data for {tbl}', sql,
+                    f'Expected skip comment for {tbl}',
+                )
+                self.assertNotIn(
+                    f'DELETE FROM ONLY "public"."{tbl}"', sql,
+                    f'DELETE FROM ONLY must be absent for skipped table {tbl}',
+                )
+                self.assertNotIn(
+                    f'COPY "public"."{tbl}"', sql,
+                    f'COPY must be absent for skipped table {tbl}',
+                )
+        finally:
+            os.unlink(dump_path)
+
+    def test_python_dump_header_error_handling(self):
+        """dump.sql must begin with ON_ERROR_ROLLBACK on then ON_ERROR_STOP off."""
+        import os, tempfile
+
+        with tempfile.NamedTemporaryFile(suffix='.sql', delete=False) as tf:
+            dump_path = tf.name
+
+        try:
+            self.service._write_python_sql_dump(dump_path)
+            with open(dump_path, 'r', encoding='utf-8') as f:
+                line1 = f.readline().rstrip('\n')
+                line2 = f.readline().rstrip('\n')
+            self.assertEqual(line1, '\\set ON_ERROR_ROLLBACK on',
+                             'First line must be \\set ON_ERROR_ROLLBACK on')
+            self.assertEqual(line2, '\\set ON_ERROR_STOP off',
+                             'Second line must be \\set ON_ERROR_STOP off')
+        finally:
+            os.unlink(dump_path)
+
+    def test_python_dump_has_delete_from_before_copy(self):
+        """DELETE FROM ONLY must precede each COPY block to clear Odoo SH init data.
+
+        Odoo SH initializes the database (--init base) before running the restore dump,
+        which populates ir_act_window and other core tables with base Odoo data whose IDs
+        conflict with production IDs.  Without DELETE FROM ONLY, COPY fails on PK collision and
+        the table retains only the init data, causing Missing Action on all app menus.
+        ONLY is required to prevent the PG-inheritance cascade from ir_actions wiping child tables.
+        """
+        import os, tempfile
+
+        with tempfile.NamedTemporaryFile(suffix='.sql', delete=False) as tf:
+            dump_path = tf.name
+
+        try:
+            self.service._write_python_sql_dump(dump_path)
+            with open(dump_path, 'r', encoding='utf-8') as f:
+                sql = f.read()
+            self.assertIn('DELETE FROM ONLY', sql,
+                          'DELETE FROM ONLY must appear before each COPY block in the dump '
+                          '(prevents PG-inheritance cascade through ir_actions)')
+        finally:
+            os.unlink(dump_path)
+
+    def test_python_dump_identity_setval(self):
+        """Dump must emit pg_get_serial_sequence setval calls for IDENTITY columns."""
+        import os, tempfile
+
+        with tempfile.NamedTemporaryFile(suffix='.sql', delete=False) as tf:
+            dump_path = tf.name
+
+        try:
+            self.service._write_python_sql_dump(dump_path)
+            with open(dump_path, 'r', encoding='utf-8') as f:
+                sql = f.read()
+            self.assertIn('pg_get_serial_sequence', sql,
+                          'Dump must contain pg_get_serial_sequence for IDENTITY column setval')
+        finally:
+            os.unlink(dump_path)
 
     def test_neutralization_appended_in_own_transaction(self):
         """When neutralize=True the neutralization SQL is appended with BEGIN/COMMIT."""
@@ -75,6 +312,214 @@ class TestDumpDb(TransactionCase):
             self.assertIn('-- Neutralization', sql)
             self.assertIn('COMMIT;', sql)
             self.assertIn('UPDATE ir_cron', sql)
+        finally:
+            os.unlink(zip_path)
+
+    def test_purge_stale_assets_default_appends_cleanup_sql(self):
+        """purge_stale_assets defaults to True and runs even when neutralize=False."""
+        import os
+        import tempfile
+
+        config = self.env['dmc.backup.config'].create({
+            'name': 'Test PSA',
+            'storage_type': 'azure',
+            'azure_account': 'a',
+            'azure_container': 'c',
+            'azure_sas_token': 't',
+            'neutralize': False,
+        })
+
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tf:
+            zip_path = tf.name
+
+        try:
+            with patch('subprocess.run', side_effect=self._fake_pg_dump), \
+                 patch.object(self.service.__class__, '_find_pg_dump', return_value='pg_dump'), \
+                 patch('odoo.tools.misc.exec_pg_environ', return_value={}):
+                self.service._dump_db(self.env.cr.dbname, zip_path, config=config)
+
+            with zipfile.ZipFile(zip_path) as zf:
+                sql = zf.read('dump.sql').decode()
+
+            self.assertIn('DELETE FROM ir_attachment', sql)
+            self.assertIn("assets_%", sql)
+            self.assertNotIn('-- Neutralization', sql)
+        finally:
+            os.unlink(zip_path)
+
+    def test_purge_stale_assets_false_omits_cleanup_sql(self):
+        """purge_stale_assets=False must omit the asset-bundle cleanup SQL."""
+        import os
+        import tempfile
+
+        config = self.env['dmc.backup.config'].create({
+            'name': 'Test PSA off',
+            'storage_type': 'azure',
+            'azure_account': 'a',
+            'azure_container': 'c',
+            'azure_sas_token': 't',
+            'neutralize': False,
+            'purge_stale_assets': False,
+        })
+
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tf:
+            zip_path = tf.name
+
+        try:
+            with patch('subprocess.run', side_effect=self._fake_pg_dump), \
+                 patch.object(self.service.__class__, '_find_pg_dump', return_value='pg_dump'), \
+                 patch('odoo.tools.misc.exec_pg_environ', return_value={}):
+                self.service._dump_db(self.env.cr.dbname, zip_path, config=config)
+
+            with zipfile.ZipFile(zip_path) as zf:
+                sql = zf.read('dump.sql').decode()
+
+            self.assertNotIn('DELETE FROM ir_attachment', sql)
+        finally:
+            os.unlink(zip_path)
+
+    def test_include_filestore_streams_real_files(self):
+        """include_filestore=True must stream real filestore files into the zip."""
+        import os
+        import shutil
+        import tempfile
+
+        config = self.env['dmc.backup.config'].create({
+            'name': 'Test FS',
+            'storage_type': 'azure',
+            'azure_account': 'a',
+            'azure_container': 'c',
+            'azure_sas_token': 't',
+            'include_filestore': True,
+        })
+
+        fs_dir = tempfile.mkdtemp()
+        sub_dir = os.path.join(fs_dir, '69')
+        os.makedirs(sub_dir)
+        with open(os.path.join(sub_dir, '69ea99d6'), 'wb') as f:
+            f.write(b'fake attachment content')
+
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tf:
+            zip_path = tf.name
+
+        try:
+            with patch('subprocess.run', side_effect=self._fake_pg_dump), \
+                 patch.object(self.service.__class__, '_find_pg_dump', return_value='pg_dump'), \
+                 patch('odoo.tools.misc.exec_pg_environ', return_value={}), \
+                 patch('odoo.tools.config.filestore', return_value=fs_dir):
+                self.service._dump_db(self.env.cr.dbname, zip_path, config=config)
+
+            with zipfile.ZipFile(zip_path) as zf:
+                names = zf.namelist()
+            self.assertIn('filestore/69/69ea99d6', names)
+        finally:
+            os.unlink(zip_path)
+            shutil.rmtree(fs_dir)
+
+    def test_include_filestore_forces_ir_attachment_data_included(self):
+        """include_filestore=True must not let skip_large_tables exclude ir_attachment data."""
+        import os
+        import tempfile
+
+        config = self.env['dmc.backup.config'].create({
+            'name': 'Test FS2',
+            'storage_type': 'azure',
+            'azure_account': 'a',
+            'azure_container': 'c',
+            'azure_sas_token': 't',
+            'include_filestore': True,
+            'skip_large_tables': True,
+        })
+
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tf:
+            zip_path = tf.name
+
+        try:
+            with patch.object(self.service.__class__, '_is_pg_dump_available', return_value=False), \
+                 patch('odoo.tools.config.filestore', return_value=tempfile.gettempdir()):
+                self.service._dump_db(self.env.cr.dbname, zip_path, config=config)
+
+            with zipfile.ZipFile(zip_path) as zf:
+                sql = zf.read('dump.sql').decode()
+
+            self.assertIn('COPY "public"."ir_attachment"', sql)
+            self.assertNotIn('-- Skipped data for ir_attachment', sql)
+        finally:
+            os.unlink(zip_path)
+
+    def test_no_filestore_always_skips_ir_attachment_even_without_skip_large_tables(self):
+        """include_filestore=False must skip ir_attachment full-table COPY even when skip_large_tables=False.
+
+        The bug: skip_large_tables=False passed skip_tables=None, bypassing the
+        ir_attachment skip and producing dangling store_fname references after restore.
+        Icon attachments (res_model='ir.ui.menu') may still appear — those are emitted
+        inline with db_datas and store_fname=NULL, which is safe.
+        """
+        import os
+        import tempfile
+
+        config = self.env['dmc.backup.config'].create({
+            'name': 'Test NoFS NoSkip',
+            'storage_type': 'azure',
+            'azure_account': 'a',
+            'azure_container': 'c',
+            'azure_sas_token': 't',
+            'include_filestore': False,
+            'skip_large_tables': False,
+        })
+
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tf:
+            zip_path = tf.name
+
+        try:
+            with patch.object(self.service.__class__, '_is_pg_dump_available', return_value=False):
+                self.service._dump_db(self.env.cr.dbname, zip_path, config=config)
+
+            with zipfile.ZipFile(zip_path) as zf:
+                sql = zf.read('dump.sql').decode()
+
+            self.assertIn('-- Skipped data for ir_attachment', sql,
+                          'ir_attachment must be skipped when include_filestore=False, '
+                          'regardless of skip_large_tables')
+        finally:
+            os.unlink(zip_path)
+
+    def test_skip_ir_attachment_still_inlines_menu_icons(self):
+        """When ir_attachment is skipped, menu icon attachments must be emitted inline."""
+        import os
+        import tempfile
+
+        config = self.env['dmc.backup.config'].create({
+            'name': 'Test Icon Inline',
+            'storage_type': 'azure',
+            'azure_account': 'a',
+            'azure_container': 'c',
+            'azure_sas_token': 't',
+            'include_filestore': False,
+            'skip_large_tables': True,
+        })
+
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tf:
+            zip_path = tf.name
+
+        try:
+            with patch.object(self.service.__class__, '_is_pg_dump_available', return_value=False):
+                self.service._dump_db(self.env.cr.dbname, zip_path, config=config)
+
+            with zipfile.ZipFile(zip_path) as zf:
+                sql = zf.read('dump.sql').decode()
+
+            self.assertIn('-- Skipped data for ir_attachment', sql)
+
+            icon_count = self.env['ir.attachment'].sudo().search_count([
+                ('res_model', '=', 'ir.ui.menu'),
+                ('res_field', '=', 'web_icon_data'),
+            ])
+            if icon_count:
+                self.assertIn('-- Menu app-icon attachments', sql,
+                              'Icon attachment COPY comment must appear in dump')
+                self.assertIn("res_field = 'web_icon_data'", sql,
+                              'DELETE for icon attachments must be in dump')
         finally:
             os.unlink(zip_path)
 

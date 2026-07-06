@@ -38,10 +38,26 @@ class DmcBackupConfig(models.Model):
         help='Append neutralization SQL to the dump: deactivates crons, mail servers, '
              'CDN and removes sensitive API keys. Recommended for non-production restores.',
     )
+    skip_large_tables = fields.Boolean(
+        string='Skip Large Tables', default=True,
+        help='Exclude ir_attachment, mail_message, mail_mail, mailing_trace, and '
+             'marketing_trace from the COPY section of the dump. ir_attachment is ~189 MB '
+             'and sits between ir_act_window and ir_ui_menu alphabetically — if its COPY '
+             'fails the menu table is never loaded. Email tables can add 2+ GB. None are '
+             'needed for staging restores. Keeping them risks a psql failure and import '
+             'revert on Odoo SH.',
+    )
     include_filestore = fields.Boolean(
-        string='Include Filestore', default=True,
-        help='Include the filestore directory in the backup zip. '
-             'Uncheck to create a database-only dump.',
+        string='Include Filestore', default=False,
+        help='Stream real filestore files into the backup zip for full-fidelity '
+             'restores (uploaded documents/images included). Increases backup '
+             'time and size — leave off for routine staging backups.',
+    )
+    purge_stale_assets = fields.Boolean(
+        string='Regenerate Web Assets on Restore', default=True,
+        help='Strip cached compiled JS/CSS asset-bundle attachments from the dump so '
+             'Odoo regenerates them on first page load after restore, instead of '
+             'crashing with FileNotFoundError when the filestore file is missing.',
     )
     status_label      = fields.Char(compute='_compute_status_label')
 

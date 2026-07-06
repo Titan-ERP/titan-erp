@@ -156,6 +156,12 @@
                     <group string="Retention">
                         <field name="retention_days"/>
                     </group>
+                    <group string="Options">
+                        <field name="neutralize"/>
+                        <field name="skip_large_tables"/>
+                        <field name="include_filestore"/>
+                        <field name="purge_stale_assets"/>
+                    </group>
                 </sheet>
             </form>
         </field>

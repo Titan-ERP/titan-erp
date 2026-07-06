@@ -257,7 +257,6 @@ class DmcBackupService(models.Model):
            (e.g. /usr/bin/pg_dump is pg14 but the server is pg16).
         """
         from odoo.tools.misc import find_pg_tool
-        import shutil
 
         configured = find_pg_tool('pg_dump')
 
@@ -302,12 +301,24 @@ class DmcBackupService(models.Model):
         except Exception:
             return False
 
-    def _dump_db(self, db_name, zip_path, config=None):
-        import shutil
-        from odoo.tools import osutil
+    # Tables skipped from COPY in skip_large_tables mode.  Together these can
+    # exceed 2 GB in a mature Odoo database (mail_message + mail_mail alone are
+    # ~2.5 GB here) and are not needed for staging restores.
+    _SKIP_LARGE_TABLES = frozenset({
+        'ir_attachment',
+        'mail_message',
+        'mail_mail',
+        'mailing_trace',
+        'marketing_trace',
+    })
 
-        neutralize        = config.neutralize        if config else False
-        include_filestore = config.include_filestore if config else True
+    def _dump_db(self, db_name, zip_path, config=None):
+        import zipfile
+
+        neutralize         = config.neutralize if config else False
+        skip_large_tables  = config.skip_large_tables if config else True
+        include_filestore  = config.include_filestore if config else False
+        purge_stale_assets = config.purge_stale_assets if config else True
 
         cr = self.env.cr
         cr.execute(
@@ -337,25 +348,36 @@ class DmcBackupService(models.Model):
                     'typical of Odoo SH staging/dev branches); '
                     'using Python/psycopg2 SQL dump as fallback.'
                 )
-                self._write_python_sql_dump(dump_path)
+                # ir_attachment must always be excluded when include_filestore is
+                # False: copying the DB rows without the actual filestore files
+                # produces dangling store_fname references on the restored host.
+                if include_filestore:
+                    skip_set = (self._SKIP_LARGE_TABLES - {'ir_attachment'}) if skip_large_tables else None
+                else:
+                    base = self._SKIP_LARGE_TABLES if skip_large_tables else frozenset()
+                    skip_set = base | frozenset({'ir_attachment'})
+                self._write_python_sql_dump(dump_path, skip_tables=skip_set)
 
-            if neutralize:
+            if neutralize or purge_stale_assets:
                 with open(dump_path, 'ab') as nf:
-                    self._write_neutralization(nf)
+                    if neutralize:
+                        self._write_neutralization(nf)
+                    if purge_stale_assets:
+                        self._write_asset_cleanup(nf)
 
-            with open(os.path.join(tmp_dir, 'manifest.json'), 'wb') as mf:
-                mf.write(manifest_bytes)
-
-            if include_filestore:
-                filestore_path = odoo.tools.config.filestore(db_name)
-                if os.path.exists(filestore_path):
-                    shutil.copytree(filestore_path, os.path.join(tmp_dir, 'filestore'))
-
-            with open(zip_path, 'wb') as zf:
-                osutil.zip_dir(
-                    tmp_dir, zf, include_dir=False,
-                    fnct_sort=lambda fname: fname != 'dump.sql',
-                )
+            with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
+                zf.write(dump_path, 'dump.sql')
+                zf.writestr('manifest.json', manifest_bytes)
+                if include_filestore:
+                    fs_dir = odoo.tools.config.filestore(db_name)
+                    if os.path.isdir(fs_dir):
+                        for root, _dirs, files in os.walk(fs_dir):
+                            for fname in files:
+                                full_path = os.path.join(root, fname)
+                                arcname = 'filestore/' + os.path.relpath(full_path, fs_dir)
+                                zf.write(full_path, arcname)
+                else:
+                    zf.writestr(zipfile.ZipInfo('filestore/'), b'')
 
     def _run_pg_dump(self, db_name, dump_path):
         """Run pg_dump subprocess to produce the SQL dump.
@@ -366,7 +388,7 @@ class DmcBackupService(models.Model):
         import subprocess
         from odoo.tools.misc import exec_pg_environ
 
-        cmd = [self._find_pg_dump(), '--no-owner', '--file=' + dump_path, db_name]
+        cmd = [self._find_pg_dump(), '--no-owner', '--clean', '--if-exists', '--file=' + dump_path, db_name]
         result = subprocess.run(
             cmd, env=exec_pg_environ(), check=False, timeout=3600,
             stderr=subprocess.PIPE,
@@ -375,20 +397,32 @@ class DmcBackupService(models.Model):
             err = result.stderr.decode('utf-8', errors='replace').strip()
             raise Exception(f'pg_dump failed (exit {result.returncode}): {err}')
 
-    def _write_python_sql_dump(self, dump_path):
+    def _write_python_sql_dump(self, dump_path, skip_tables=None):
         """Write a psql-compatible SQL dump using psycopg2 catalog queries and COPY TO STDOUT.
 
         Used when pg_dump is unavailable (e.g. Odoo SH staging where the app user
         cannot access pg_settings, which pg_dump requires at startup).  Produces a
         dump.sql that is structurally identical to pg_dump plain-format output and
         is compatible with Odoo SH's restore_db / import utility.
+
+        skip_tables: optional frozenset of table names whose data (DELETE FROM ONLY + COPY)
+        is omitted from the dump.  The CREATE TABLE statement is still emitted so the
+        schema is complete; the table just starts empty after restore.  Use this to
+        exclude large email/tracking tables (mail_message, mail_mail, …) that are
+        irrelevant to staging and can push the dump past psql timeout limits on Odoo SH.
+
+        PostgreSQL native table inheritance (INHERITS) is re-established via
+        ALTER TABLE ... INHERIT statements emitted between the schema and data
+        sections so that action tables (ir_act_client, ir_act_window, etc.) are
+        visible through ir_actions even on a fresh database with no --init base.
         """
         cr  = self.env.cr
         raw = cr._obj  # psycopg2 cursor — needed for copy_expert
 
-        # Extend session timeouts so long dumps don't get killed.
-        cr.execute("SET statement_timeout = 0")
-        cr.execute("SET lock_timeout = 0")
+        # SET LOCAL scopes these to the current transaction so the connection
+        # returns to Odoo's pool with the original timeout values intact.
+        cr.execute("SET LOCAL statement_timeout = 0")
+        cr.execute("SET LOCAL lock_timeout = 0")
         # Empty search_path forces all catalog functions (pg_get_constraintdef,
         # pg_get_indexdef, pg_get_expr, …) to emit fully schema-qualified names.
         # pg_catalog is always implicitly visible regardless of search_path.
@@ -399,6 +433,20 @@ class DmcBackupService(models.Model):
                 f.write(text.encode('utf-8') if isinstance(text, str) else text)
 
             # ── Header ────────────────────────────────────────────────────────
+            # ON_ERROR_ROLLBACK on: psql automatically issues ROLLBACK TO
+            # SAVEPOINT after each failed statement.  This recovers the
+            # PostgreSQL transaction from the aborted state so subsequent
+            # COPY/ALTER statements continue to execute normally.  Without
+            # this, a single COPY failure puts the entire --single-transaction
+            # into aborted state — every subsequent statement silently fails,
+            # the final COMMIT becomes a ROLLBACK, and Odoo SH reverts to the
+            # old broken database.
+            #
+            # ON_ERROR_STOP off: additionally prevents psql itself from
+            # exiting on the error, so the file is always read to completion
+            # regardless of psql's --on-error-stop=1 command-line flag.
+            w("\\set ON_ERROR_ROLLBACK on\n")
+            w("\\set ON_ERROR_STOP off\n")
             w("SET statement_timeout = 0;\n")
             w("SET lock_timeout = 0;\n")
             w("SET idle_in_transaction_session_timeout = 0;\n")
@@ -528,7 +576,75 @@ class DmcBackupService(models.Model):
                 w(',\n'.join(col_defs))
                 w('\n);\n\n')
 
+            # ── Table inheritance (PostgreSQL native INHERITS) ─────────────────
+            #
+            # Odoo 19's action tables use PostgreSQL native table inheritance
+            # (ir_act_window, ir_act_client, ir_act_server, ir_act_url, and
+            # ir_act_report_xml all INHERIT from ir_actions in base_data.sql).
+            # Our CREATE TABLE IF NOT EXISTS statements above do NOT include the
+            # INHERITS clause, so on a fresh database the inheritance hierarchy
+            # is absent after the schema is created.
+            #
+            # Without INHERITS:
+            #   SELECT id, type FROM ir_actions WHERE id = 310
+            # returns nothing (the row lives in ir_act_client, not visible
+            # through ir_actions), so /web/action/load raises
+            # "The action '310' does not exist" on every navigation.
+            #
+            # We emit ALTER TABLE ... INHERIT ... here (after schema, before
+            # data) to restore the hierarchy.  Each statement is wrapped in
+            # a DO block so that if --init base already ran and INHERITS is
+            # set up, the duplicate-inherit error is caught and silently skipped
+            # (idempotent).  On a fresh database the ALTER TABLE succeeds and
+            # the hierarchy is in place before COPY fills the child tables.
+            cr.execute("""
+                SELECT nc.nspname, c.relname, p.relname
+                FROM pg_inherits i
+                JOIN pg_class c  ON c.oid = i.inhrelid
+                JOIN pg_namespace nc ON nc.oid = c.relnamespace
+                JOIN pg_class p  ON p.oid = i.inhparent
+                JOIN pg_namespace np ON np.oid = p.relnamespace
+                WHERE nc.nspname = 'public' AND np.nspname = 'public'
+                ORDER BY c.relname
+            """)
+            inherit_rows = cr.fetchall()
+            if inherit_rows:
+                w('-- Restore PostgreSQL native table-inheritance hierarchy\n')
+                for inh_ns, child_tbl, parent_tbl in inherit_rows:
+                    w(f'DO $$ BEGIN ALTER TABLE "{inh_ns}"."{child_tbl}"'
+                      f' INHERIT "{inh_ns}"."{parent_tbl}";'
+                      f' EXCEPTION WHEN others THEN NULL; END $$;\n')
+                w('\n')
+
             # ── Data — COPY TO STDOUT (works under Odoo SH app-user permissions) ─
+            #
+            # Odoo SH initializes the database (--init base) BEFORE running the
+            # restore dump, so core tables like ir_act_window already contain base
+            # Odoo data with IDs starting from 1.  Without DELETE FROM ONLY, COPY
+            # fails on PK collision and ON_ERROR_ROLLBACK rolls it back — the table
+            # retains the init data, not our production data.  ir_ui_menu COPY
+            # succeeds because our custom menu IDs are in a higher range; menus
+            # appear but every app click gives "Missing Action" because ir_act_window
+            # has only base init records.  DELETE FROM ONLY clears init data so COPY
+            # always runs against an empty table with no PK conflicts.
+            #
+            # ONLY is required to prevent PostgreSQL native-inheritance cascade.
+            # Odoo 19 creates its action tables with PG native INHERITS
+            # (base_data.sql: ir_act_window, ir_act_client, ir_act_server, etc.
+            # all INHERIT from ir_actions).  Without ONLY, DELETE FROM ir_actions
+            # cascades through PG inheritance and wipes every child table.  The
+            # child tables are processed alphabetically before ir_actions, so
+            # their COPY data would be destroyed by the parent DELETE before the
+            # dump finishes.  After restore all action tables would be empty, and
+            # any user.action_id set during --update all would point to a missing
+            # action → "The action 'N' does not exist" on every login.
+            # ONLY restricts the DELETE to directly-stored rows only (0 for
+            # ir_actions, which has no direct rows — all data lives in child
+            # tables).  For all other tables ONLY is a no-op.
+            #
+            # DISABLE TRIGGER ALL suppresses FK-check triggers so COPY can run
+            # before FK constraints are applied (added after all data is loaded).
+            # Requires owning the table — Odoo SH app user does.
             for tbl_oid, nspname, tblname in tables:
                 cr.execute("""
                     SELECT attname FROM pg_attribute
@@ -539,15 +655,147 @@ class DmcBackupService(models.Model):
                 col_names = [row[0] for row in cr.fetchall()]
                 if not col_names:
                     continue
+                if skip_tables and tblname in skip_tables:
+                    # Schema was already written (CREATE TABLE IF NOT EXISTS above).
+                    # Skip DELETE FROM ONLY + COPY so this large table is left empty
+                    # on restore — its data is irrelevant for staging and would push
+                    # the dump past psql timeout limits on Odoo SH.
+                    w(f'-- Skipped data for {tblname} (excluded from dump)\n\n')
+                    if tblname == 'ir_attachment':
+                        # ir_attachment is skipped (no filestore on restore), but
+                        # ir.ui.menu.web_icon_data is a Binary(attachment=True) field:
+                        # load_menus() reads its data from ir_attachment.  With the
+                        # table empty, web_icon_data is False for every app and the
+                        # home screen shows broken box icons instead of module icons.
+                        #
+                        # Fix: emit only the icon-attachment rows, with filestore data
+                        # read in Python and inlined into db_datas (store_fname=NULL).
+                        # This makes icons work without needing the filestore on the
+                        # restored database.
+                        filestore_root = odoo.tools.config.filestore(self.env.cr.dbname)
+
+                        # Non-generated columns (same query pattern used above for COPY)
+                        cr.execute("""
+                            SELECT attname
+                            FROM pg_catalog.pg_attribute
+                            WHERE attrelid = 'public.ir_attachment'::regclass
+                            AND attnum > 0 AND NOT attisdropped AND attgenerated = ''
+                            ORDER BY attnum
+                        """)
+                        icon_att_cols = [row[0] for row in cr.fetchall()]
+                        icon_col_sql  = ', '.join(f'"{c}"' for c in icon_att_cols)
+
+                        cr.execute("""
+                            SELECT id, store_fname, db_datas
+                            FROM public.ir_attachment
+                            WHERE res_model = 'ir.ui.menu' AND res_field = 'web_icon_data'
+                            ORDER BY id
+                        """)
+                        icon_meta = cr.fetchall()
+
+                        if icon_meta:
+                            cr.execute(f'DROP TABLE IF EXISTS pg_temp.icon_attach_tmp')
+                            cr.execute(f"""
+                                CREATE TEMP TABLE pg_temp.icon_attach_tmp AS
+                                SELECT {icon_col_sql}
+                                FROM public.ir_attachment WHERE false
+                            """)
+                            try:
+                                icons_added = 0
+                                for att_id, store_fname, db_datas in icon_meta:
+                                    if store_fname:
+                                        full_path = os.path.join(filestore_root, store_fname)
+                                        try:
+                                            with open(full_path, 'rb') as fh:
+                                                raw_icon = fh.read()
+                                        except OSError:
+                                            _logger.warning(
+                                                'dmc_backup: menu icon filestore file '
+                                                'not found, skipping: %s', full_path)
+                                            continue
+                                    elif db_datas:
+                                        raw_icon = bytes(db_datas)
+                                    else:
+                                        continue
+
+                                    # Copy full row then inline the bytes
+                                    cr.execute(f"""
+                                        INSERT INTO pg_temp.icon_attach_tmp ({icon_col_sql})
+                                        SELECT {icon_col_sql}
+                                        FROM public.ir_attachment WHERE id = %s
+                                    """, (att_id,))
+                                    cr.execute("""
+                                        UPDATE pg_temp.icon_attach_tmp
+                                        SET db_datas = %s, store_fname = NULL
+                                        WHERE id = %s
+                                    """, (raw_icon, att_id))
+                                    icons_added += 1
+
+                                if icons_added:
+                                    w('-- Menu app-icon attachments '
+                                      '(inline bytes, no filestore needed)\n')
+                                    w('ALTER TABLE "public"."ir_attachment"'
+                                      ' DISABLE TRIGGER ALL;\n')
+                                    w("DELETE FROM ONLY \"public\".\"ir_attachment\""
+                                      " WHERE res_model = 'ir.ui.menu'"
+                                      " AND res_field = 'web_icon_data';\n")
+                                    w(f'COPY "public"."ir_attachment"'
+                                      f' ({icon_col_sql}) FROM STDIN;\n')
+                                    raw.copy_expert(
+                                        f'COPY (SELECT {icon_col_sql}'
+                                        f' FROM pg_temp.icon_attach_tmp ORDER BY id)'
+                                        f' TO STDOUT',
+                                        f,
+                                    )
+                                    w('\\.\n\n')
+                                    w('ALTER TABLE "public"."ir_attachment"'
+                                      ' ENABLE TRIGGER ALL;\n\n')
+                            finally:
+                                cr.execute('DROP TABLE IF EXISTS pg_temp.icon_attach_tmp')
+                    continue
                 col_list = ', '.join(f'"{c}"' for c in col_names)
+
+                # GENERATED ALWAYS AS IDENTITY columns reject explicit values in
+                # COPY (PostgreSQL raises "cannot insert a non-DEFAULT value into
+                # column ... with GENERATED ALWAYS").  Temporarily relax to
+                # GENERATED BY DEFAULT so COPY can supply the production IDs,
+                # then restore the stricter constraint afterwards.
+                cr.execute("""
+                    SELECT attname FROM pg_attribute
+                    WHERE attrelid = %s AND attnum > 0 AND NOT attisdropped
+                    AND attidentity = 'a'
+                    ORDER BY attnum
+                """, (tbl_oid,))
+                always_identity_cols = [row[0] for row in cr.fetchall()]
+                for col in always_identity_cols:
+                    w(f'DO $$ BEGIN ALTER TABLE "{nspname}"."{tblname}"'
+                      f' ALTER COLUMN "{col}" SET GENERATED BY DEFAULT;'
+                      f' EXCEPTION WHEN feature_not_supported THEN NULL; END $$;\n')
+
+                w(f'ALTER TABLE "{nspname}"."{tblname}" DISABLE TRIGGER ALL;\n')
+                w(f'DELETE FROM ONLY "{nspname}"."{tblname}";\n')
                 w(f'COPY "{nspname}"."{tblname}" ({col_list}) FROM STDIN;\n')
                 raw.copy_expert(
                     f'COPY "{nspname}"."{tblname}" ({col_list}) TO STDOUT',
                     f,
                 )
-                w('\n\\.\n\n')
+                w('\\.\n\n')
+                w(f'ALTER TABLE "{nspname}"."{tblname}" ENABLE TRIGGER ALL;\n')
+
+                for col in always_identity_cols:
+                    w(f'DO $$ BEGIN ALTER TABLE "{nspname}"."{tblname}"'
+                      f' ALTER COLUMN "{col}" SET GENERATED ALWAYS;'
+                      f' EXCEPTION WHEN feature_not_supported THEN NULL; END $$;\n')
+                w('\n')
 
             # ── Primary key constraints ────────────────────────────────────────
+            #
+            # Each ADD CONSTRAINT is wrapped in a DO block so that psql never
+            # stops with ON_ERROR_STOP=1 when the constraint already exists
+            # (Odoo SH may restore into an existing schema rather than a fresh
+            # drop+create) or when FK validation finds stale rows in migration-
+            # artifact tables like _ir_property.  EXCEPTION WHEN others catches
+            # both duplicate_object (42710) and foreign_key_violation (23503).
             cr.execute("""
                 SELECT c.conname,
                        '"' || n.nspname || '"."' || t.relname || '"',
@@ -559,7 +807,8 @@ class DmcBackupService(models.Model):
                 ORDER BY t.relname, c.conname
             """)
             for conname, tblref, condef in cr.fetchall():
-                w(f'ALTER TABLE {tblref} ADD CONSTRAINT "{conname}" {condef};\n')
+                w(f'DO $$ BEGIN ALTER TABLE {tblref} ADD CONSTRAINT "{conname}" {condef};'
+                  f' EXCEPTION WHEN others THEN NULL; END $$;\n')
             w('\n')
 
             # ── Unique constraints ─────────────────────────────────────────────
@@ -574,7 +823,8 @@ class DmcBackupService(models.Model):
                 ORDER BY t.relname, c.conname
             """)
             for conname, tblref, condef in cr.fetchall():
-                w(f'ALTER TABLE {tblref} ADD CONSTRAINT "{conname}" {condef};\n')
+                w(f'DO $$ BEGIN ALTER TABLE {tblref} ADD CONSTRAINT "{conname}" {condef};'
+                  f' EXCEPTION WHEN others THEN NULL; END $$;\n')
             w('\n')
 
             # ── Foreign key constraints ────────────────────────────────────────
@@ -589,7 +839,8 @@ class DmcBackupService(models.Model):
                 ORDER BY t.relname, c.conname
             """)
             for conname, tblref, condef in cr.fetchall():
-                w(f'ALTER TABLE {tblref} ADD CONSTRAINT "{conname}" {condef};\n')
+                w(f'DO $$ BEGIN ALTER TABLE {tblref} ADD CONSTRAINT "{conname}" {condef};'
+                  f' EXCEPTION WHEN others THEN NULL; END $$;\n')
             w('\n')
 
             # ── Check constraints ──────────────────────────────────────────────
@@ -604,10 +855,16 @@ class DmcBackupService(models.Model):
                 ORDER BY t.relname, c.conname
             """)
             for conname, tblref, condef in cr.fetchall():
-                w(f'ALTER TABLE {tblref} ADD CONSTRAINT "{conname}" {condef};\n')
+                w(f'DO $$ BEGIN ALTER TABLE {tblref} ADD CONSTRAINT "{conname}" {condef};'
+                  f' EXCEPTION WHEN others THEN NULL; END $$;\n')
             w('\n')
 
             # ── Indexes (exclude constraint-backing indexes) ───────────────────
+            #
+            # IF NOT EXISTS makes the statement idempotent: if the index already
+            # exists (existing-schema restore) the statement is a no-op instead
+            # of failing with "relation already exists" and stopping psql.
+            # pg_indexes.indexdef does NOT include IF NOT EXISTS, so we inject it.
             cr.execute("""
                 SELECT indexdef
                 FROM pg_indexes
@@ -622,7 +879,13 @@ class DmcBackupService(models.Model):
                 ORDER BY tablename, indexname
             """)
             for (indexdef,) in cr.fetchall():
-                w(f'{indexdef};\n')
+                if indexdef.startswith('CREATE UNIQUE INDEX '):
+                    safe = 'CREATE UNIQUE INDEX IF NOT EXISTS ' + indexdef[len('CREATE UNIQUE INDEX '):]
+                elif indexdef.startswith('CREATE INDEX '):
+                    safe = 'CREATE INDEX IF NOT EXISTS ' + indexdef[len('CREATE INDEX '):]
+                else:
+                    safe = indexdef
+                w(f'{safe};\n')
             w('\n')
 
             # ── Views ─────────────────────────────────────────────────────────
@@ -654,13 +917,59 @@ class DmcBackupService(models.Model):
                         f" {'true' if is_called else 'false'});\n"
                     )
             w('\n')
+
+            # ── Advance IDENTITY column sequences ─────────────────────────────
+            # IDENTITY sequences (GENERATED ALWAYS/BY DEFAULT AS IDENTITY) are
+            # managed internally by PostgreSQL and are excluded from the
+            # CREATE SEQUENCE block above.  After COPYing rows with explicit ID
+            # values the internal sequence still starts at 1.  Odoo's first
+            # INSERT after restore would try id=1 → primary key conflict.
+            # pg_get_serial_sequence() works for both SERIAL and IDENTITY
+            # columns, so we use it here to advance IDENTITY sequences to the
+            # actual max value present in each table.
+            cr.execute("""
+                SELECT n.nspname, c.relname, a.attname
+                FROM pg_attribute a
+                JOIN pg_class c ON c.oid = a.attrelid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'public'
+                AND a.attidentity IN ('a', 'd')
+                AND a.attnum > 0
+                AND NOT a.attisdropped
+                ORDER BY c.relname, a.attname
+            """)
+            for _id_nspname, id_tblname, id_colname in cr.fetchall():
+                tblref  = f'"public"."{id_tblname}"'
+                colref  = f'"{id_colname}"'
+                w(
+                    f"SELECT setval(pg_get_serial_sequence('{tblref}', '{id_colname}'),"
+                    f" COALESCE((SELECT max({colref}) FROM {tblref}), 1), true);\n"
+                )
+            w('\n')
+
         # Restore search_path so Odoo ORM queries on this cursor (e.g. writing
         # the success log in run_backup) work normally.  SET LOCAL reverts at
         # transaction end, but we return to the same transaction immediately.
         cr.execute("SET LOCAL search_path TO DEFAULT")
 
     def _write_neutralization(self, f):
-        f.write(b'\nBEGIN;\n\n-- Neutralization\n\n')
+        # search_path was set to '' by the dump header; restore public so that
+        # unqualified table names (ir_cron, ir_mail_server, etc.) resolve correctly.
+        f.write(b'\nBEGIN;\nSET LOCAL search_path TO public, pg_catalog;\n\n-- Neutralization\n\n')
+
+        # Clear per-user home actions so the home screen does not try to open an
+        # action whose ID no longer exists in the restored staging database.
+        # Odoo stores the user's last-opened action in res_users.action_id; after
+        # restore the original ID (e.g. 443) may be gone or point to a different
+        # record, causing "The action 'N' does not exist" on every page load.
+        # Clearing the field makes Odoo fall back to the default app-list home screen.
+        f.write(
+            b"DO $$\n"
+            b"BEGIN\n"
+            b"    UPDATE res_users SET action_id = NULL;\n"
+            b"EXCEPTION WHEN undefined_table OR undefined_column THEN NULL;\n"
+            b"END $$;\n\n"
+        )
 
         # Deactivate all crons, then re-enable safe system ones
         f.write(b"UPDATE ir_cron SET active = 'f';\n")
@@ -730,6 +1039,30 @@ class DmcBackupService(models.Model):
             b"                    AND module = 'mail');\n"
         )
 
+        f.write(b'\nCOMMIT;\n')
+
+    def _write_asset_cleanup(self, f):
+        """Strip cached compiled web-asset bundle attachments from the dump.
+
+        These ir_attachment rows are content-addressed by filestore hash, but the
+        backup zip does not ship the real filestore (see include_filestore) — after
+        restore the row survives while the physical file does not, so the first
+        page load crashes with FileNotFoundError instead of Odoo just regenerating
+        the bundle. Deleting the rows here makes Odoo recompute them on next
+        request. The predicate matches only cached bundle attachments (never real
+        user uploads): res_model/name is the pattern used by Odoo's own built-in
+        "Regenerate Assets Bundles" debug action; url is the newer /web/assets path.
+        """
+        f.write(b'\nBEGIN;\nSET LOCAL search_path TO public, pg_catalog;\n\n-- Stale asset bundle cleanup\n\n')
+        f.write(
+            b"DO $$\n"
+            b"BEGIN\n"
+            b"    DELETE FROM ir_attachment\n"
+            b"        WHERE (res_model = 'ir.ui.view' AND name LIKE 'assets_%')\n"
+            b"           OR url LIKE '/web/assets/%';\n"
+            b"EXCEPTION WHEN undefined_table OR undefined_column THEN NULL;\n"
+            b"END $$;\n"
+        )
         f.write(b'\nCOMMIT;\n')
 
     # ── Azure Blob Storage push ───────────────────────────────────────────────
