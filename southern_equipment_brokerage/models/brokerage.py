@@ -1553,6 +1553,7 @@ class SouthernEquipmentImportWizard(models.TransientModel):
             "name": _("Imported Sourced Listings"),
             "res_model": "southern.equipment.listing",
             "view_mode": "list,form",
+            "views": [(False, "list"), (False, "form")],
             "domain": [("id", "in", imported.ids)],
             "context": {"search_default_needs_verification": 1},
         }
