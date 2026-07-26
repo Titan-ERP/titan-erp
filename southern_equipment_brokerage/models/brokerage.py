@@ -346,20 +346,26 @@ class SouthernEquipmentListing(models.Model):
         "public_status",
         "public_title",
         "public_region",
+        "verification_note",
+        "image_1920",
         "show_vin_serial_publicly",
         "vin_serial",
     )
     def _check_publish_readiness(self):
         for listing in self:
-            if listing.website_published and (
-                listing.public_status not in PUBLIC_WEBSITE_STATUSES
-                or not listing.public_region
-            ):
+            if listing.website_published and listing.public_status not in PUBLIC_WEBSITE_STATUSES:
                 raise ValidationError(
-                    _(
-                        "A website listing needs a public region and an active, "
-                        "public-safe status."
-                    )
+                    _("A website listing needs an active, public-safe status.")
+                )
+            if listing.website_published and not listing.public_region:
+                raise ValidationError(_("Add a public region before publishing."))
+            if listing.website_published and not listing.verification_note:
+                raise ValidationError(
+                    _("Add a public-safe verification note before publishing.")
+                )
+            if listing.website_published and not listing.image_1920:
+                raise ValidationError(
+                    _("Add a reviewed primary photo before publishing.")
                 )
             if listing.show_vin_serial_publicly and not listing.vin_serial:
                 raise ValidationError(
@@ -522,7 +528,10 @@ class SouthernBuyerInquiry(models.Model):
                 ) or _("New")
         inquiries = super().create(vals_list)
         for inquiry in inquiries:
-            if inquiry.listing_id.public_status == "published":
+            if (
+                inquiry.listing_id.website_published
+                and inquiry.listing_id.public_status in PUBLIC_WEBSITE_STATUSES
+            ):
                 inquiry.listing_id.public_status = "inquiry_received"
         return inquiries
 
@@ -816,6 +825,11 @@ class SouthernBrokeredDeal(models.Model):
             deal.deposit_balance = deposits - deductions + adjustments
 
     def action_request_deposit(self):
+        for deal in self:
+            if deal.deposit_required <= 0:
+                raise UserError(
+                    _("Enter a positive required deposit before requesting it.")
+                )
         self.write({"stage": "deposit_pending", "deposit_status": "requested"})
 
     def action_create_inspection(self):
@@ -863,6 +877,10 @@ class SouthernBrokeredDeal(models.Model):
 
     def action_close(self):
         for deal in self:
+            if deal.stage != "assigned":
+                raise UserError(
+                    _("Only a deal assigned to the buyer can be closed.")
+                )
             if not deal.all_parties_approved:
                 raise UserError(_("Record all-party approval before closing the deal."))
             deal.write({"stage": "closed", "close_date": fields.Date.context_today(deal)})
@@ -937,6 +955,10 @@ class SouthernInspectionOrder(models.Model):
         for order in self:
             if not order.report_file and not order.summary:
                 raise UserError(_("Add an inspection report or summary before completing."))
+            if not order.pass_fail:
+                raise UserError(
+                    _("Record the inspection outcome before completing the inspection.")
+                )
             order.status = "complete"
             # Inspectors deliberately have read-only deal access. This narrow workflow
             # transition is the only deal mutation performed on their behalf.
@@ -1015,6 +1037,14 @@ class SouthernContractAssignment(models.Model):
 
     def action_execute(self):
         for assignment in self:
+            if assignment.purchase_contract_status != "executed":
+                raise UserError(
+                    _("Mark the purchase contract as executed before the assignment.")
+                )
+            if not assignment.purchase_contract_file:
+                raise UserError(
+                    _("Upload the executed purchase contract before the assignment.")
+                )
             if not assignment.buyer_approval_received or not assignment.southern_approval_received:
                 raise UserError(_("Buyer and Southern Equipment approval are required."))
             if assignment.seller_consent_required and not assignment.seller_consent_received:
@@ -1224,6 +1254,14 @@ class SouthernEquipmentImportWizard(models.TransientModel):
         default=True,
         help="Update a listing when Equipment ID matches its Source Listing ID.",
     )
+    validate_only = fields.Boolean(
+        string="Validate Only (No Database Changes)",
+        default=True,
+        help=(
+            "Check the file, deduplication keys, and row values without creating "
+            "or updating sourced listings."
+        ),
+    )
 
     MAX_FILE_BYTES = 5 * 1024 * 1024
     MAX_IMPORT_ROWS = 500
@@ -1363,6 +1401,36 @@ class SouthernEquipmentImportWizard(models.TransientModel):
             "verification_note": "Availability and seller information have not yet been verified.",
         }
 
+    def _find_existing_listing(self, Listing, vals):
+        equipment_id = vals.get("source_listing_id")
+        source = vals.get("source")
+        existing = (
+            Listing.search(
+                [
+                    ("source", "=", source),
+                    ("source_listing_id", "=", equipment_id),
+                ],
+                limit=1,
+            )
+            if equipment_id
+            else Listing.browse()
+        )
+        if not existing and vals.get("source_url"):
+            candidates = Listing.search(
+                [("source", "=", source), ("source_url", "!=", False)]
+            )
+            existing = candidates.filtered(
+                lambda listing: _canonical_source_url(listing.source_url)
+                == vals["source_url"]
+            )[:1]
+        return existing
+
+    def _row_identity(self, vals):
+        source = vals.get("source")
+        if vals.get("source_listing_id"):
+            return (source, "id", vals["source_listing_id"])
+        return (source, "url", vals.get("source_url"))
+
     def action_import(self):
         self.ensure_one()
         if not (self.upload_filename or "").lower().endswith(".csv"):
@@ -1393,7 +1461,10 @@ class SouthernEquipmentImportWizard(models.TransientModel):
 
         Listing = self.env["southern.equipment.listing"]
         imported = Listing.browse()
+        created = 0
+        updated = 0
         skipped = 0
+        seen_rows = {}
         for row_number, row in enumerate(reader, start=2):
             if row_number > self.MAX_IMPORT_ROWS + 1:
                 raise UserError(
@@ -1413,29 +1484,26 @@ class SouthernEquipmentImportWizard(models.TransientModel):
                     _("CSV row %(row)s could not be imported: %(error)s",
                       row=row_number, error=exc)
                 ) from exc
-            equipment_id = vals.get("source_listing_id")
-            source = vals.get("source")
-            existing = (
-                Listing.search(
-                    [
-                        ("source", "=", source),
-                        ("source_listing_id", "=", equipment_id),
-                    ],
-                    limit=1,
+            identity = self._row_identity(vals)
+            if identity in seen_rows:
+                raise UserError(
+                    _(
+                        "CSV rows %(first)s and %(second)s identify the same "
+                        "source listing.",
+                        first=seen_rows[identity],
+                        second=row_number,
+                    )
                 )
-                if equipment_id
-                else Listing.browse()
-            )
-            if not existing and vals.get("source_url"):
-                candidates = Listing.search(
-                    [("source", "=", source), ("source_url", "!=", False)]
-                )
-                existing = candidates.filtered(
-                    lambda listing: _canonical_source_url(listing.source_url)
-                    == vals["source_url"]
-                )[:1]
+            seen_rows[identity] = row_number
+            existing = self._find_existing_listing(Listing, vals)
             if existing and not self.update_existing:
                 skipped += 1
+                continue
+            if self.validate_only:
+                if existing:
+                    updated += 1
+                else:
+                    created += 1
                 continue
             try:
                 if existing:
@@ -1448,20 +1516,54 @@ class SouthernEquipmentImportWizard(models.TransientModel):
                     }
                     existing.write(vals)
                     imported |= existing
+                    updated += 1
                 else:
                     imported |= Listing.create(vals)
+                    created += 1
             except (ValueError, ValidationError) as exc:
                 raise UserError(_("CSV row %(row)s could not be imported: %(error)s", row=row_number, error=exc)) from exc
 
+        if not created and not updated and not skipped:
+            raise UserError(_("The CSV does not contain any opportunity rows."))
+        summary = _(
+            "%(mode)s complete: %(created)s new, %(updated)s updates, "
+            "%(skipped)s skipped.",
+            mode=_("Validation") if self.validate_only else _("Import"),
+            created=created,
+            updated=updated,
+            skipped=skipped,
+        )
+        if self.validate_only:
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": _("CSV Ready to Import"),
+                    "message": summary,
+                    "type": "success",
+                    "sticky": True,
+                },
+            }
         if not imported:
             raise UserError(
                 _("No listings were imported. %s existing rows were skipped.") % skipped
             )
-        return {
+        next_action = {
             "type": "ir.actions.act_window",
             "name": _("Imported Sourced Listings"),
             "res_model": "southern.equipment.listing",
             "view_mode": "list,form",
             "domain": [("id", "in", imported.ids)],
             "context": {"search_default_needs_verification": 1},
+        }
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": _("Equipment Opportunities Imported"),
+                "message": summary,
+                "type": "success",
+                "sticky": False,
+                "next": next_action,
+            },
         }
