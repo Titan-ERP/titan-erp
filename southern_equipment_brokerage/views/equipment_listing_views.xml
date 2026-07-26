@@ -62,9 +62,13 @@
                 <templates>
                     <t t-name="card">
                         <div class="d-flex gap-3">
-                            <img t-if="record.image_1920.raw_value"
-                                 t-att-src="kanban_image('southern.equipment.listing', 'image_1920', record.id.raw_value)"
-                                 class="rounded object-fit-cover" style="width:72px;height:72px" alt="Equipment"/>
+                            <field name="image_1920"
+                                   widget="image"
+                                   class="rounded overflow-hidden flex-shrink-0"
+                                   style="width:72px;height:72px"
+                                   options="{'size': [72, 72], 'img_class': 'object-fit-cover w-100 h-100'}"
+                                   alt="Equipment image"
+                                   invisible="not image_1920"/>
                             <div class="flex-grow-1">
                                 <strong><field name="public_title"/></strong>
                                 <div class="text-muted">
