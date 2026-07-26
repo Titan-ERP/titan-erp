@@ -220,11 +220,18 @@ class SouthernEquipmentListing(models.Model):
     inquiry_count = fields.Integer(compute="_compute_related_counts")
     deal_count = fields.Integer(compute="_compute_related_counts", groups=BROKER_GROUPS)
 
-    _sql_constraints = [
-        ("public_slug_unique", "unique(public_slug)", "The public URL slug must be unique."),
-        ("year_reasonable", "CHECK(year IS NULL OR year = 0 OR (year >= 1900 AND year <= 2200))", "Enter a valid equipment year."),
-        ("hours_nonnegative", "CHECK(hours IS NULL OR hours >= 0)", "Hours cannot be negative."),
-    ]
+    _public_slug_unique = models.Constraint(
+        "unique(public_slug)",
+        "The public URL slug must be unique.",
+    )
+    _year_reasonable = models.Constraint(
+        "CHECK(year IS NULL OR year = 0 OR (year >= 1900 AND year <= 2200))",
+        "Enter a valid equipment year.",
+    )
+    _hours_nonnegative = models.Constraint(
+        "CHECK(hours IS NULL OR hours >= 0)",
+        "Hours cannot be negative.",
+    )
 
     @api.depends("ask_price", "freight_cost", "repairs", "inspection_estimate", "expected_resale", "comp_median")
     def _compute_deal_math(self):
@@ -1029,10 +1036,14 @@ class SouthernEquipmentComp(models.Model):
     location = fields.Char()
     notes = fields.Text()
 
-    _sql_constraints = [
-        ("comp_price_nonnegative", "CHECK(price >= 0)", "Comparable price cannot be negative."),
-        ("comp_hours_nonnegative", "CHECK(hours IS NULL OR hours >= 0)", "Hours cannot be negative."),
-    ]
+    _comp_price_nonnegative = models.Constraint(
+        "CHECK(price >= 0)",
+        "Comparable price cannot be negative.",
+    )
+    _comp_hours_nonnegative = models.Constraint(
+        "CHECK(hours IS NULL OR hours >= 0)",
+        "Hours cannot be negative.",
+    )
 
 
 class SouthernEquipmentImportWizard(models.TransientModel):
