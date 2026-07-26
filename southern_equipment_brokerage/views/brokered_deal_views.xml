@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_southern_brokered_deal_list" model="ir.ui.view">
+        <field name="name">southern.brokered.deal.list</field>
+        <field name="model">southern.brokered.deal</field>
+        <field name="arch" type="xml">
+            <list decoration-success="stage == 'closed'" decoration-muted="stage in ['lost', 'refunded']">
+                <field name="name"/>
+                <field name="listing_id"/>
+                <field name="buyer_id"/>
+                <field name="broker_id"/>
+                <field name="buyer_max_price"/>
+                <field name="negotiated_purchase_price" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                <field name="deposit_status" groups="southern_equipment_brokerage.group_southern_equipment_admin"/>
+                <field name="stage"/>
+                <field name="close_date"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_southern_brokered_deal_kanban" model="ir.ui.view">
+        <field name="name">southern.brokered.deal.kanban</field>
+        <field name="model">southern.brokered.deal</field>
+        <field name="arch" type="xml">
+            <kanban default_group_by="stage" class="o_kanban_small_column">
+                <field name="name"/>
+                <field name="listing_id"/>
+                <field name="buyer_id"/>
+                <field name="broker_id"/>
+                <templates>
+                    <t t-name="card">
+                        <strong><field name="name"/></strong>
+                        <div><field name="listing_id"/></div>
+                        <div>Buyer: <field name="buyer_id"/></div>
+                        <footer><field name="broker_id" widget="many2one_avatar_user"/></footer>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <record id="view_southern_brokered_deal_form" model="ir.ui.view">
+        <field name="name">southern.brokered.deal.form</field>
+        <field name="model">southern.brokered.deal</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_request_deposit" string="Request Deposit" type="object"
+                            invisible="stage != 'buyer_qualified'" groups="southern_equipment_brokerage.group_southern_equipment_admin"/>
+                    <button name="action_create_inspection" string="Create Inspection" type="object" class="btn-primary"
+                            invisible="stage not in ['deposit_received', 'seller_verification', 'inspection_ordered']"/>
+                    <button name="action_create_assignment" string="Open Contract / Assignment" type="object"
+                            invisible="stage not in ['inspection_complete', 'contract_negotiation', 'under_contract', 'assignment_ready', 'assigned']"
+                            groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                    <button name="action_close" string="Close Deal" type="object" class="btn-primary"
+                            invisible="stage != 'assigned'" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                    <field name="stage" widget="statusbar"
+                           statusbar_visible="buyer_qualified,deposit_pending,deposit_received,seller_verification,inspection_ordered,inspection_complete,contract_negotiation,under_contract,assignment_ready,assigned,closed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group string="Opportunity">
+                            <field name="listing_id"/>
+                            <field name="buyer_inquiry_id"/>
+                            <field name="buyer_id"/>
+                            <field name="seller_id" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                            <field name="broker_id"/>
+                        </group>
+                        <group string="Negotiation">
+                            <field name="buyer_budget"/>
+                            <field name="buyer_max_price"/>
+                            <field name="seller_ask_price" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                            <field name="negotiated_purchase_price" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                            <field name="all_parties_approved" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                            <field name="close_date"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Deposit" groups="southern_equipment_brokerage.group_southern_equipment_admin">
+                            <group>
+                                <group>
+                                    <field name="deposit_required"/>
+                                    <field name="deposit_received" readonly="1"/>
+                                    <field name="deposit_balance" readonly="1"/>
+                                    <field name="deposit_received_date"/>
+                                </group>
+                                <group>
+                                    <field name="deposit_holder"/>
+                                    <field name="deposit_status"/>
+                                    <field name="inspection_budget"/>
+                                </group>
+                            </group>
+                            <field name="ledger_ids">
+                                <list editable="bottom">
+                                    <field name="transaction_date"/>
+                                    <field name="transaction_type"/>
+                                    <field name="amount"/>
+                                    <field name="held_by"/>
+                                    <field name="payment_reference"/>
+                                    <field name="status"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Inspection">
+                            <group>
+                                <field name="inspection_order_id" readonly="1"/>
+                            </group>
+                        </page>
+                        <page string="Contract &amp; Assignment" groups="southern_equipment_brokerage.group_southern_deal_broker">
+                            <group>
+                                <field name="contract_id" readonly="1"/>
+                                <field name="assignment_id" readonly="1"/>
+                            </group>
+                        </page>
+                        <page string="Fees" groups="southern_equipment_brokerage.group_southern_equipment_admin">
+                            <group>
+                                <field name="broker_fee_type"/>
+                                <field name="expected_fee"/>
+                                <field name="assignment_fee"/>
+                            </group>
+                        </page>
+                        <page string="Notes">
+                            <field name="notes" widget="html"/>
+                            <field name="lost_reason" invisible="stage != 'lost'"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_southern_brokered_deals" model="ir.actions.act_window">
+        <field name="name">Brokered Deals</field>
+        <field name="res_model">southern.brokered.deal</field>
+        <field name="view_mode">kanban,list,form</field>
+    </record>
+</odoo>
