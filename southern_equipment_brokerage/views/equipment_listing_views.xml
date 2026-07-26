@@ -10,6 +10,12 @@
                 <field name="model"/>
                 <field name="public_region"/>
                 <field name="source" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                <filter name="valid_source_link" string="Valid Source Link"
+                        domain="[('source_link_valid', '=', True)]"
+                        groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                <filter name="invalid_source_link" string="Source Link Problem"
+                        domain="[('source_link_valid', '=', False)]"
+                        groups="southern_equipment_brokerage.group_southern_deal_broker"/>
                 <filter name="website_published" string="Website Published" domain="[('website_published', '=', True)]"/>
                 <filter name="needs_verification" string="Needs Verification" domain="[('public_status', 'in', ['needs_verification', 'verification_in_progress'])]"/>
                 <filter name="available" string="Available" domain="[('public_status', 'not in', ['unavailable', 'sold', 'archived', 'assigned'])]"/>
@@ -36,6 +42,11 @@
                 <field name="hours"/>
                 <field name="public_region"/>
                 <field name="public_price"/>
+                <field name="source_url" string="Facebook Listing" widget="url"
+                       optional="show"
+                       groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                <field name="source_link_valid" optional="show"
+                       groups="southern_equipment_brokerage.group_southern_deal_broker"/>
                 <field name="public_status"/>
                 <field name="website_published"/>
                 <field name="deal_score" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
@@ -140,7 +151,8 @@
                             <field name="image_is_representative"
                                    groups="southern_equipment_brokerage.group_southern_deal_broker"/>
                             <field name="public_slug" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
-                            <field name="website_url" widget="url" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                            <field name="website_url" string="Southern Website Page" widget="url"
+                                   groups="southern_equipment_brokerage.group_southern_deal_broker"/>
                             <field name="inspection_available"/>
                             <field name="deposit_required"/>
                             <field name="is_southern_owned" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
@@ -162,8 +174,9 @@
                             <group>
                                 <group string="Provenance">
                                     <field name="source"/>
-                                    <field name="source_url" widget="url"/>
+                                    <field name="source_url" string="Facebook Listing" widget="url"/>
                                     <field name="source_listing_id"/>
+                                    <field name="source_link_valid" readonly="1"/>
                                     <field name="capture_run_id"/>
                                 </group>
                                 <group string="Seller">
@@ -222,7 +235,7 @@
         <field name="res_model">southern.equipment.listing</field>
         <field name="view_mode">kanban,list,form</field>
         <field name="search_view_id" ref="view_southern_equipment_listing_search"/>
-        <field name="context">{'search_default_available': 1}</field>
+        <field name="context">{'search_default_available': 1, 'search_default_valid_source_link': 1}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">Create a sourced equipment opportunity</p>
             <p>Keep original seller and source data internal, then curate the public listing.</p>

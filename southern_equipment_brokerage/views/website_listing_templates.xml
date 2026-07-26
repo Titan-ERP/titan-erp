@@ -177,6 +177,38 @@
                                 <h2>About this opportunity</h2>
                                 <div t-if="listing.public_description" t-field="listing.public_description" class="se-description"/>
                                 <p t-else="" class="text-muted">Contact us for the curated details on this equipment opportunity.</p>
+                                <div t-if="listing.comp_count &gt;= 3 and listing.grade in ('good', 'strong')"
+                                     class="card border-warning mt-4">
+                                    <div class="card-body">
+                                        <span class="se-eyebrow">Comparable market analysis</span>
+                                        <h3 class="h4 mt-2">How this opportunity compares</h3>
+                                        <div class="row g-3 mt-1">
+                                            <div class="col-6 col-md-3">
+                                                <div class="small text-muted">Comp low</div>
+                                                <strong t-field="listing.comp_low"
+                                                        t-options="{'widget': 'monetary', 'display_currency': listing.currency_id}"/>
+                                            </div>
+                                            <div class="col-6 col-md-3">
+                                                <div class="small text-muted">Median</div>
+                                                <strong t-field="listing.comp_median"
+                                                        t-options="{'widget': 'monetary', 'display_currency': listing.currency_id}"/>
+                                            </div>
+                                            <div class="col-6 col-md-3">
+                                                <div class="small text-muted">Comp high</div>
+                                                <strong t-field="listing.comp_high"
+                                                        t-options="{'widget': 'monetary', 'display_currency': listing.currency_id}"/>
+                                            </div>
+                                            <div class="col-6 col-md-3">
+                                                <div class="small text-muted">Deal rating</div>
+                                                <strong t-field="listing.grade"/>
+                                            </div>
+                                        </div>
+                                        <p class="small text-muted mb-0 mt-3">
+                                            Based on <t t-out="listing.comp_count"/> compatible market comparables.
+                                            Values are estimates and subject to inspection and availability.
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
                             <div class="col-lg-5">
                                 <div class="se-verification-box">

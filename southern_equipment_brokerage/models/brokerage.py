@@ -18,10 +18,8 @@ BROKER_GROUPS = (
 )
 ADMIN_GROUP = "southern_equipment_brokerage.group_southern_equipment_admin"
 PUBLIC_WEBSITE_STATUSES = (
-    "needs_verification",
     "published",
     "inquiry_received",
-    "verification_in_progress",
     "seller_confirmed",
     "under_negotiation",
     "under_contract",
@@ -60,6 +58,15 @@ def _canonical_source_url(value):
     return urlunsplit(
         (parsed.scheme.lower(), parsed.netloc.lower(), path, query, "")
     )
+
+
+def _facebook_listing_id(value):
+    match = re.fullmatch(
+        r"https://(?:www\.)?facebook\.com/marketplace/item/(\d+)/?",
+        (value or "").strip(),
+        flags=re.IGNORECASE,
+    )
+    return match.group(1) if match else False
 
 
 class SouthernEquipmentListing(models.Model):
@@ -114,6 +121,17 @@ class SouthernEquipmentListing(models.Model):
     )
     source_url = fields.Char(groups=BROKER_GROUPS)
     source_listing_id = fields.Char(groups=BROKER_GROUPS)
+    source_link_valid = fields.Boolean(
+        string="Source Link Valid",
+        compute="_compute_source_link_valid",
+        store=True,
+        index=True,
+        groups=BROKER_GROUPS,
+        help=(
+            "Facebook records are valid only when the canonical Marketplace URL "
+            "matches the source listing ID."
+        ),
+    )
     capture_run_id = fields.Char(groups=BROKER_GROUPS)
     raw_capture_text = fields.Text(groups=BROKER_GROUPS)
     source_seller_id = fields.Many2one(
@@ -320,6 +338,19 @@ class SouthernEquipmentListing(models.Model):
                 f"/equipment-opportunities/{listing.public_slug}" if listing.public_slug else False
             )
 
+    @api.depends("source", "source_url", "source_listing_id")
+    def _compute_source_link_valid(self):
+        for listing in self:
+            if listing.source != "facebook_marketplace":
+                listing.source_link_valid = True
+                continue
+            url_listing_id = _facebook_listing_id(listing.source_url)
+            listing.source_link_valid = bool(
+                url_listing_id
+                and listing.source_listing_id
+                and url_listing_id == listing.source_listing_id.strip()
+            )
+
     def _compute_related_counts(self):
         Inquiry = self.env["southern.buyer.inquiry"]
         Deal = self.env["southern.brokered.deal"]
@@ -381,6 +412,14 @@ class SouthernEquipmentListing(models.Model):
         "photo_source_note",
         "show_vin_serial_publicly",
         "vin_serial",
+        "source",
+        "source_url",
+        "source_listing_id",
+        "source_link_valid",
+        "public_price",
+        "public_description",
+        "grade",
+        "comp_count",
     )
     def _check_publish_readiness(self):
         for listing in self:
@@ -390,9 +429,22 @@ class SouthernEquipmentListing(models.Model):
                 )
             if listing.website_published and not listing.public_region:
                 raise ValidationError(_("Add a public region before publishing."))
+            if listing.website_published and not listing.public_price:
+                raise ValidationError(_("Add a public listing price before publishing."))
+            if listing.website_published and not listing.public_description:
+                raise ValidationError(_("Add a public description before publishing."))
             if listing.website_published and not listing.verification_note:
                 raise ValidationError(
                     _("Add a public-safe verification note before publishing.")
+                )
+            if listing.website_published and (
+                listing.grade not in ("good", "strong") or listing.comp_count < 3
+            ):
+                raise ValidationError(
+                    _(
+                        "Only comp-supported Good or Strong deals can be published "
+                        "(at least three compatible comps required)."
+                    )
                 )
             if listing.website_published and not listing.image_1920:
                 raise ValidationError(
@@ -405,6 +457,17 @@ class SouthernEquipmentListing(models.Model):
                     _(
                         "Confirm publication rights and record the primary photo "
                         "source before publishing."
+                    )
+                )
+            if (
+                listing.website_published
+                and listing.source == "facebook_marketplace"
+                and not listing.source_link_valid
+            ):
+                raise ValidationError(
+                    _(
+                        "Add a canonical Facebook Marketplace item link matching "
+                        "the source listing ID before publishing."
                     )
                 )
             if listing.show_vin_serial_publicly and not listing.vin_serial:

@@ -38,7 +38,7 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
     def _listing_values(self, **overrides):
         values = {
             "public_title": "2022 Test Skid Steer",
-            "public_status": "needs_verification",
+            "public_status": "seller_confirmed",
             "public_region": "Southeast",
             "equipment_type": "skid_steer",
             "manufacturer": "Test Make",
@@ -50,10 +50,14 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
             "seller_phone": "555-0100",
             "source_url": "https://internal.example/listing/1",
             "raw_capture_text": "Internal source text",
-            "verification_note": "Availability is being verified by Southern Equipment.",
+            "verification_note": "Availability and source information were reviewed by Southern Equipment.",
+            "public_price": 52500,
+            "public_description": "<p>Public-safe listing description.</p>",
             "image_1920": TEST_IMAGE,
             "photo_rights_confirmed": True,
             "photo_source_note": "Owned test fixture.",
+            "grade": "good",
+            "comp_count": 3,
         }
         values.update(overrides)
         return values
@@ -63,6 +67,7 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
             [self._listing_values(), self._listing_values()]
         )
         self.assertEqual(len(set(listings.mapped("public_slug"))), 2)
+        listings[0].public_status = "seller_confirmed"
         listings[0].action_publish()
         self.assertTrue(listings[0].website_published)
         with self.assertRaises(ValidationError):
@@ -92,6 +97,7 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
             self._listing_values(
                 public_title="Representative Image Test",
                 image_is_representative=True,
+                public_status="seller_confirmed",
             )
         )
         representative.action_publish()
@@ -222,6 +228,37 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
             "https://dealer.example/listing/1?a=1&b=2",
         )
 
+    def test_facebook_source_link_must_match_before_publication(self):
+        listing = self.Listing.create(
+            self._listing_values(
+                source="facebook_marketplace",
+                source_listing_id="1362964311864158",
+                source_url="https://www.facebook.com/marketplace/item/9999999999999999",
+                public_status="seller_confirmed",
+            )
+        )
+        self.assertFalse(listing.source_link_valid)
+        with self.assertRaises(ValidationError):
+            listing.action_publish()
+
+        listing.source_url = (
+            "https://www.facebook.com/marketplace/item/1362964311864158"
+        )
+        self.assertTrue(listing.source_link_valid)
+        listing.action_publish()
+        self.assertTrue(listing.website_published)
+
+    def test_only_verified_comp_supported_good_deals_can_publish(self):
+        for overrides in (
+            {"public_status": "verification_in_progress"},
+            {"public_status": "seller_confirmed", "grade": "verify"},
+            {"public_status": "seller_confirmed", "grade": "pass"},
+            {"public_status": "seller_confirmed", "comp_count": 2},
+        ):
+            listing = self.Listing.create(self._listing_values(**overrides))
+            with self.assertRaises(ValidationError):
+                listing.action_publish()
+
     def test_public_vin_approval_requires_a_serial(self):
         with self.assertRaises(ValidationError):
             self.Listing.create(
@@ -233,6 +270,7 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
             self._listing_values(
                 broker_id=self.env.user.id,
                 website_published=True,
+                public_status="seller_confirmed",
             )
         )
         inquiry = self.Inquiry.create_from_website(
