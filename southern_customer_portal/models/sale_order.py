@@ -9,8 +9,13 @@ class SaleOrder(models.Model):
     SOUTHERN_CARD_FEE_RATE = 0.035
     SOUTHERN_CARD_FEE_FIXED = 0.30
 
-    def _cart_update(self, *args, **kwargs):
-        result = super()._cart_update(*args, **kwargs)
+    def _cart_add(self, *args, **kwargs):
+        result = super()._cart_add(*args, **kwargs)
+        self._southern_sync_website_card_fee()
+        return result
+
+    def _cart_update_line_quantity(self, *args, **kwargs):
+        result = super()._cart_update_line_quantity(*args, **kwargs)
         self._southern_sync_website_card_fee()
         return result
 
