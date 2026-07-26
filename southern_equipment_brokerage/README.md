@@ -36,7 +36,9 @@ fields pending attorney and processor review.
 Use **Equipment Brokerage → Pipeline → Import Equipment Opportunity CSV** for the current
 `odoo-equipment-opportunities.csv` export. The wizard accepts its exact CRM-shaped headers
 (`Opportunity`, `Customer`, `Stage`, `Expected Revenue`, `Equipment ID`, and the remaining
-export columns) and maps them into the brokerage listing model.
+export columns) and maps them into the brokerage listing model. Select **Validate Only (No
+Database Changes)** first to check the file, duplicate identities, and expected counts for
+new, updated, and skipped listings without writing anything to Odoo.
 
 The wizard stores seller contact, exact location, source URL, internal notes, capture-run ID,
 hours, and captured text only in restricted fields. Blank VIN/serial values remain blank.
@@ -64,3 +66,12 @@ values should use these technical keys:
 Keep `Published on Website` false during initial import. Review the public title, description,
 region, verification note, ownership flag, and photos before publishing. Never fill a missing
 VIN/serial with a placeholder.
+
+## Publishing and workflow safeguards
+
+A listing cannot be published until it has an active public-safe status, public region,
+public-safe verification note, and reviewed primary photo. Deposit requests require a
+positive configured amount. Inspections require an outcome plus a report or summary before
+completion. Assignment execution requires an executed purchase contract and uploaded file,
+an assignment agreement, applicable approvals, and seller consent when required. Only an
+assigned deal can be closed.
