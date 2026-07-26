@@ -5,7 +5,7 @@
     <menuitem id="menu_southern_brokerage_pipeline" name="Pipeline" parent="menu_southern_brokerage_root" sequence="10"/>
     <menuitem id="menu_southern_equipment_listings" name="Sourced Listings" parent="menu_southern_brokerage_pipeline"
               action="action_southern_equipment_listings" sequence="10"/>
-    <menuitem id="menu_southern_equipment_import" name="Import Facebook Agent CSV" parent="menu_southern_brokerage_pipeline"
+    <menuitem id="menu_southern_equipment_import" name="Import Equipment Opportunity CSV" parent="menu_southern_brokerage_pipeline"
               action="action_southern_equipment_import_wizard" sequence="15"
               groups="southern_equipment_brokerage.group_southern_deal_broker"/>
     <menuitem id="menu_southern_buyer_inquiries" name="Buyer Inquiries" parent="menu_southern_brokerage_pipeline"
