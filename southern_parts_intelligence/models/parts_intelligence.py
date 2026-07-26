@@ -17,13 +17,10 @@ class SouthernPartsSpecification(models.Model):
     confidence = fields.Float(default=1.0)
     notes = fields.Text()
 
-    _sql_constraints = [
-        (
-            "product_spec_unique",
-            "unique(product_tmpl_id, group_name, name, value)",
-            "Specification must be unique per product, group, name, and value.",
-        ),
-    ]
+    _product_spec_unique = models.Constraint(
+        "unique(product_tmpl_id, group_name, name, value)",
+        "Specification must be unique per product, group, name, and value.",
+    )
 
 
 class SouthernPartsMake(models.Model):
@@ -34,9 +31,10 @@ class SouthernPartsMake(models.Model):
     name = fields.Char(required=True, index=True)
     active = fields.Boolean(default=True)
 
-    _sql_constraints = [
-        ("name_unique", "unique(name)", "Make must be unique."),
-    ]
+    _name_unique = models.Constraint(
+        "unique(name)",
+        "Make must be unique.",
+    )
 
 
 class SouthernPartsModel(models.Model):
@@ -48,9 +46,10 @@ class SouthernPartsModel(models.Model):
     make_id = fields.Many2one("southern.parts.make", required=True, ondelete="cascade", index=True)
     active = fields.Boolean(default=True)
 
-    _sql_constraints = [
-        ("make_model_unique", "unique(make_id, name)", "Model must be unique per make."),
-    ]
+    _make_model_unique = models.Constraint(
+        "unique(make_id, name)",
+        "Model must be unique per make.",
+    )
 
 
 class SouthernPartsFitment(models.Model):
@@ -70,13 +69,10 @@ class SouthernPartsFitment(models.Model):
     source_url = fields.Char()
     confidence = fields.Float(default=1.0)
 
-    _sql_constraints = [
-        (
-            "product_fitment_unique",
-            "unique(product_tmpl_id, make_id, model_id, engine, build_list)",
-            "Fitment must be unique per product, make, model, engine, and build list.",
-        ),
-    ]
+    _product_fitment_unique = models.Constraint(
+        "unique(product_tmpl_id, make_id, model_id, engine, build_list)",
+        "Fitment must be unique per product, make, model, engine, and build list.",
+    )
 
 
 class SouthernPartsOemReference(models.Model):
@@ -104,13 +100,10 @@ class SouthernPartsOemReference(models.Model):
     confidence = fields.Float(default=1.0)
     notes = fields.Text()
 
-    _sql_constraints = [
-        (
-            "product_oem_reference_unique",
-            "unique(product_tmpl_id, manufacturer, oem_part_number, reference_type)",
-            "OEM reference must be unique per product, manufacturer, part number, and type.",
-        ),
-    ]
+    _product_oem_reference_unique = models.Constraint(
+        "unique(product_tmpl_id, manufacturer, oem_part_number, reference_type)",
+        "OEM reference must be unique per product, manufacturer, part number, and type.",
+    )
 
 
 class SouthernPartsCatalogPage(models.Model):
@@ -126,13 +119,10 @@ class SouthernPartsCatalogPage(models.Model):
     source_url = fields.Char()
     notes = fields.Text()
 
-    _sql_constraints = [
-        (
-            "product_catalog_page_unique",
-            "unique(product_tmpl_id, catalog_name, page_number)",
-            "Catalog page must be unique per product, catalog, and page number.",
-        ),
-    ]
+    _product_catalog_page_unique = models.Constraint(
+        "unique(product_tmpl_id, catalog_name, page_number)",
+        "Catalog page must be unique per product, catalog, and page number.",
+    )
 
 
 class SouthernPartsRelatedProduct(models.Model):
@@ -161,13 +151,10 @@ class SouthernPartsRelatedProduct(models.Model):
     confidence = fields.Float(default=1.0)
     notes = fields.Text()
 
-    _sql_constraints = [
-        (
-            "product_related_part_unique",
-            "unique(product_tmpl_id, related_product_tmpl_id, relationship_type)",
-            "Related part must be unique per product, related product, and relationship type.",
-        ),
-    ]
+    _product_related_part_unique = models.Constraint(
+        "unique(product_tmpl_id, related_product_tmpl_id, relationship_type)",
+        "Related part must be unique per product, related product, and relationship type.",
+    )
 
 
 class SouthernPartsAlternateBarcode(models.Model):
@@ -192,6 +179,7 @@ class SouthernPartsAlternateBarcode(models.Model):
     source_name = fields.Char(index=True)
     source_url = fields.Char()
 
-    _sql_constraints = [
-        ("product_barcode_unique", "unique(product_tmpl_id, barcode)", "Alternate barcode must be unique per product."),
-    ]
+    _product_barcode_unique = models.Constraint(
+        "unique(product_tmpl_id, barcode)",
+        "Alternate barcode must be unique per product.",
+    )

@@ -100,10 +100,9 @@
                 <field name="southern_parts_search_text" string="Parts Intelligence"/>
                 <filter string="Parts Data Complete" name="southern_parts_complete" domain="[('southern_enrichment_status','=','complete')]"/>
                 <filter string="Needs Parts Review" name="southern_parts_review" domain="[('southern_enrichment_status','=','review')]"/>
-                <group expand="0" string="Parts Intelligence">
-                    <filter string="Parts Data Status" name="group_southern_parts_status" context="{'group_by': 'southern_enrichment_status'}"/>
-                    <filter string="Source" name="group_southern_source_name" context="{'group_by': 'southern_source_name'}"/>
-                </group>
+                <separator/>
+                <filter string="Parts Data Status" name="group_southern_parts_status" context="{'group_by': 'southern_enrichment_status'}"/>
+                <filter string="Source" name="group_southern_source_name" context="{'group_by': 'southern_source_name'}"/>
             </xpath>
         </field>
     </record>
