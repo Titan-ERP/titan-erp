@@ -88,6 +88,15 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
             self.Listing.create(
                 self._listing_values(photo_source_note=False, website_published=True)
             )
+        representative = self.Listing.create(
+            self._listing_values(
+                public_title="Representative Image Test",
+                image_is_representative=True,
+            )
+        )
+        representative.action_publish()
+        self.assertTrue(representative.website_published)
+        self.assertTrue(representative.image_is_representative)
 
     def test_public_and_inspector_cannot_read_sensitive_fields(self):
         listing = self.Listing.create(self._listing_values())
