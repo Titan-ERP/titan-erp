@@ -13,12 +13,11 @@
                 <filter name="website_published" string="Website Published" domain="[('website_published', '=', True)]"/>
                 <filter name="needs_verification" string="Needs Verification" domain="[('public_status', 'in', ['needs_verification', 'verification_in_progress'])]"/>
                 <filter name="available" string="Available" domain="[('public_status', 'not in', ['unavailable', 'sold', 'archived', 'assigned'])]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_status" string="Status" context="{'group_by': 'public_status'}"/>
-                    <filter name="group_type" string="Equipment Type" context="{'group_by': 'equipment_type'}"/>
-                    <filter name="group_region" string="Region" context="{'group_by': 'public_region'}"/>
-                    <filter name="group_broker" string="Broker" context="{'group_by': 'broker_id'}" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
-                </group>
+                <separator/>
+                <filter name="group_status" string="Status" context="{'group_by': 'public_status'}"/>
+                <filter name="group_type" string="Equipment Type" context="{'group_by': 'equipment_type'}"/>
+                <filter name="group_region" string="Region" context="{'group_by': 'public_region'}"/>
+                <filter name="group_broker" string="Broker" context="{'group_by': 'broker_id'}" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
             </search>
         </field>
     </record>
