@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_southern_equipment_listing_search" model="ir.ui.view">
+        <field name="name">southern.equipment.listing.search</field>
+        <field name="model">southern.equipment.listing</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="public_title"/>
+                <field name="manufacturer"/>
+                <field name="model"/>
+                <field name="public_region"/>
+                <field name="source" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                <filter name="website_published" string="Website Published" domain="[('website_published', '=', True)]"/>
+                <filter name="needs_verification" string="Needs Verification" domain="[('public_status', 'in', ['needs_verification', 'verification_in_progress'])]"/>
+                <filter name="available" string="Available" domain="[('public_status', 'not in', ['unavailable', 'sold', 'archived', 'assigned'])]"/>
+                <separator/>
+                <filter name="group_status" string="Status" context="{'group_by': 'public_status'}"/>
+                <filter name="group_type" string="Equipment Type" context="{'group_by': 'equipment_type'}"/>
+                <filter name="group_region" string="Region" context="{'group_by': 'public_region'}"/>
+                <filter name="group_broker" string="Broker" context="{'group_by': 'broker_id'}" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_southern_equipment_listing_list" model="ir.ui.view">
+        <field name="name">southern.equipment.listing.list</field>
+        <field name="model">southern.equipment.listing</field>
+        <field name="arch" type="xml">
+            <list decoration-success="grade == 'strong'" decoration-muted="public_status in ['sold', 'archived', 'unavailable']">
+                <field name="name" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                <field name="public_title"/>
+                <field name="equipment_type"/>
+                <field name="manufacturer"/>
+                <field name="model"/>
+                <field name="year"/>
+                <field name="hours"/>
+                <field name="public_region"/>
+                <field name="public_price"/>
+                <field name="public_status"/>
+                <field name="website_published"/>
+                <field name="deal_score" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                <field name="grade" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                <field name="broker_id" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_southern_equipment_listing_kanban" model="ir.ui.view">
+        <field name="name">southern.equipment.listing.kanban</field>
+        <field name="model">southern.equipment.listing</field>
+        <field name="arch" type="xml">
+            <kanban default_group_by="public_status" class="o_kanban_small_column">
+                <field name="public_title"/>
+                <field name="image_1920"/>
+                <field name="manufacturer"/>
+                <field name="model"/>
+                <field name="year"/>
+                <field name="public_region"/>
+                <field name="public_price"/>
+                <field name="currency_id"/>
+                <field name="website_published"/>
+                <templates>
+                    <t t-name="card">
+                        <div class="d-flex gap-3">
+                            <field name="image_1920"
+                                   widget="image"
+                                   class="rounded overflow-hidden flex-shrink-0"
+                                   style="width:72px;height:72px"
+                                   options="{'size': [72, 72], 'img_class': 'object-fit-cover w-100 h-100'}"
+                                   alt="Equipment image"
+                                   invisible="not image_1920"/>
+                            <div class="flex-grow-1">
+                                <strong><field name="public_title"/></strong>
+                                <div class="text-muted">
+                                    <field name="year"/> <field name="manufacturer"/> <field name="model"/>
+                                </div>
+                                <div><field name="public_region"/></div>
+                                <div t-if="record.public_price.raw_value">
+                                    <field name="public_price" widget="monetary"/>
+                                </div>
+                                <span t-if="record.website_published.raw_value" class="badge text-bg-success mt-1">Website</span>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <record id="view_southern_equipment_listing_form" model="ir.ui.view">
+        <field name="name">southern.equipment.listing.form</field>
+        <field name="model">southern.equipment.listing</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_publish" string="Publish" type="object" class="btn-primary"
+                            invisible="website_published"
+                            groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                    <button name="action_unpublish" string="Unpublish" type="object"
+                            invisible="not website_published"
+                            groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                    <field name="public_status" widget="statusbar"
+                           statusbar_visible="draft,needs_verification,published,inquiry_received,verification_in_progress,seller_confirmed,under_negotiation,under_contract,assigned,sold"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_inquiries" type="object" class="oe_stat_button" icon="fa-comments">
+                            <field name="inquiry_count" widget="statinfo" string="Inquiries"/>
+                        </button>
+                        <button name="action_view_deals" type="object" class="oe_stat_button" icon="fa-handshake-o"
+                                groups="southern_equipment_brokerage.group_southern_deal_broker">
+                            <field name="deal_count" widget="statinfo" string="Deals"/>
+                        </button>
+                    </div>
+                    <field name="image_1920" widget="image" class="oe_avatar"/>
+                    <div class="oe_title">
+                        <label for="public_title"/>
+                        <h1><field name="public_title" placeholder="2022 CAT 259D3 Skid Steer"/></h1>
+                        <div groups="southern_equipment_brokerage.group_southern_deal_broker">
+                            <field name="name" readonly="1"/>
+                        </div>
+                    </div>
+                    <group>
+                        <group string="Public Summary">
+                            <field name="public_region"/>
+                            <field name="equipment_type"/>
+                            <field name="manufacturer"/>
+                            <field name="model"/>
+                            <field name="year"/>
+                            <field name="hours"/>
+                            <field name="public_price"/>
+                            <field name="estimated_market_value"/>
+                        </group>
+                        <group string="Publishing">
+                            <field name="website_published"/>
+                            <field name="public_slug" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                            <field name="website_url" widget="url" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                            <field name="inspection_available"/>
+                            <field name="deposit_required"/>
+                            <field name="is_southern_owned" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                            <field name="broker_id" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Public Listing">
+                            <group>
+                                <field name="verification_note"/>
+                                <field name="public_deal_summary"/>
+                                <field name="deposit_public_note" invisible="not deposit_required"/>
+                                <field name="show_vin_serial_publicly" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                            </group>
+                            <field name="public_description" widget="html"/>
+                            <field name="photo_ids" widget="many2many_binary"/>
+                        </page>
+                        <page string="Source &amp; Seller" groups="southern_equipment_brokerage.group_southern_deal_broker">
+                            <group>
+                                <group string="Provenance">
+                                    <field name="source"/>
+                                    <field name="source_url" widget="url"/>
+                                    <field name="source_listing_id"/>
+                                    <field name="capture_run_id"/>
+                                </group>
+                                <group string="Seller">
+                                    <field name="source_seller_id"/>
+                                    <field name="seller_name_raw"/>
+                                    <field name="seller_phone" widget="phone"/>
+                                    <field name="seller_email" widget="email"/>
+                                    <field name="seller_facebook" widget="url"/>
+                                    <field name="seller_exact_location"/>
+                                    <field name="seller_ask_price"/>
+                                    <field name="vin_serial"/>
+                                </group>
+                            </group>
+                            <group>
+                                <field name="raw_capture_text"/>
+                                <field name="internal_notes" widget="html"/>
+                            </group>
+                        </page>
+                        <page string="Deal Math" groups="southern_equipment_brokerage.group_southern_deal_broker">
+                            <group>
+                                <group string="Comparable Range">
+                                    <field name="comp_low"/>
+                                    <field name="comp_median"/>
+                                    <field name="comp_high"/>
+                                    <field name="comp_count"/>
+                                    <field name="comp_confidence"/>
+                                    <field name="expected_resale"/>
+                                </group>
+                                <group string="Acquisition">
+                                    <field name="ask_price"/>
+                                    <field name="target_buy_price"/>
+                                    <field name="max_offer"/>
+                                    <field name="freight_cost"/>
+                                    <field name="repairs"/>
+                                    <field name="inspection_estimate"/>
+                                </group>
+                            </group>
+                            <group string="Projection">
+                                <field name="landed_cost" readonly="1"/>
+                                <field name="projected_savings" readonly="1"/>
+                                <field name="projected_profit" readonly="1"/>
+                                <field name="margin_pct" widget="percentage" readonly="1"/>
+                                <field name="deal_score"/>
+                                <field name="grade"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_southern_equipment_listings" model="ir.actions.act_window">
+        <field name="name">Sourced Listings</field>
+        <field name="res_model">southern.equipment.listing</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="search_view_id" ref="view_southern_equipment_listing_search"/>
+        <field name="context">{'search_default_available': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Create a sourced equipment opportunity</p>
+            <p>Keep original seller and source data internal, then curate the public listing.</p>
+        </field>
+    </record>
+</odoo>

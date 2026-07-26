@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="module_category_southern_brokerage" model="ir.module.category">
+        <field name="name">Southern Equipment Brokerage</field>
+        <field name="description">Access to sourced equipment opportunities and brokered deals.</field>
+        <field name="sequence">35</field>
+    </record>
+
+    <record id="privilege_southern_brokerage" model="res.groups.privilege">
+        <field name="name">Equipment Brokerage Access</field>
+        <field name="category_id" ref="module_category_southern_brokerage"/>
+        <field name="sequence">10</field>
+    </record>
+
+    <record id="group_southern_inspector_coordinator" model="res.groups">
+        <field name="name">Inspector Coordinator</field>
+        <field name="privilege_id" ref="privilege_southern_brokerage"/>
+        <field name="sequence">10</field>
+    </record>
+
+    <record id="group_southern_deal_broker" model="res.groups">
+        <field name="name">Deal Broker</field>
+        <field name="privilege_id" ref="privilege_southern_brokerage"/>
+        <field name="sequence">20</field>
+    </record>
+
+    <record id="group_southern_equipment_admin" model="res.groups">
+        <field name="name">Southern Equipment Admin</field>
+        <field name="privilege_id" ref="privilege_southern_brokerage"/>
+        <field name="sequence">30</field>
+        <field name="implied_ids" eval="[(4, ref('group_southern_deal_broker')), (4, ref('group_southern_inspector_coordinator'))]"/>
+    </record>
+
+    <record id="rule_southern_listing_company" model="ir.rule">
+        <field name="name">Brokerage Listings: Company Isolation</field>
+        <field name="model_id" ref="model_southern_equipment_listing"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="global" eval="True"/>
+    </record>
+
+    <record id="rule_southern_inquiry_company" model="ir.rule">
+        <field name="name">Brokerage Inquiries: Company Isolation</field>
+        <field name="model_id" ref="model_southern_buyer_inquiry"/>
+        <field name="domain_force">[('listing_id.company_id', 'in', company_ids)]</field>
+        <field name="global" eval="True"/>
+    </record>
+
+    <record id="rule_southern_deal_company" model="ir.rule">
+        <field name="name">Brokered Deals: Company Isolation</field>
+        <field name="model_id" ref="model_southern_brokered_deal"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="global" eval="True"/>
+    </record>
+
+    <record id="rule_southern_inspection_company" model="ir.rule">
+        <field name="name">Brokerage Inspections: Company Isolation</field>
+        <field name="model_id" ref="model_southern_inspection_order"/>
+        <field name="domain_force">[('listing_id.company_id', 'in', company_ids)]</field>
+        <field name="global" eval="True"/>
+    </record>
+
+    <record id="rule_southern_assignment_company" model="ir.rule">
+        <field name="name">Brokerage Assignments: Company Isolation</field>
+        <field name="model_id" ref="model_southern_contract_assignment"/>
+        <field name="domain_force">[('listing_id.company_id', 'in', company_ids)]</field>
+        <field name="global" eval="True"/>
+    </record>
+
+    <record id="rule_southern_ledger_company" model="ir.rule">
+        <field name="name">Brokerage Deposit Ledger: Company Isolation</field>
+        <field name="model_id" ref="model_southern_deposit_ledger"/>
+        <field name="domain_force">[('deal_id.company_id', 'in', company_ids)]</field>
+        <field name="global" eval="True"/>
+    </record>
+
+    <record id="rule_southern_comp_company" model="ir.rule">
+        <field name="name">Brokerage Comparables: Company Isolation</field>
+        <field name="model_id" ref="model_southern_equipment_comp"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="global" eval="True"/>
+    </record>
+</odoo>

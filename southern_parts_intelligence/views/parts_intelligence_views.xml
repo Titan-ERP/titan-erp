@@ -1,0 +1,321 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="southern_parts_make_list" model="ir.ui.view">
+        <field name="name">southern.parts.make.list</field>
+        <field name="model">southern.parts.make</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="southern_parts_model_list" model="ir.ui.view">
+        <field name="name">southern.parts.model.list</field>
+        <field name="model">southern.parts.model</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="make_id"/>
+                <field name="name"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="southern_parts_specification_list" model="ir.ui.view">
+        <field name="name">southern.parts.specification.list</field>
+        <field name="model">southern.parts.specification</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="product_tmpl_id"/>
+                <field name="group_name"/>
+                <field name="name"/>
+                <field name="value"/>
+                <field name="unit"/>
+                <field name="source_name"/>
+                <field name="confidence"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="southern_parts_specification_form" model="ir.ui.view">
+        <field name="name">southern.parts.specification.form</field>
+        <field name="model">southern.parts.specification</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="product_tmpl_id"/>
+                            <field name="group_name"/>
+                            <field name="name"/>
+                            <field name="value"/>
+                            <field name="unit"/>
+                        </group>
+                        <group>
+                            <field name="source_name"/>
+                            <field name="source_url"/>
+                            <field name="confidence"/>
+                        </group>
+                    </group>
+                    <field name="notes" placeholder="Notes"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="southern_parts_fitment_list" model="ir.ui.view">
+        <field name="name">southern.parts.fitment.list</field>
+        <field name="model">southern.parts.fitment</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="product_tmpl_id"/>
+                <field name="make_id"/>
+                <field name="model_id"/>
+                <field name="engine"/>
+                <field name="year_from"/>
+                <field name="year_to"/>
+                <field name="build_list"/>
+                <field name="source_name"/>
+                <field name="confidence"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="southern_parts_fitment_form" model="ir.ui.view">
+        <field name="name">southern.parts.fitment.form</field>
+        <field name="model">southern.parts.fitment</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="product_tmpl_id"/>
+                            <field name="make_id"/>
+                            <field name="model_id"/>
+                            <field name="engine"/>
+                            <field name="build_list"/>
+                        </group>
+                        <group>
+                            <field name="year_from"/>
+                            <field name="year_to"/>
+                            <field name="source_name"/>
+                            <field name="source_url"/>
+                            <field name="confidence"/>
+                        </group>
+                    </group>
+                    <field name="notes" placeholder="Fitment notes"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="southern_parts_oem_reference_list" model="ir.ui.view">
+        <field name="name">southern.parts.oem_reference.list</field>
+        <field name="model">southern.parts.oem_reference</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="product_tmpl_id"/>
+                <field name="manufacturer"/>
+                <field name="oem_part_number"/>
+                <field name="reference_type"/>
+                <field name="source_name"/>
+                <field name="confidence"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="southern_parts_oem_reference_form" model="ir.ui.view">
+        <field name="name">southern.parts.oem_reference.form</field>
+        <field name="model">southern.parts.oem_reference</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="product_tmpl_id"/>
+                            <field name="manufacturer"/>
+                            <field name="oem_part_number"/>
+                            <field name="reference_type"/>
+                        </group>
+                        <group>
+                            <field name="source_name"/>
+                            <field name="source_url"/>
+                            <field name="confidence"/>
+                        </group>
+                    </group>
+                    <field name="notes" placeholder="Reference notes"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="southern_parts_catalog_page_list" model="ir.ui.view">
+        <field name="name">southern.parts.catalog_page.list</field>
+        <field name="model">southern.parts.catalog_page</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="product_tmpl_id"/>
+                <field name="catalog_code"/>
+                <field name="catalog_name"/>
+                <field name="page_number"/>
+                <field name="source_name"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="southern_parts_related_product_list" model="ir.ui.view">
+        <field name="name">southern.parts.related_product.list</field>
+        <field name="model">southern.parts.related_product</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="product_tmpl_id"/>
+                <field name="relationship_type"/>
+                <field name="related_product_tmpl_id"/>
+                <field name="source_name"/>
+                <field name="confidence"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="southern_parts_alternate_barcode_list" model="ir.ui.view">
+        <field name="name">southern.parts.alternate_barcode.list</field>
+        <field name="model">southern.parts.alternate_barcode</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="product_tmpl_id"/>
+                <field name="barcode_type"/>
+                <field name="barcode"/>
+                <field name="source_name"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="southern_parts_oem_reference_search" model="ir.ui.view">
+        <field name="name">southern.parts.oem_reference.search</field>
+        <field name="model">southern.parts.oem_reference</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="oem_part_number"/>
+                <field name="manufacturer"/>
+                <field name="product_tmpl_id"/>
+                <filter string="OEM" name="reference_type_oem" domain="[('reference_type','=','oem')]"/>
+                <filter string="Alternate" name="reference_type_alternate" domain="[('reference_type','=','alternate')]"/>
+                <separator/>
+                <filter string="Manufacturer" name="group_manufacturer" context="{'group_by': 'manufacturer'}"/>
+                <filter string="Reference Type" name="group_reference_type" context="{'group_by': 'reference_type'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="southern_parts_fitment_search" model="ir.ui.view">
+        <field name="name">southern.parts.fitment.search</field>
+        <field name="model">southern.parts.fitment</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="product_tmpl_id"/>
+                <field name="make_id"/>
+                <field name="model_id"/>
+                <field name="engine"/>
+                <field name="build_list"/>
+                <separator/>
+                <filter string="Make" name="group_make" context="{'group_by': 'make_id'}"/>
+                <filter string="Model" name="group_model" context="{'group_by': 'model_id'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_southern_parts_make" model="ir.actions.act_window">
+        <field name="name">Equipment Makes</field>
+        <field name="res_model">southern.parts.make</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="action_southern_parts_model" model="ir.actions.act_window">
+        <field name="name">Equipment Models</field>
+        <field name="res_model">southern.parts.model</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="action_southern_parts_specification" model="ir.actions.act_window">
+        <field name="name">Product Specifications</field>
+        <field name="res_model">southern.parts.specification</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="action_southern_parts_fitment" model="ir.actions.act_window">
+        <field name="name">Make/Model Fitment</field>
+        <field name="res_model">southern.parts.fitment</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="action_southern_parts_oem_reference" model="ir.actions.act_window">
+        <field name="name">OEM Cross References</field>
+        <field name="res_model">southern.parts.oem_reference</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="action_southern_parts_catalog_page" model="ir.actions.act_window">
+        <field name="name">Catalog Pages</field>
+        <field name="res_model">southern.parts.catalog_page</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="action_southern_parts_related_product" model="ir.actions.act_window">
+        <field name="name">Related Parts</field>
+        <field name="res_model">southern.parts.related_product</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="action_southern_parts_alternate_barcode" model="ir.actions.act_window">
+        <field name="name">Alternate Barcodes</field>
+        <field name="res_model">southern.parts.alternate_barcode</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="menu_southern_parts_intelligence_root"
+              name="Parts Intelligence"
+              parent="stock.menu_stock_config_settings"
+              sequence="90"/>
+    <menuitem id="menu_southern_parts_specifications"
+              name="Product Specifications"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_parts_specification"
+              sequence="10"/>
+    <menuitem id="menu_southern_parts_fitments"
+              name="Make/Model Fitment"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_parts_fitment"
+              sequence="20"/>
+    <menuitem id="menu_southern_parts_oem_references"
+              name="OEM Cross References"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_parts_oem_reference"
+              sequence="30"/>
+    <menuitem id="menu_southern_parts_catalog_pages"
+              name="Catalog Pages"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_parts_catalog_page"
+              sequence="40"/>
+    <menuitem id="menu_southern_parts_related_parts"
+              name="Related Parts"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_parts_related_product"
+              sequence="50"/>
+    <menuitem id="menu_southern_parts_alternate_barcodes"
+              name="Alternate Barcodes"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_parts_alternate_barcode"
+              sequence="60"/>
+    <menuitem id="menu_southern_parts_makes"
+              name="Equipment Makes"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_parts_make"
+              sequence="70"/>
+    <menuitem id="menu_southern_parts_models"
+              name="Equipment Models"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_parts_model"
+              sequence="80"/>
+</odoo>
