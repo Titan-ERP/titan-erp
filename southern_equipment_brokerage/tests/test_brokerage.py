@@ -74,19 +74,21 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
 
     def test_facebook_agent_import_is_private_and_unpublished(self):
         headers = [
-            "Opportunity", "Customer", "Contact Name", "Phone", "Email", "Stage",
-            "Expected Revenue", "Priority", "Source", "Equipment ID",
-            "Equipment Name", "Equipment Type", "Manufacturer", "Model", "Year",
-            "VIN/Serial", "Ask Price", "Max Offer", "Projected Profit", "Margin %",
-            "Location", "Facebook URL", "Internal Notes",
+            "Opportunity", "Customer", "Contact Name", "Phone", "Email",
+            "Seller Facebook", "Stage", "Expected Revenue", "Priority", "Source",
+            "Equipment ID", "Capture Run ID", "Equipment Name", "Equipment Type",
+            "Manufacturer", "Model", "Year", "Hours", "VIN/Serial", "Ask Price",
+            "Max Offer", "Projected Profit", "Margin %", "Location",
+            "Facebook URL", "Internal Notes",
         ]
         row = [
             "Test opportunity", "Marketplace Seller", "Seller Name", "555-0111",
-            "seller@example.com", "Qualified", "62000", "3",
-            "Facebook Marketplace", "FB-TEST-001", "2021 Test Excavator",
-            "Excavator", "Test Make", "EX100", "2021", "", "42000", "39000",
-            "20000", "32", "Exact City, MS",
-            "https://facebook.example/item/1",
+            "seller@example.com", "https://facebook.example/seller/1", "Qualified",
+            "62000", "3", "Facebook Marketplace", "FB-TEST-001",
+            "RUN-TEST-001", "2021 Test Compact Track Loader",
+            "Compact Track Loader", "Test Make", "CTL100", "2021", "3554", "",
+            "42000", "39000", "20000", "32", "Exact City, MS",
+            "https://facebook.com/marketplace/item/1/?tracking=abc",
             "Grade: Strong Buy | Captured text: original marketplace text",
         ]
         stream = io.StringIO()
@@ -107,9 +109,47 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         self.assertFalse(listing.website_published)
         self.assertFalse(listing.public_region)
         self.assertFalse(listing.vin_serial)
+        self.assertEqual(listing.hours, 3554)
+        self.assertEqual(listing.equipment_type, "compact_track_loader")
+        self.assertEqual(listing.capture_run_id, "RUN-TEST-001")
+        self.assertEqual(
+            listing.seller_facebook, "https://facebook.example/seller/1"
+        )
+        self.assertEqual(
+            listing.source_url, "https://facebook.com/marketplace/item/1"
+        )
         self.assertEqual(listing.seller_exact_location, "Exact City, MS")
         self.assertEqual(listing.raw_capture_text, "original marketplace text")
         self.assertEqual(listing.public_status, "verification_in_progress")
+
+        wizard.action_import()
+        duplicates = self.Listing.search(
+            [
+                ("source", "=", "facebook_marketplace"),
+                ("source_listing_id", "=", "FB-TEST-001"),
+            ]
+        )
+        self.assertEqual(len(duplicates), 1)
+
+    def test_terminal_status_automatically_unpublishes(self):
+        listing = self.Listing.create(
+            self._listing_values(website_published=True)
+        )
+        for status in ("unavailable", "sold", "archived", "assigned"):
+            listing.write(
+                {
+                    "public_status": "published",
+                    "website_published": True,
+                }
+            )
+            listing.public_status = status
+            self.assertFalse(listing.website_published)
+
+    def test_public_vin_approval_requires_a_serial(self):
+        with self.assertRaises(ValidationError):
+            self.Listing.create(
+                self._listing_values(show_vin_serial_publicly=True)
+            )
 
     def test_website_inquiry_creates_partner_lead_and_activity(self):
         listing = self.Listing.create(
@@ -136,6 +176,29 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         self.assertEqual(inquiry.crm_lead_id.type, "opportunity")
         self.assertTrue(inquiry.activity_ids)
         self.assertEqual(listing.public_status, "needs_verification")
+        duplicate = self.Inquiry.create_from_website(
+            listing,
+            {
+                "contact_name": "Test Buyer",
+                "phone": "555-0199",
+                "email": "buyer@example.com",
+                "company": "Buyer Company",
+                "buyer_location": "Jackson, MS",
+                "budget": 50000,
+                "timeline": "30_days",
+                "financing_needed": True,
+                "trade_in": False,
+                "message": "Duplicate browser submission.",
+            },
+            broker=self.env.user,
+        )
+        self.assertEqual(duplicate, inquiry)
+        self.assertEqual(
+            self.env["crm.lead"].search_count(
+                [("name", "=", "Equipment Deal Request: 2022 Test Skid Steer")]
+            ),
+            1,
+        )
 
     def test_deposit_inspection_and_assignment_guards(self):
         listing = self.Listing.create(self._listing_values())
@@ -183,3 +246,31 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         )
         with self.assertRaises(UserError):
             assignment.action_execute()
+
+        refund = self.env["southern.deposit.ledger"].create(
+            {
+                "deal_id": deal.id,
+                "amount": 1500,
+                "transaction_type": "refund",
+            }
+        )
+        with self.assertRaises(UserError):
+            refund.action_post()
+        ledger.action_void()
+        self.assertEqual(deal.deposit_received, 0)
+        self.assertEqual(deal.deposit_status, "not_requested")
+
+    def test_deal_requires_verified_seller_contact(self):
+        listing = self.Listing.create(
+            self._listing_values(source_seller_id=False)
+        )
+        inquiry = self.Inquiry.create(
+            {
+                "listing_id": listing.id,
+                "contact_name": "Buyer",
+                "phone": "555-0102",
+                "email": "buyer-no-seller@example.com",
+            }
+        )
+        with self.assertRaises(UserError):
+            inquiry.action_create_deal()
