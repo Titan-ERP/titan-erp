@@ -17,13 +17,18 @@ PUBLIC_WEBSITE_STATUSES = [
     "under_contract",
 ]
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+BROKERAGE_COMPANY_NAME = "Southern Equipment Company (Laurel)"
 
 
 class SouthernEquipmentBrokerageWebsite(http.Controller):
     PRIVACY_NOTICE_VERSION = "2026-07"
 
+    def _is_brokerage_website(self):
+        return request.website.company_id.name == BROKERAGE_COMPANY_NAME
+
     def _public_domain(self):
         return [
+            ("company_id", "=", request.website.company_id.id),
             ("website_published", "=", True),
             ("public_status", "in", PUBLIC_WEBSITE_STATUSES),
         ]
@@ -36,6 +41,8 @@ class SouthernEquipmentBrokerageWebsite(http.Controller):
         sitemap=True,
     )
     def equipment_opportunities(self, page=1, equipment_type=None, region=None, **kw):
+        if not self._is_brokerage_website():
+            return request.not_found()
         Listing = request.env["southern.equipment.listing"].sudo()
         domain = self._public_domain()
         if equipment_type:
@@ -84,6 +91,8 @@ class SouthernEquipmentBrokerageWebsite(http.Controller):
         sitemap=True,
     )
     def equipment_opportunity_detail(self, slug, submitted=None, error=None, **kw):
+        if not self._is_brokerage_website():
+            return request.not_found()
         listing = request.env["southern.equipment.listing"].sudo().search(
             self._public_domain() + [("public_slug", "=", slug)],
             limit=1,
@@ -138,6 +147,8 @@ class SouthernEquipmentBrokerageWebsite(http.Controller):
         sitemap=True,
     )
     def privacy_notice(self, **kw):
+        if not self._is_brokerage_website():
+            return request.not_found()
         return request.render(
             "southern_equipment_brokerage.website_privacy_notice",
             {"privacy_notice_version": self._privacy_notice_version()},
@@ -152,6 +163,8 @@ class SouthernEquipmentBrokerageWebsite(http.Controller):
         csrf=True,
     )
     def equipment_opportunity_inquire(self, slug, **post):
+        if not self._is_brokerage_website():
+            return request.not_found()
         Listing = request.env["southern.equipment.listing"].sudo()
         listing = Listing.search(
             self._public_domain() + [("public_slug", "=", slug)],

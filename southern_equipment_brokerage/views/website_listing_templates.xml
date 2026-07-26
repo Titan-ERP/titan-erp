@@ -335,6 +335,7 @@
         <xpath expr="//div[@id='wrap']" position="inside">
             <t t-set="brokerage_home_listings"
                t-value="request.env['southern.equipment.listing'].sudo().search([
+                    ('company_id', '=', request.website.company_id.id),
                     ('website_published', '=', True),
                     ('public_status', 'in', [
                         'needs_verification',
@@ -346,7 +347,10 @@
                         'under_contract'
                     ])
                ], order='deal_score desc, create_date desc', limit=3)"/>
-            <section class="se-home-opportunities py-5" data-snippet="s_text_image" data-name="Brokered Equipment Opportunities">
+            <section t-if="request.website.company_id.name == 'Southern Equipment Company (Laurel)'"
+                     class="se-home-opportunities py-5"
+                     data-snippet="s_text_image"
+                     data-name="Brokered Equipment Opportunities">
                 <div class="container py-lg-4">
                     <div class="row align-items-end g-3 mb-4">
                         <div class="col-lg-8">
