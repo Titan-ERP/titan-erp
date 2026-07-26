@@ -38,25 +38,26 @@ Use **Equipment Brokerage → Pipeline → Import Facebook Agent CSV** for the c
 (`Opportunity`, `Customer`, `Stage`, `Expected Revenue`, `Equipment ID`, and the remaining
 export columns) and maps them into the brokerage listing model.
 
-The wizard stores seller contact, exact location, Facebook URL, internal notes, and captured
-text only in restricted fields. Blank VIN/serial values remain blank. Imported records are
-always unpublished with a verification-required status; the importer never copies an exact
-seller location into the public region.
+The wizard stores seller contact, exact location, source URL, internal notes, capture-run ID,
+hours, and captured text only in restricted fields. Blank VIN/serial values remain blank.
+Imported records are always unpublished with a verification-required status; the importer
+never copies an exact seller location into the public region. Duplicate detection uses source
+plus source listing ID, then falls back to the canonical source URL.
 
-For other data sources, Odoo's standard **Sourced Listings → Actions → Import records** flow
-can be used. A native compatible header template is provided at
-`data/odoo-equipment-opportunities-template.csv`.
+For authorized dealer, auction, referral, or official-export sources, populate the compatible
+template at `data/odoo-equipment-opportunities-template.csv` and use the same custom wizard.
+Do not automate collection from a website that prohibits automated access.
 
-For the current Facebook Agent bridge, map its exported headers to the labels in the template.
-Selection values should use these technical keys:
+When using Odoo's standard **Sourced Listings → Actions → Import records** flow, selection
+values should use these technical keys:
 
 - `source`: `facebook_marketplace`, `machinerytrader`, `auctionvalues`, `vip`, `dealer`,
   `auction`, `manual`, `other`
 - `public_status`: `draft`, `needs_verification`, `published`, `inquiry_received`,
   `verification_in_progress`, `seller_confirmed`, `under_negotiation`, `under_contract`,
   `assigned`, `unavailable`, `sold`, `archived`
-- `equipment_type`: `skid_steer`, `dozer`, `excavator`, `mini_excavator`, `telehandler`,
-  `forklift`, `tractor`, `loader`, `other`
+- `equipment_type`: `skid_steer`, `compact_track_loader`, `dozer`, `excavator`,
+  `mini_excavator`, `telehandler`, `forklift`, `tractor`, `loader`, `other`
 - `comp_confidence`: `low`, `medium`, `high`
 - `grade`: `strong`, `good`, `verify`, `pass`
 

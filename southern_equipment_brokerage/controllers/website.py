@@ -1,13 +1,28 @@
+import math
+import re
+
 from odoo import http
 from odoo.addons.portal.controllers.portal import pager as portal_pager
 from odoo.http import request
+
+
+PUBLIC_WEBSITE_STATUSES = [
+    "needs_verification",
+    "published",
+    "inquiry_received",
+    "verification_in_progress",
+    "seller_confirmed",
+    "under_negotiation",
+    "under_contract",
+]
+EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 class SouthernEquipmentBrokerageWebsite(http.Controller):
     def _public_domain(self):
         return [
             ("website_published", "=", True),
-            ("public_status", "not in", ["draft", "archived"]),
+            ("public_status", "in", PUBLIC_WEBSITE_STATUSES),
         ]
 
     @http.route(
@@ -113,13 +128,20 @@ class SouthernEquipmentBrokerageWebsite(http.Controller):
         name = (post.get("name") or "").strip()[:120]
         email = (post.get("email") or "").strip()[:254]
         phone = (post.get("phone") or "").strip()[:60]
-        if not name or "@" not in email or not phone:
+        if (
+            not name
+            or not EMAIL_PATTERN.fullmatch(email)
+            or not phone
+            or not re.search(r"\d", phone)
+        ):
             return request.redirect(f"{listing.website_url}?error=missing#inquiry")
 
         budget = 0.0
         if post.get("budget"):
             try:
-                budget = max(float(post["budget"]), 0.0)
+                budget = float(post["budget"])
+                if not math.isfinite(budget) or budget < 0 or budget > 1_000_000_000:
+                    raise ValueError
             except (TypeError, ValueError):
                 return request.redirect(f"{listing.website_url}?error=budget#inquiry")
 

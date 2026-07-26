@@ -148,7 +148,6 @@
                                 <field name="public_deal_summary"/>
                                 <field name="deposit_public_note" invisible="not deposit_required"/>
                                 <field name="show_vin_serial_publicly" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
-                                <field name="vin_serial" invisible="not show_vin_serial_publicly" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
                             </group>
                             <field name="public_description" widget="html"/>
                             <field name="photo_ids" widget="many2many_binary"/>
@@ -169,6 +168,7 @@
                                     <field name="seller_facebook" widget="url"/>
                                     <field name="seller_exact_location"/>
                                     <field name="seller_ask_price"/>
+                                    <field name="vin_serial"/>
                                 </group>
                             </group>
                             <group>
