@@ -51,7 +51,6 @@ class ProductTemplate(models.Model):
         string="Parts Search Text",
         compute="_compute_southern_parts_search_text",
         store=True,
-        index=True,
         help="Aggregates OEM references, fitments, specifications, catalog pages, and alternate barcodes for parts-counter search.",
     )
 
@@ -79,10 +78,10 @@ class ProductTemplate(models.Model):
             values = [
                 product.default_code,
                 product.barcode,
-                product.x_studio_manufacturer,
-                product.x_studio_oem_part_number,
-                product.x_studio_sub_reference,
             ]
+            for field_name in ("x_studio_manufacturer", "x_studio_oem_part_number", "x_studio_sub_reference"):
+                if field_name in product._fields:
+                    values.append(product[field_name])
             for spec in product.southern_specification_ids:
                 values.extend([spec.name, spec.value, spec.unit])
             for fitment in product.southern_fitment_ids:
