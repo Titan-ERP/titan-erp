@@ -17,7 +17,8 @@ Complete this checklist in staging before merging the production-candidate branc
 ## Website and privacy
 
 - Replace the default website name, logo, phone, email, address, and footer copy.
-- Publish an attorney-reviewed Privacy Policy at `/privacy`.
+- Review and approve the module's Privacy Notice at `/privacy` with counsel,
+  then adapt it to the company's actual practices before production.
 - Set `southern_equipment_brokerage.privacy_notice_version` in System
   Parameters whenever the approved privacy notice changes.
 - Review the broker-assisted opportunity disclosure, deposit language,

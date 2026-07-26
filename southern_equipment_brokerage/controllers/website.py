@@ -121,6 +121,29 @@ class SouthernEquipmentBrokerageWebsite(http.Controller):
             f"{secret}:{remote_address}".encode("utf-8")
         ).hexdigest()
 
+    def _privacy_notice_version(self):
+        return (
+            request.env["ir.config_parameter"]
+            .sudo()
+            .get_param(
+                "southern_equipment_brokerage.privacy_notice_version",
+                self.PRIVACY_NOTICE_VERSION,
+            )
+        )
+
+    @http.route(
+        "/privacy",
+        type="http",
+        auth="public",
+        website=True,
+        sitemap=True,
+    )
+    def privacy_notice(self, **kw):
+        return request.render(
+            "southern_equipment_brokerage.website_privacy_notice",
+            {"privacy_notice_version": self._privacy_notice_version()},
+        )
+
     @http.route(
         "/equipment-opportunities/<string:slug>/inquire",
         type="http",
@@ -166,14 +189,7 @@ class SouthernEquipmentBrokerageWebsite(http.Controller):
         if timeline not in ("immediate", "30_days", "90_days", "researching"):
             timeline = False
         broker = self._find_broker(listing)
-        privacy_notice_version = (
-            request.env["ir.config_parameter"]
-            .sudo()
-            .get_param(
-                "southern_equipment_brokerage.privacy_notice_version",
-                self.PRIVACY_NOTICE_VERSION,
-            )
-        )
+        privacy_notice_version = self._privacy_notice_version()
         inquiry = request.env["southern.buyer.inquiry"].sudo().create_from_website(
             listing,
             {

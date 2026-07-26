@@ -269,6 +269,65 @@
         </t>
     </template>
 
+    <template id="website_privacy_notice" name="Southern Equipment Privacy Notice">
+        <t t-call="website.layout">
+            <t t-set="additional_title">Privacy Notice</t>
+            <main id="wrap" class="se-brokerage">
+                <section class="container py-5">
+                    <div class="mx-auto" style="max-width: 860px;">
+                        <span class="se-eyebrow">Southern Equipment</span>
+                        <h1 class="display-5 fw-bold mt-2">Privacy Notice</h1>
+                        <p class="text-muted">
+                            Notice version <t t-out="privacy_notice_version"/>
+                        </p>
+
+                        <p>
+                            This notice describes how Southern Equipment handles information
+                            submitted through its broker-assisted equipment opportunity pages.
+                        </p>
+
+                        <h2 class="h4 mt-5">Information we collect</h2>
+                        <p>
+                            An equipment inquiry may include your name, company, email, phone,
+                            general location, budget, purchase timeline, financing or trade-in
+                            interest, and the message you provide. We also retain the opportunity
+                            requested, the time and version of your consent, and a one-way request
+                            fingerprint used to limit abusive submissions.
+                        </p>
+
+                        <h2 class="h4 mt-4">How we use information</h2>
+                        <p>
+                            We use this information to respond to your request, qualify the
+                            equipment need, verify the sourced opportunity, coordinate inspection
+                            or negotiation, maintain business records, and protect the inquiry
+                            service from misuse. Submitting an inquiry does not authorize an
+                            automatic purchase, bid, payment, or message to a seller.
+                        </p>
+
+                        <h2 class="h4 mt-4">Access, sharing, and retention</h2>
+                        <p>
+                            Inquiry and source details are limited to authorized brokerage staff.
+                            Information may be shared with service providers or professional
+                            advisers when reasonably needed to operate the service, complete a
+                            requested transaction, or comply with law. Records are retained only
+                            as long as reasonably necessary for these purposes and the company's
+                            approved retention requirements.
+                        </p>
+
+                        <h2 class="h4 mt-4">Your choices and questions</h2>
+                        <p>
+                            You may choose not to submit the inquiry form. To ask about, correct,
+                            or request deletion of information associated with an inquiry, use the
+                            company contact page. Legal or operational requirements may limit a
+                            deletion request.
+                        </p>
+                        <a href="/contactus" class="btn btn-dark mt-2">Contact Southern Equipment</a>
+                    </div>
+                </section>
+            </main>
+        </t>
+    </template>
+
     <template id="website_homepage_brokerage_section"
               inherit_id="website.homepage"
               name="Southern Equipment Brokered Opportunities Homepage Section"

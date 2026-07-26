@@ -4,7 +4,7 @@ import io
 
 from odoo import Command, fields
 from odoo.exceptions import AccessError, UserError, ValidationError
-from odoo.tests import TransactionCase, tagged
+from odoo.tests import HttpCase, TransactionCase, tagged
 
 
 TEST_IMAGE = (
@@ -417,3 +417,11 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         )
         with self.assertRaises(UserError):
             inquiry.action_create_deal()
+
+
+@tagged("southern_brokerage", "post_install", "-at_install")
+class TestSouthernEquipmentBrokerageWebsite(HttpCase):
+    def test_privacy_notice_route_is_available(self):
+        response = self.url_open("/privacy")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Southern Equipment handles information", response.content)
