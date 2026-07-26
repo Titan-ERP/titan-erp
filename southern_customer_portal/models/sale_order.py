@@ -61,7 +61,6 @@ class SaleOrder(models.Model):
                 "product_id": fee_product.id,
                 "name": "Processing Fee",
                 "product_uom_qty": 1.0,
-                "price_unit": fee_amount,
             }
             if fee_lines:
                 primary_fee_line = fee_lines[0]
@@ -69,14 +68,23 @@ class SaleOrder(models.Model):
                     primary_fee_line.price_unit != fee_amount
                     or primary_fee_line.product_uom_qty != 1.0
                 ):
-                    primary_fee_line.with_context(skip_southern_card_fee=True).write(vals)
+                    primary_fee_line.with_context(skip_southern_card_fee=True).write(
+                        {
+                            "name": "Processing Fee",
+                            "product_uom_qty": 1.0,
+                            "price_unit": fee_amount,
+                        }
+                    )
                 extra_fee_lines = fee_lines - primary_fee_line
                 if extra_fee_lines:
                     extra_fee_lines.with_context(skip_southern_card_fee=True).unlink()
             else:
-                self.env["sale.order.line"].with_context(
+                fee_line = self.env["sale.order.line"].with_context(
                     skip_southern_card_fee=True
                 ).sudo().create(vals)
+                fee_line.with_context(skip_southern_card_fee=True).write(
+                    {"price_unit": fee_amount}
+                )
 
     def _southern_membership_lines(self):
         return self.order_line.filtered(
