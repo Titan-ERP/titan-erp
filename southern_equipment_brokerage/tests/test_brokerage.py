@@ -7,6 +7,12 @@ from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests import TransactionCase, tagged
 
 
+TEST_IMAGE = (
+    b"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+    b"+A8AAQUBAScY42YAAAAASUVORK5CYII="
+)
+
+
 @tagged("southern_brokerage", "post_install", "-at_install")
 class TestSouthernEquipmentBrokerage(TransactionCase):
     @classmethod
@@ -44,11 +50,13 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
             "seller_phone": "555-0100",
             "source_url": "https://internal.example/listing/1",
             "raw_capture_text": "Internal source text",
+            "verification_note": "Availability is being verified by Southern Equipment.",
+            "image_1920": TEST_IMAGE,
         }
         values.update(overrides)
         return values
 
-    def test_batch_slugs_are_unique_and_publish_requires_region(self):
+    def test_batch_slugs_are_unique_and_publish_requires_curated_fields(self):
         listings = self.Listing.create(
             [self._listing_values(), self._listing_values()]
         )
@@ -58,6 +66,14 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         with self.assertRaises(ValidationError):
             self.Listing.create(
                 self._listing_values(public_region=False, website_published=True)
+            )
+        with self.assertRaises(ValidationError):
+            self.Listing.create(
+                self._listing_values(verification_note=False, website_published=True)
+            )
+        with self.assertRaises(ValidationError):
+            self.Listing.create(
+                self._listing_values(image_1920=False, website_published=True)
             )
 
     def test_public_and_inspector_cannot_read_sensitive_fields(self):
@@ -99,9 +115,19 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
             {
                 "upload_file": base64.b64encode(stream.getvalue().encode()),
                 "upload_filename": "odoo-equipment-opportunities.csv",
+                "validate_only": True,
             }
         )
-        wizard.action_import()
+        validation_action = wizard.action_import()
+        self.assertEqual(validation_action["tag"], "display_notification")
+        self.assertIn("1 new", validation_action["params"]["message"])
+        self.assertFalse(
+            self.Listing.search([("source_listing_id", "=", "FB-TEST-001")])
+        )
+        wizard.validate_only = False
+        import_action = wizard.action_import()
+        self.assertEqual(import_action["tag"], "display_notification")
+        self.assertIn("1 new", import_action["params"]["message"])
         listing = self.Listing.search(
             [("source_listing_id", "=", "FB-TEST-001")], limit=1
         )
@@ -153,7 +179,10 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
 
     def test_website_inquiry_creates_partner_lead_and_activity(self):
         listing = self.Listing.create(
-            self._listing_values(broker_id=self.env.user.id)
+            self._listing_values(
+                broker_id=self.env.user.id,
+                website_published=True,
+            )
         )
         inquiry = self.Inquiry.create_from_website(
             listing,
@@ -175,7 +204,7 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         self.assertTrue(inquiry.crm_lead_id)
         self.assertEqual(inquiry.crm_lead_id.type, "opportunity")
         self.assertTrue(inquiry.activity_ids)
-        self.assertEqual(listing.public_status, "needs_verification")
+        self.assertEqual(listing.public_status, "inquiry_received")
         duplicate = self.Inquiry.create_from_website(
             listing,
             {
@@ -221,6 +250,13 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
                 "broker_id": self.env.user.id,
             }
         )
+        with self.assertRaises(UserError):
+            deal.action_close()
+        with self.assertRaises(UserError):
+            deal.action_request_deposit()
+        deal.deposit_required = 1000
+        deal.action_request_deposit()
+        self.assertEqual(deal.stage, "deposit_pending")
         ledger = self.env["southern.deposit.ledger"].create(
             {
                 "deal_id": deal.id,
@@ -238,6 +274,9 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         with self.assertRaises(UserError):
             inspection.action_mark_complete()
         inspection.summary = "<p>Inspection complete.</p>"
+        with self.assertRaises(UserError):
+            inspection.action_mark_complete()
+        inspection.pass_fail = "pass"
         inspection.action_mark_complete()
         self.assertEqual(deal.stage, "inspection_complete")
         assignment_action = deal.action_create_assignment()
@@ -246,6 +285,22 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         )
         with self.assertRaises(UserError):
             assignment.action_execute()
+        assignment.write(
+            {
+                "purchase_contract_status": "executed",
+                "purchase_contract_file": TEST_IMAGE,
+                "buyer_approval_received": True,
+                "southern_approval_received": True,
+            }
+        )
+        with self.assertRaises(UserError):
+            assignment.action_execute()
+        assignment.assignment_agreement_file = TEST_IMAGE
+        assignment.action_execute()
+        self.assertEqual(deal.stage, "assigned")
+        deal.action_close()
+        self.assertEqual(deal.stage, "closed")
+        self.assertEqual(listing.public_status, "sold")
 
         refund = self.env["southern.deposit.ledger"].create(
             {
