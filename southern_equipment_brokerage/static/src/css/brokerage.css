@@ -1,0 +1,144 @@
+.se-brokerage {
+    --se-ink: #172019;
+    --se-green: #24452f;
+    --se-sand: #f3efe5;
+    --se-yellow: #f2b632;
+    color: var(--se-ink);
+    background: #fff;
+}
+
+.se-hero {
+    color: #fff;
+    background:
+        radial-gradient(circle at 82% 20%, rgba(242, 182, 50, .22), transparent 24rem),
+        linear-gradient(125deg, #15251a, #2d5036);
+}
+
+.se-eyebrow {
+    color: #c88d10;
+    font-size: .78rem;
+    font-weight: 800;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+}
+
+.se-hero .se-eyebrow {
+    color: #ffd36d;
+}
+
+.se-trust-card,
+.se-verification-box {
+    padding: 1.5rem;
+    border: 1px solid rgba(255, 255, 255, .2);
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, .08);
+    backdrop-filter: blur(10px);
+}
+
+.se-filter {
+    padding: 1.25rem;
+    border: 1px solid #e2ded4;
+    border-radius: 1rem;
+    background: var(--se-sand);
+}
+
+.se-listing-card {
+    overflow: hidden;
+    box-shadow: 0 14px 40px rgba(28, 45, 32, .1);
+    transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.se-listing-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 18px 50px rgba(28, 45, 32, .16);
+}
+
+.se-card-media {
+    position: relative;
+    height: 245px;
+    background: #dfe4de;
+}
+
+.se-card-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #fff;
+    font-size: 1.4rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    background: linear-gradient(145deg, #53675a, #1b3021);
+}
+
+.se-status,
+.se-owned {
+    position: absolute;
+    top: 1rem;
+    padding: .45rem .7rem;
+    border-radius: 999px;
+    color: #fff;
+    font-size: .72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    background: rgba(20, 31, 23, .88);
+}
+
+.se-status { left: 1rem; }
+.se-owned { right: 1rem; background: #25763c; }
+.se-spec-line { color: #66726a; font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.se-price, .se-detail-price { color: var(--se-green); font-size: 1.6rem; font-weight: 850; }
+.se-detail-price { font-size: 2.2rem; }
+.se-deal-note { padding-left: .8rem; border-left: 3px solid var(--se-yellow); }
+.se-detail-media { overflow: hidden; height: min(62vw, 520px); border-radius: 1rem; background: #dfe4de; }
+.se-thumb { height: 120px; border-radius: .6rem; background: #dfe4de; }
+.se-back-link { color: var(--se-green); font-weight: 700; text-decoration: none; }
+.se-specs dt { color: #6b756e; font-weight: 600; }
+.se-specs dd { font-weight: 750; text-align: right; }
+.se-detail-section { background: var(--se-sand); }
+.se-description { font-size: 1.08rem; line-height: 1.75; }
+.se-verification-box { border-color: #d8d2c4; background: #fff; box-shadow: 0 12px 30px rgba(28, 45, 32, .08); }
+.se-inquiry-panel { padding: clamp(1.5rem, 4vw, 3rem); border-radius: 1.25rem; color: #fff; background: var(--se-green); }
+.se-inquiry-panel .form-control, .se-inquiry-panel .form-select { border-color: rgba(255, 255, 255, .25); }
+.se-disclosure { padding: 1.25rem; border: 1px solid #dad4c7; background: #f8f6f0; color: #4d554f; }
+.se-home-opportunities { --se-green: #24452f; overflow: hidden; background: #f7f5ef; }
+.se-home-opportunity-card {
+    overflow: hidden;
+    box-shadow: 0 12px 34px rgba(28, 45, 32, .1);
+    transition: transform .2s ease, box-shadow .2s ease;
+}
+.se-home-opportunity-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 18px 42px rgba(28, 45, 32, .16);
+}
+.se-home-card-media {
+    position: relative;
+    display: block;
+    height: 220px;
+    background: #dfe4de;
+}
+.se-home-price { color: var(--se-green); white-space: nowrap; }
+.se-home-opportunity-empty {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding: 2rem;
+    border: 1px dashed #b9b5aa;
+    border-radius: 1rem;
+    background: #fff;
+}
+.se-home-disclosure {
+    color: #6b736d;
+    font-size: .82rem;
+    line-height: 1.55;
+}
+
+@media (max-width: 767px) {
+    .se-card-media { height: 220px; }
+    .se-detail-media { height: 360px; }
+    .se-thumb { height: 90px; }
+    .se-home-card-media { height: 210px; }
+    .se-home-opportunity-empty { align-items: flex-start; flex-direction: column; }
+}

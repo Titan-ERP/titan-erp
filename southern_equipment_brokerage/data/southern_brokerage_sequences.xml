@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <record id="seq_southern_equipment_listing" model="ir.sequence">
+        <field name="name">Sourced Equipment Listing</field>
+        <field name="code">southern.equipment.listing</field>
+        <field name="prefix">EQ-%(year)s-</field>
+        <field name="padding">5</field>
+    </record>
+    <record id="seq_southern_buyer_inquiry" model="ir.sequence">
+        <field name="name">Equipment Buyer Inquiry</field>
+        <field name="code">southern.buyer.inquiry</field>
+        <field name="prefix">INQ-%(year)s-</field>
+        <field name="padding">5</field>
+    </record>
+    <record id="seq_southern_brokered_deal" model="ir.sequence">
+        <field name="name">Brokered Equipment Deal</field>
+        <field name="code">southern.brokered.deal</field>
+        <field name="prefix">DEAL-%(year)s-</field>
+        <field name="padding">5</field>
+    </record>
+    <record id="seq_southern_inspection_order" model="ir.sequence">
+        <field name="name">Equipment Inspection Order</field>
+        <field name="code">southern.inspection.order</field>
+        <field name="prefix">INSP-%(year)s-</field>
+        <field name="padding">5</field>
+    </record>
+    <record id="seq_southern_contract_assignment" model="ir.sequence">
+        <field name="name">Equipment Contract Assignment</field>
+        <field name="code">southern.contract.assignment</field>
+        <field name="prefix">ASN-%(year)s-</field>
+        <field name="padding">5</field>
+    </record>
+</odoo>
