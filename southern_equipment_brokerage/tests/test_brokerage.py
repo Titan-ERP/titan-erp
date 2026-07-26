@@ -128,6 +128,10 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         import_action = wizard.action_import()
         self.assertEqual(import_action["tag"], "display_notification")
         self.assertIn("1 new", import_action["params"]["message"])
+        self.assertEqual(
+            import_action["params"]["next"]["views"],
+            [(False, "list"), (False, "form")],
+        )
         listing = self.Listing.search(
             [("source_listing_id", "=", "FB-TEST-001")], limit=1
         )
