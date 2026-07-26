@@ -3,6 +3,7 @@
     "version": "19.0.1.0.0",
     "category": "Website/Portal",
     "summary": "Customer portal pages for memberships, outstanding repair orders, and invoices.",
+    "author": "Southern Equipment Company",
     "depends": [
         "portal",
         "account",

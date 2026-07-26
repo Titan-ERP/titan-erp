@@ -26,9 +26,7 @@ class SouthernPartsMake(models.Model):
     name = fields.Char(required=True, index=True)
     active = fields.Boolean(default=True)
 
-    _sql_constraints = [
-        ("name_unique", "unique(name)", "Make must be unique."),
-    ]
+    _name_unique = models.Constraint("unique(name)", "Make must be unique.")
 
 
 class SouthernPartsModel(models.Model):
@@ -40,9 +38,10 @@ class SouthernPartsModel(models.Model):
     make_id = fields.Many2one("southern.parts.make", required=True, ondelete="cascade", index=True)
     active = fields.Boolean(default=True)
 
-    _sql_constraints = [
-        ("make_model_unique", "unique(make_id, name)", "Model must be unique per make."),
-    ]
+    _make_model_unique = models.Constraint(
+        "unique(make_id, name)",
+        "Model must be unique per make.",
+    )
 
 
 class SouthernPartsFitment(models.Model):
@@ -152,6 +151,7 @@ class SouthernPartsAlternateBarcode(models.Model):
     source_name = fields.Char(index=True)
     source_url = fields.Char()
 
-    _sql_constraints = [
-        ("product_barcode_unique", "unique(product_tmpl_id, barcode)", "Alternate barcode must be unique per product."),
-    ]
+    _product_barcode_unique = models.Constraint(
+        "unique(product_tmpl_id, barcode)",
+        "Alternate barcode must be unique per product.",
+    )

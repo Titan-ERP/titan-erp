@@ -26,7 +26,7 @@
         <field name="name">southern.equipment.listing.list</field>
         <field name="model">southern.equipment.listing</field>
         <field name="arch" type="xml">
-            <list decoration-success="grade == 'strong'" decoration-muted="public_status in ['sold', 'archived', 'unavailable']">
+            <list decoration-muted="public_status in ['sold', 'archived', 'unavailable']">
                 <field name="name" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
                 <field name="public_title"/>
                 <field name="equipment_type"/>
