@@ -4,7 +4,7 @@ import html
 import io
 import re
 from datetime import timedelta
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from markupsafe import Markup
 
@@ -45,7 +45,18 @@ def _canonical_source_url(value):
     if parsed.scheme.lower() not in ("http", "https") or not parsed.netloc:
         return value
     path = parsed.path.rstrip("/") or "/"
-    query = "" if "facebook.com" in parsed.netloc.lower() else parsed.query
+    if "facebook.com" in parsed.netloc.lower():
+        query = ""
+    else:
+        query = urlencode(
+            sorted(
+                (key, item)
+                for key, item in parse_qsl(parsed.query, keep_blank_values=True)
+                if not key.lower().startswith("utm_")
+                and key.lower() not in {"fbclid", "gclid", "mc_cid", "mc_eid"}
+            ),
+            doseq=True,
+        )
     return urlunsplit(
         (parsed.scheme.lower(), parsed.netloc.lower(), path, query, "")
     )
@@ -196,6 +207,16 @@ class SouthernEquipmentListing(models.Model):
     )
     website_url = fields.Char(compute="_compute_website_url", groups=BROKER_GROUPS)
     image_1920 = fields.Image(string="Primary Photo", max_width=1920, max_height=1920)
+    photo_rights_confirmed = fields.Boolean(
+        string="Photo Rights Confirmed",
+        groups=BROKER_GROUPS,
+        help="Confirm Southern Equipment is authorized to publish the primary photo.",
+    )
+    photo_source_note = fields.Char(
+        string="Photo Source / License Note",
+        groups=BROKER_GROUPS,
+        help="Record the owned, licensed, dealer-authorized, or generic asset source.",
+    )
     photo_ids = fields.Many2many(
         "ir.attachment",
         "southern_listing_attachment_rel",
@@ -348,6 +369,8 @@ class SouthernEquipmentListing(models.Model):
         "public_region",
         "verification_note",
         "image_1920",
+        "photo_rights_confirmed",
+        "photo_source_note",
         "show_vin_serial_publicly",
         "vin_serial",
     )
@@ -366,6 +389,15 @@ class SouthernEquipmentListing(models.Model):
             if listing.website_published and not listing.image_1920:
                 raise ValidationError(
                     _("Add a reviewed primary photo before publishing.")
+                )
+            if listing.website_published and (
+                not listing.photo_rights_confirmed or not listing.photo_source_note
+            ):
+                raise ValidationError(
+                    _(
+                        "Confirm publication rights and record the primary photo "
+                        "source before publishing."
+                    )
                 )
             if listing.show_vin_serial_publicly and not listing.vin_serial:
                 raise ValidationError(
@@ -479,6 +511,15 @@ class SouthernBuyerInquiry(models.Model):
     financing_needed = fields.Boolean(groups=BROKER_GROUPS)
     trade_in = fields.Boolean(groups=BROKER_GROUPS)
     message = fields.Text(groups=BROKER_GROUPS)
+    website_submission = fields.Boolean(readonly=True, groups=BROKER_GROUPS)
+    privacy_consent_at = fields.Datetime(readonly=True, groups=BROKER_GROUPS)
+    privacy_notice_version = fields.Char(readonly=True, groups=BROKER_GROUPS)
+    submission_fingerprint = fields.Char(
+        readonly=True,
+        index=True,
+        groups=ADMIN_GROUP,
+        help="One-way request fingerprint used only for website abuse prevention.",
+    )
     stage = fields.Selection(
         [
             ("new", "New"),
@@ -538,6 +579,14 @@ class SouthernBuyerInquiry(models.Model):
     @api.model
     def create_from_website(self, listing, values, broker=False):
         """Create the complete internal follow-up chain for a validated public request."""
+        fingerprint = values.get("submission_fingerprint")
+        if fingerprint and self.search_count(
+            [
+                ("submission_fingerprint", "=", fingerprint),
+                ("create_date", ">=", fields.Datetime.now() - timedelta(minutes=15)),
+            ]
+        ) >= 20:
+            return self.browse()
         cutoff = fields.Datetime.now() - timedelta(minutes=10)
         duplicate = self.search(
             [
