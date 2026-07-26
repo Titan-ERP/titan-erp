@@ -202,10 +202,9 @@
                 <field name="product_tmpl_id"/>
                 <filter string="OEM" name="reference_type_oem" domain="[('reference_type','=','oem')]"/>
                 <filter string="Alternate" name="reference_type_alternate" domain="[('reference_type','=','alternate')]"/>
-                <group expand="0" string="Group By">
-                    <filter string="Manufacturer" name="group_manufacturer" context="{'group_by': 'manufacturer'}"/>
-                    <filter string="Reference Type" name="group_reference_type" context="{'group_by': 'reference_type'}"/>
-                </group>
+                <separator/>
+                <filter string="Manufacturer" name="group_manufacturer" context="{'group_by': 'manufacturer'}"/>
+                <filter string="Reference Type" name="group_reference_type" context="{'group_by': 'reference_type'}"/>
             </search>
         </field>
     </record>
@@ -220,10 +219,9 @@
                 <field name="model_id"/>
                 <field name="engine"/>
                 <field name="build_list"/>
-                <group expand="0" string="Group By">
-                    <filter string="Make" name="group_make" context="{'group_by': 'make_id'}"/>
-                    <filter string="Model" name="group_model" context="{'group_by': 'model_id'}"/>
-                </group>
+                <separator/>
+                <filter string="Make" name="group_make" context="{'group_by': 'make_id'}"/>
+                <filter string="Model" name="group_model" context="{'group_by': 'model_id'}"/>
             </search>
         </field>
     </record>
