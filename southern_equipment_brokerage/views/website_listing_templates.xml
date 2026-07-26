@@ -202,6 +202,8 @@
                                         </div>
                                         <div t-if="error == 'missing'" class="alert alert-danger">Please provide your name, a valid email, and phone number.</div>
                                         <div t-if="error == 'budget'" class="alert alert-danger">Please enter a valid budget.</div>
+                                        <div t-if="error == 'privacy'" class="alert alert-danger">Please acknowledge the privacy notice before submitting.</div>
+                                        <div t-if="error == 'rate'" class="alert alert-warning">We received several requests from this connection. Please wait and try again later.</div>
                                         <form t-att-action="listing.website_url + '/inquire'" method="post">
                                             <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                                             <div class="d-none" aria-hidden="true">
@@ -227,6 +229,13 @@
                                                 <div class="col-md-6 form-check ms-2"><input id="financing_needed" name="financing_needed" value="1" type="checkbox" class="form-check-input"/><label for="financing_needed" class="form-check-label">Financing may be needed</label></div>
                                                 <div class="col-md-5 form-check ms-2"><input id="trade_in" name="trade_in" value="1" type="checkbox" class="form-check-input"/><label for="trade_in" class="form-check-label">I have a trade-in</label></div>
                                                 <div class="col-12"><label class="form-label" for="message">What should we know?</label><textarea id="message" name="message" rows="4" class="form-control"/></div>
+                                                <div class="col-12 form-check ms-2">
+                                                    <input id="privacy_consent" name="privacy_consent" value="1" type="checkbox" class="form-check-input" required="required"/>
+                                                    <label for="privacy_consent" class="form-check-label">
+                                                        I agree that Southern Equipment may use this information to respond to my request and acknowledge the
+                                                        <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.
+                                                    </label>
+                                                </div>
                                                 <div class="col-12"><button class="btn btn-warning btn-lg w-100" type="submit">Request this deal</button></div>
                                             </div>
                                         </form>

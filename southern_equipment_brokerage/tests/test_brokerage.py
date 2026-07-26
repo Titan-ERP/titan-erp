@@ -2,7 +2,7 @@ import base64
 import csv
 import io
 
-from odoo import Command
+from odoo import Command, fields
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests import TransactionCase, tagged
 
@@ -52,6 +52,8 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
             "raw_capture_text": "Internal source text",
             "verification_note": "Availability is being verified by Southern Equipment.",
             "image_1920": TEST_IMAGE,
+            "photo_rights_confirmed": True,
+            "photo_source_note": "Owned test fixture.",
         }
         values.update(overrides)
         return values
@@ -75,6 +77,17 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
             self.Listing.create(
                 self._listing_values(image_1920=False, website_published=True)
             )
+        with self.assertRaises(ValidationError):
+            self.Listing.create(
+                self._listing_values(
+                    photo_rights_confirmed=False,
+                    website_published=True,
+                )
+            )
+        with self.assertRaises(ValidationError):
+            self.Listing.create(
+                self._listing_values(photo_source_note=False, website_published=True)
+            )
 
     def test_public_and_inspector_cannot_read_sensitive_fields(self):
         listing = self.Listing.create(self._listing_values())
@@ -87,6 +100,16 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
             ["public_title", "public_region", "equipment_type"]
         )[0]
         self.assertEqual(safe["public_title"], listing.public_title)
+        inquiry = self.Inquiry.create(
+            {
+                "listing_id": listing.id,
+                "contact_name": "Private Buyer",
+                "phone": "555-0198",
+                "email": "private-buyer@example.com",
+            }
+        )
+        with self.assertRaises(AccessError):
+            inquiry.with_user(self.inspector).read(["contact_name"])
 
     def test_facebook_agent_import_is_private_and_unpublished(self):
         headers = [
@@ -175,6 +198,21 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
             listing.public_status = status
             self.assertFalse(listing.website_published)
 
+    def test_source_url_canonicalization_removes_tracking_parameters(self):
+        listing = self.Listing.create(
+            self._listing_values(
+                source="dealer",
+                source_url=(
+                    "HTTPS://Dealer.Example/listing/1/?utm_source=test"
+                    "&b=2&gclid=tracking&a=1#photos"
+                ),
+            )
+        )
+        self.assertEqual(
+            listing.source_url,
+            "https://dealer.example/listing/1?a=1&b=2",
+        )
+
     def test_public_vin_approval_requires_a_serial(self):
         with self.assertRaises(ValidationError):
             self.Listing.create(
@@ -201,6 +239,10 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
                 "financing_needed": True,
                 "trade_in": False,
                 "message": "Please coordinate an inspection.",
+                "website_submission": True,
+                "privacy_consent_at": fields.Datetime.now(),
+                "privacy_notice_version": "2026-07",
+                "submission_fingerprint": "test-request-fingerprint",
             },
             broker=self.env.user,
         )
@@ -208,6 +250,9 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         self.assertTrue(inquiry.crm_lead_id)
         self.assertEqual(inquiry.crm_lead_id.type, "opportunity")
         self.assertTrue(inquiry.activity_ids)
+        self.assertTrue(inquiry.website_submission)
+        self.assertTrue(inquiry.privacy_consent_at)
+        self.assertEqual(inquiry.privacy_notice_version, "2026-07")
         self.assertEqual(listing.public_status, "inquiry_received")
         duplicate = self.Inquiry.create_from_website(
             listing,
@@ -222,6 +267,10 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
                 "financing_needed": True,
                 "trade_in": False,
                 "message": "Duplicate browser submission.",
+                "website_submission": True,
+                "privacy_consent_at": fields.Datetime.now(),
+                "privacy_notice_version": "2026-07",
+                "submission_fingerprint": "test-request-fingerprint",
             },
             broker=self.env.user,
         )
@@ -232,6 +281,32 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
             ),
             1,
         )
+
+    def test_website_inquiry_fingerprint_is_rate_limited(self):
+        listing = self.Listing.create(self._listing_values())
+        fingerprint = "rate-limit-test-fingerprint"
+        self.Inquiry.create(
+            [
+                {
+                    "listing_id": listing.id,
+                    "contact_name": f"Rate Test {index}",
+                    "phone": f"555-02{index:02d}",
+                    "email": f"rate-{index}@example.com",
+                    "submission_fingerprint": fingerprint,
+                }
+                for index in range(20)
+            ]
+        )
+        inquiry = self.Inquiry.create_from_website(
+            listing,
+            {
+                "contact_name": "Blocked Request",
+                "phone": "555-0299",
+                "email": "blocked-rate@example.com",
+                "submission_fingerprint": fingerprint,
+            },
+        )
+        self.assertFalse(inquiry)
 
     def test_deposit_inspection_and_assignment_guards(self):
         listing = self.Listing.create(self._listing_values())

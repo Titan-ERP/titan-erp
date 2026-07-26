@@ -18,6 +18,10 @@ No public user receives model access. Website controllers fetch only records exp
 Sensitive source, seller, serial, margin, contract, and deposit fields also carry field-level
 group restrictions.
 
+Before production, complete `PRODUCTION_CHECKLIST.md`. Public inquiry submissions record the
+privacy-notice version and consent time, use a one-way request fingerprint for bounded abuse
+prevention, and remain subject to the company's approved privacy and retention policies.
+
 ## Install
 
 Place `southern_equipment_brokerage` on the Odoo 19 addons path, update the Apps list, and
@@ -70,8 +74,8 @@ VIN/serial with a placeholder.
 ## Publishing and workflow safeguards
 
 A listing cannot be published until it has an active public-safe status, public region,
-public-safe verification note, and reviewed primary photo. Deposit requests require a
-positive configured amount. Inspections require an outcome plus a report or summary before
-completion. Assignment execution requires an executed purchase contract and uploaded file,
-an assignment agreement, applicable approvals, and seller consent when required. Only an
-assigned deal can be closed.
+public-safe verification note, reviewed primary photo, confirmed publication rights, and a
+photo source/license note. Deposit requests require a positive configured amount. Inspections
+require an outcome plus a report or summary before completion. Assignment execution requires
+an executed purchase contract and uploaded file, an assignment agreement, applicable
+approvals, and seller consent when required. Only an assigned deal can be closed.

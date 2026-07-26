@@ -89,6 +89,15 @@
                     </group>
                     <notebook groups="southern_equipment_brokerage.group_southern_deal_broker">
                         <page string="Buyer Message"><field name="message"/></page>
+                        <page string="Website Consent">
+                            <group>
+                                <field name="website_submission" readonly="1"/>
+                                <field name="privacy_consent_at" readonly="1"/>
+                                <field name="privacy_notice_version" readonly="1"/>
+                                <field name="submission_fingerprint" readonly="1"
+                                       groups="southern_equipment_brokerage.group_southern_equipment_admin"/>
+                            </group>
+                        </page>
                     </notebook>
                 </sheet>
                 <chatter/>

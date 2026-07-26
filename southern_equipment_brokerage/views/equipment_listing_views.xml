@@ -133,6 +133,10 @@
                         </group>
                         <group string="Publishing">
                             <field name="website_published"/>
+                            <field name="photo_rights_confirmed"
+                                   groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                            <field name="photo_source_note"
+                                   groups="southern_equipment_brokerage.group_southern_deal_broker"/>
                             <field name="public_slug" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
                             <field name="website_url" widget="url" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
                             <field name="inspection_available"/>

@@ -1,7 +1,8 @@
+import hashlib
 import math
 import re
 
-from odoo import http
+from odoo import fields, http
 from odoo.addons.portal.controllers.portal import pager as portal_pager
 from odoo.http import request
 
@@ -19,6 +20,8 @@ EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 class SouthernEquipmentBrokerageWebsite(http.Controller):
+    PRIVACY_NOTICE_VERSION = "2026-07"
+
     def _public_domain(self):
         return [
             ("website_published", "=", True),
@@ -106,6 +109,18 @@ class SouthernEquipmentBrokerageWebsite(http.Controller):
         )
         return group.user_ids.filtered(lambda user: user.active)[:1] if group else False
 
+    def _submission_fingerprint(self):
+        remote_address = request.httprequest.remote_addr or "unknown"
+        parameters = request.env["ir.config_parameter"].sudo()
+        secret = (
+            parameters.get_param("database.secret")
+            or parameters.get_param("database.uuid")
+            or request.db
+        )
+        return hashlib.sha256(
+            f"{secret}:{remote_address}".encode("utf-8")
+        ).hexdigest()
+
     @http.route(
         "/equipment-opportunities/<string:slug>/inquire",
         type="http",
@@ -135,6 +150,8 @@ class SouthernEquipmentBrokerageWebsite(http.Controller):
             or not re.search(r"\d", phone)
         ):
             return request.redirect(f"{listing.website_url}?error=missing#inquiry")
+        if post.get("privacy_consent") not in ("1", "on", "true"):
+            return request.redirect(f"{listing.website_url}?error=privacy#inquiry")
 
         budget = 0.0
         if post.get("budget"):
@@ -149,7 +166,15 @@ class SouthernEquipmentBrokerageWebsite(http.Controller):
         if timeline not in ("immediate", "30_days", "90_days", "researching"):
             timeline = False
         broker = self._find_broker(listing)
-        request.env["southern.buyer.inquiry"].sudo().create_from_website(
+        privacy_notice_version = (
+            request.env["ir.config_parameter"]
+            .sudo()
+            .get_param(
+                "southern_equipment_brokerage.privacy_notice_version",
+                self.PRIVACY_NOTICE_VERSION,
+            )
+        )
+        inquiry = request.env["southern.buyer.inquiry"].sudo().create_from_website(
             listing,
             {
                 "contact_name": name,
@@ -162,7 +187,13 @@ class SouthernEquipmentBrokerageWebsite(http.Controller):
                 "financing_needed": bool(post.get("financing_needed")),
                 "trade_in": bool(post.get("trade_in")),
                 "message": (post.get("message") or "").strip()[:4000],
+                "website_submission": True,
+                "privacy_consent_at": fields.Datetime.now(),
+                "privacy_notice_version": privacy_notice_version,
+                "submission_fingerprint": self._submission_fingerprint(),
             },
             broker=broker,
         )
+        if not inquiry:
+            return request.redirect(f"{listing.website_url}?error=rate#inquiry")
         return request.redirect(f"{listing.website_url}?submitted=1#inquiry")
