@@ -91,20 +91,4 @@
         </field>
     </record>
 
-    <record id="southern_parts_product_template_search" model="ir.ui.view">
-        <field name="name">product.template.search.southern.parts.intelligence</field>
-        <field name="model">product.template</field>
-        <field name="inherit_id" ref="product.product_template_search_view"/>
-        <field name="arch" type="xml">
-            <xpath expr="//search" position="inside">
-                <field name="southern_parts_search_text" string="Parts Intelligence"/>
-                <filter string="Parts Data Complete" name="southern_parts_complete" domain="[('southern_enrichment_status','=','complete')]"/>
-                <filter string="Needs Parts Review" name="southern_parts_review" domain="[('southern_enrichment_status','=','review')]"/>
-                <group expand="0" string="Parts Intelligence">
-                    <filter string="Parts Data Status" name="group_southern_parts_status" context="{'group_by': 'southern_enrichment_status'}"/>
-                    <filter string="Source" name="group_southern_source_name" context="{'group_by': 'southern_source_name'}"/>
-                </group>
-            </xpath>
-        </field>
-    </record>
 </odoo>
