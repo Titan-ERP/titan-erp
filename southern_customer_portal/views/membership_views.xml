@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_southern_membership_application_list" model="ir.ui.view">
+        <field name="name">southern.membership.application.list</field>
+        <field name="model">southern.membership.application</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="state"/>
+                <field name="trial_end_date"/>
+                <field name="requested_house_credit"/>
+                <field name="requires_credit_approval"/>
+                <field name="signed_on"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_southern_membership_application_form" model="ir.ui.view">
+        <field name="name">southern.membership.application.form</field>
+        <field name="model">southern.membership.application</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_activate" string="Activate" type="object" class="btn-primary" invisible="state == 'active'"/>
+                    <button name="action_suspend" string="Suspend" type="object" invisible="state != 'active'"/>
+                    <button name="action_cancel" string="Cancel" type="object" invisible="state == 'cancelled'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="submitted,active,suspended,cancelled"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group string="Member">
+                            <field name="partner_id"/>
+                            <field name="member_name"/>
+                            <field name="phone"/>
+                            <field name="email"/>
+                            <field name="signature"/>
+                            <field name="signed_on"/>
+                            <field name="portal_ip"/>
+                        </group>
+                        <group string="Membership Terms">
+                            <field name="monthly_fee"/>
+                            <field name="currency_id" groups="base.group_multi_currency"/>
+                            <field name="trial_start_date"/>
+                            <field name="trial_end_date"/>
+                            <field name="parts_service_discount"/>
+                            <field name="house_credit_limit"/>
+                            <field name="requested_house_credit"/>
+                            <field name="requires_credit_approval"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Billing Authorization">
+                            <field name="cardholder_name"/>
+                            <field name="billing_street"/>
+                            <field name="billing_zip"/>
+                            <field name="billing_email"/>
+                            <field name="billing_phone"/>
+                            <field name="payment_authorized"/>
+                            <field name="agreement_accepted"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Notes">
+                            <field name="notes"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_southern_membership_applications" model="ir.actions.act_window">
+        <field name="name">Membership Applications</field>
+        <field name="res_model">southern.membership.application</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="menu_southern_membership_root" name="Southern Membership" sequence="65"/>
+    <menuitem
+        id="menu_southern_membership_applications"
+        name="Applications"
+        parent="menu_southern_membership_root"
+        action="action_southern_membership_applications"
+        sequence="10"
+    />
+</odoo>
