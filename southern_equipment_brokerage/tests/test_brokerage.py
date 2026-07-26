@@ -86,7 +86,7 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
             "seller@example.com", "https://facebook.example/seller/1", "Qualified",
             "62000", "3", "Facebook Marketplace", "FB-TEST-001",
             "RUN-TEST-001", "2021 Test Compact Track Loader",
-            "Compact Track Loader", "Test Make", "CTL100", "2021", "3554", "",
+            "Loader", "Test Make", "CTL100", "2021", "3554", "",
             "42000", "39000", "20000", "32", "Exact City, MS",
             "https://facebook.com/marketplace/item/1/?tracking=abc",
             "Grade: Strong Buy | Captured text: original marketplace text",

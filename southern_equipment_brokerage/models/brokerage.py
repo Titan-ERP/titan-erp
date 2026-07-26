@@ -1342,7 +1342,14 @@ class SouthernEquipmentImportWizard(models.TransientModel):
             "seller_ask_price": self._number(row.get("Ask Price")),
             "seller_exact_location": (row.get("Location") or "").strip(),
             "internal_notes": f"<p>{html.escape(notes)}</p>" if notes else False,
-            "equipment_type": self._equipment_type_key(row.get("Equipment Type")),
+            "equipment_type": self._equipment_type_key(
+                " ".join(
+                    filter(
+                        None,
+                        [row.get("Equipment Type"), title],
+                    )
+                )
+            ),
             "manufacturer": (row.get("Manufacturer") or "").strip(),
             "model": (row.get("Model") or "").strip(),
             "year": self._number(row.get("Year"), integer=True),
