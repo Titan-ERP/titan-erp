@@ -124,3 +124,28 @@ class TestSouthernPartsIntelligence(TransactionCase):
         self.assertEqual(fact_map["OEM Cross References"], 1)
         self.assertEqual(fact_map["Fits"], "1 makes / 1 models")
         self.assertEqual(fact_map["Catalog References"], 1)
+
+    def test_website_search_detail_includes_parts_search_text(self):
+        website = self.env["website"].get_current_website()
+        detail = self.product._search_get_detail(
+            website,
+            "name asc",
+            {
+                "displayDescription": True,
+                "displayDetail": True,
+                "displayExtraDetail": True,
+                "displayExtraLink": True,
+                "displayImage": True,
+                "allowFuzzy": True,
+                "category": None,
+                "tags": None,
+                "min_price": 0,
+                "max_price": 0,
+                "attribute_value_dict": {},
+                "display_currency": website.currency_id,
+            },
+        )
+
+        self.assertIn("southern_parts_search_text", detail["search_fields"])
+        self.assertIn("southern_parts_search_text", detail["fetch_fields"])
+        self.assertIn("southern_parts_search_text", detail["mapping"])

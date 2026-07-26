@@ -104,6 +104,20 @@ class ProductTemplate(models.Model):
             or product.southern_alternate_barcode_ids
         )
 
+    @api.model
+    def _search_get_detail(self, website, order, options):
+        detail = super()._search_get_detail(website, order, options)
+        if "southern_parts_search_text" not in detail["search_fields"]:
+            detail["search_fields"].append("southern_parts_search_text")
+        if "southern_parts_search_text" not in detail["fetch_fields"]:
+            detail["fetch_fields"].append("southern_parts_search_text")
+        detail["mapping"]["southern_parts_search_text"] = {
+            "name": "southern_parts_search_text",
+            "type": "text",
+            "match": True,
+        }
+        return detail
+
     def _southern_website_catalog_sections(self):
         self.ensure_one()
         product = self.sudo()
