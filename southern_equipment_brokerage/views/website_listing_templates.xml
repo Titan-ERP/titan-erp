@@ -72,6 +72,10 @@
                                     </div>
                                     <span class="se-status"><span t-field="listing.public_status"/></span>
                                     <span t-if="listing.is_southern_owned" class="se-owned">Southern-owned</span>
+                                    <span t-if="listing.image_is_representative"
+                                          class="badge rounded-pill text-bg-light border position-absolute bottom-0 start-0 m-3">
+                                        Representative image
+                                    </span>
                                 </div>
                                 <div class="card-body d-flex flex-column p-4">
                                     <div class="se-spec-line mb-2">
@@ -124,6 +128,10 @@
                                     <span><t t-out="listing.manufacturer or 'Southern Equipment'"/></span>
                                 </div>
                             </div>
+                            <p t-if="listing.image_is_representative"
+                               class="small text-muted mt-2 mb-0">
+                                Representative image — not a photo of the specific machine.
+                            </p>
                             <div t-if="listing.photo_ids" class="row g-3 mt-1">
                                 <div t-foreach="listing.photo_ids.filtered(lambda photo: photo.mimetype and photo.mimetype.startswith('image/'))[:6]"
                                      t-as="photo" class="col-4">

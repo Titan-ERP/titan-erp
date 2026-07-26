@@ -210,12 +210,20 @@ class SouthernEquipmentListing(models.Model):
     photo_rights_confirmed = fields.Boolean(
         string="Photo Rights Confirmed",
         groups=BROKER_GROUPS,
-        help="Confirm Southern Equipment is authorized to publish the primary photo.",
+        help="Confirm Southern Equipment is authorized to publish every displayed photo.",
     )
     photo_source_note = fields.Char(
         string="Photo Source / License Note",
         groups=BROKER_GROUPS,
-        help="Record the owned, licensed, dealer-authorized, or generic asset source.",
+        help="Record the owned, licensed, dealer-authorized, or generated asset source.",
+    )
+    image_is_representative = fields.Boolean(
+        string="Representative / Generic Image",
+        groups=BROKER_GROUPS,
+        help=(
+            "Enable this when the primary image illustrates the equipment type but "
+            "does not show the specific machine offered."
+        ),
     )
     photo_ids = fields.Many2many(
         "ir.attachment",

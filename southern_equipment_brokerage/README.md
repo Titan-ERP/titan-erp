@@ -21,6 +21,10 @@ group restrictions.
 Before production, complete `PRODUCTION_CHECKLIST.md`. Public inquiry submissions record the
 privacy-notice version and consent time, use a one-way request fingerprint for bounded abuse
 prevention, and remain subject to the company's approved privacy and retention policies.
+Publishing is blocked until the primary photo and every additional displayed
+photo have confirmed publication rights and a recorded source/license note.
+Generated, stock, or otherwise non-machine-specific primary images can be marked
+as representative so the public page states that they do not show the offered machine.
 
 ## Install
 

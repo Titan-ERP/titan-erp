@@ -40,6 +40,8 @@ Complete this checklist in staging before merging the production-candidate branc
   verification note, broker-assisted disclosure, and primary image.
 - Publish only owned, licensed, dealer-authorized, or appropriately licensed
   generic media. Record the source/license note and confirm publication rights.
+- Mark generated, stock, or otherwise non-machine-specific primary images as
+  **Representative / Generic Image** and verify the public disclosure appears.
 - Never reuse marketplace seller photos without documented permission.
 - Never invent VIN or serial values.
 

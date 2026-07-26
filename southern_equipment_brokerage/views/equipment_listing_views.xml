@@ -137,6 +137,8 @@
                                    groups="southern_equipment_brokerage.group_southern_deal_broker"/>
                             <field name="photo_source_note"
                                    groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                            <field name="image_is_representative"
+                                   groups="southern_equipment_brokerage.group_southern_deal_broker"/>
                             <field name="public_slug" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
                             <field name="website_url" widget="url" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
                             <field name="inspection_available"/>
