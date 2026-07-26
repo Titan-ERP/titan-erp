@@ -57,12 +57,11 @@ class SouthernEquipmentBrokerageWebsite(http.Controller):
             offset=pager["offset"],
         )
         regions = [
-            row["public_region"]
-            for row in Listing.read_group(
+            public_region
+            for (public_region,) in Listing._read_group(
                 self._public_domain() + [("public_region", "!=", False)],
-                ["public_region"],
-                ["public_region"],
-                orderby="public_region",
+                groupby=["public_region"],
+                order="public_region",
             )
         ]
         return request.render(
