@@ -260,7 +260,15 @@
             <t t-set="brokerage_home_listings"
                t-value="request.env['southern.equipment.listing'].sudo().search([
                     ('website_published', '=', True),
-                    ('public_status', 'not in', ['draft', 'archived'])
+                    ('public_status', 'in', [
+                        'needs_verification',
+                        'published',
+                        'inquiry_received',
+                        'verification_in_progress',
+                        'seller_confirmed',
+                        'under_negotiation',
+                        'under_contract'
+                    ])
                ], order='deal_score desc, create_date desc', limit=3)"/>
             <section class="se-home-opportunities py-5" data-snippet="s_text_image" data-name="Brokered Equipment Opportunities">
                 <div class="container py-lg-4">

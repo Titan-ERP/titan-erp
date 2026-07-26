@@ -3,6 +3,8 @@ import csv
 import html
 import io
 import re
+from datetime import timedelta
+from urllib.parse import urlsplit, urlunsplit
 
 from markupsafe import Markup
 
@@ -15,11 +17,38 @@ BROKER_GROUPS = (
     "southern_equipment_brokerage.group_southern_deal_broker"
 )
 ADMIN_GROUP = "southern_equipment_brokerage.group_southern_equipment_admin"
+PUBLIC_WEBSITE_STATUSES = (
+    "needs_verification",
+    "published",
+    "inquiry_received",
+    "verification_in_progress",
+    "seller_confirmed",
+    "under_negotiation",
+    "under_contract",
+)
+TERMINAL_LISTING_STATUSES = ("assigned", "unavailable", "sold", "archived")
 
 
 def _slugify(value):
     slug = re.sub(r"[^a-z0-9]+", "-", (value or "").lower()).strip("-")
     return slug or "equipment-opportunity"
+
+
+def _canonical_source_url(value):
+    value = (value or "").strip()
+    if not value:
+        return False
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        return value
+    if parsed.scheme.lower() not in ("http", "https") or not parsed.netloc:
+        return value
+    path = parsed.path.rstrip("/") or "/"
+    query = "" if "facebook.com" in parsed.netloc.lower() else parsed.query
+    return urlunsplit(
+        (parsed.scheme.lower(), parsed.netloc.lower(), path, query, "")
+    )
 
 
 class SouthernEquipmentListing(models.Model):
@@ -122,6 +151,7 @@ class SouthernEquipmentListing(models.Model):
     equipment_type = fields.Selection(
         [
             ("skid_steer", "Skid Steer"),
+            ("compact_track_loader", "Compact Track Loader"),
             ("dozer", "Dozer"),
             ("excavator", "Excavator"),
             ("mini_excavator", "Mini Excavator"),
@@ -142,8 +172,11 @@ class SouthernEquipmentListing(models.Model):
     vin_serial = fields.Char(string="VIN / Serial", groups=BROKER_GROUPS)
     show_vin_serial_publicly = fields.Boolean(groups=BROKER_GROUPS)
     public_price = fields.Monetary(tracking=True)
-    estimated_market_value = fields.Monetary()
-    deal_score = fields.Float(help="Internal 0–100 opportunity score.")
+    estimated_market_value = fields.Monetary(groups=BROKER_GROUPS)
+    deal_score = fields.Float(
+        help="Internal 0–100 opportunity score.",
+        groups=BROKER_GROUPS,
+    )
     public_deal_summary = fields.Char(
         string="Why It Looks Like a Deal",
         help="Short public-safe explanation; do not include seller strategy or internal margin.",
@@ -232,6 +265,10 @@ class SouthernEquipmentListing(models.Model):
         "CHECK(hours IS NULL OR hours >= 0)",
         "Hours cannot be negative.",
     )
+    _source_listing_unique = models.Constraint(
+        "unique(source, source_listing_id)",
+        "A source listing ID can only be imported once for the same source.",
+    )
 
     @api.depends("ask_price", "freight_cost", "repairs", "inspection_estimate", "expected_resale", "comp_median")
     def _compute_deal_math(self):
@@ -276,6 +313,10 @@ class SouthernEquipmentListing(models.Model):
             self.search([("public_slug", "!=", False)]).mapped("public_slug")
         )
         for vals in vals_list:
+            if vals.get("source_url"):
+                vals["source_url"] = _canonical_source_url(vals["source_url"])
+            if vals.get("public_status") in TERMINAL_LISTING_STATUSES:
+                vals["website_published"] = False
             if not vals.get("public_slug"):
                 base = _slugify(vals.get("public_title"))
                 slug = base
@@ -294,17 +335,72 @@ class SouthernEquipmentListing(models.Model):
     def write(self, vals):
         if vals.get("public_slug"):
             vals["public_slug"] = _slugify(vals["public_slug"])
+        if vals.get("source_url"):
+            vals["source_url"] = _canonical_source_url(vals["source_url"])
+        if vals.get("public_status") in TERMINAL_LISTING_STATUSES:
+            vals["website_published"] = False
         return super().write(vals)
 
-    @api.constrains("website_published", "public_status", "public_title", "public_region")
+    @api.constrains(
+        "website_published",
+        "public_status",
+        "public_title",
+        "public_region",
+        "show_vin_serial_publicly",
+        "vin_serial",
+    )
     def _check_publish_readiness(self):
         for listing in self:
             if listing.website_published and (
-                listing.public_status in ("draft", "archived") or not listing.public_region
+                listing.public_status not in PUBLIC_WEBSITE_STATUSES
+                or not listing.public_region
             ):
                 raise ValidationError(
-                    _("A website listing needs a public region and a non-draft, non-archived status.")
+                    _(
+                        "A website listing needs a public region and an active, "
+                        "public-safe status."
+                    )
                 )
+            if listing.show_vin_serial_publicly and not listing.vin_serial:
+                raise ValidationError(
+                    _("Add a VIN/serial before approving it for public display.")
+                )
+
+    @api.constrains(
+        "public_price",
+        "estimated_market_value",
+        "deal_score",
+        "ask_price",
+        "expected_resale",
+        "comp_median",
+        "comp_low",
+        "comp_high",
+        "freight_cost",
+        "repairs",
+        "inspection_estimate",
+        "target_buy_price",
+        "max_offer",
+    )
+    def _check_listing_numbers(self):
+        monetary_fields = (
+            "public_price",
+            "estimated_market_value",
+            "ask_price",
+            "expected_resale",
+            "comp_median",
+            "comp_low",
+            "comp_high",
+            "freight_cost",
+            "repairs",
+            "inspection_estimate",
+            "target_buy_price",
+            "max_offer",
+        )
+        for listing in self:
+            if any(listing[field_name] < 0 for field_name in monetary_fields):
+                raise ValidationError(_("Equipment prices and costs cannot be negative."))
+            if not 0 <= listing.deal_score <= 100:
+                raise ValidationError(_("Deal score must be between 0 and 100."))
 
     def action_publish(self):
         for listing in self:
@@ -433,6 +529,18 @@ class SouthernBuyerInquiry(models.Model):
     @api.model
     def create_from_website(self, listing, values, broker=False):
         """Create the complete internal follow-up chain for a validated public request."""
+        cutoff = fields.Datetime.now() - timedelta(minutes=10)
+        duplicate = self.search(
+            [
+                ("listing_id", "=", listing.id),
+                ("email", "=ilike", values["email"]),
+                ("create_date", ">=", cutoff),
+            ],
+            order="id desc",
+            limit=1,
+        )
+        if duplicate:
+            return duplicate
         Partner = self.env["res.partner"]
         partner = Partner.search([("email", "=ilike", values["email"])], limit=1)
         if not partner:
@@ -504,6 +612,13 @@ class SouthernBuyerInquiry(models.Model):
                     "email": self.email,
                     "company_name": self.company,
                 }
+            )
+        if not self.listing_id.source_seller_id:
+            raise UserError(
+                _(
+                    "Link the verified seller contact on the sourced listing "
+                    "before creating a brokered deal."
+                )
             )
         deal = self.env["southern.brokered.deal"].create(
             {
@@ -673,6 +788,11 @@ class SouthernBrokeredDeal(models.Model):
             deal.contract_id = assignment
             deal.assignment_id = assignment
 
+    @api.depends(
+        "ledger_ids.amount",
+        "ledger_ids.status",
+        "ledger_ids.transaction_type",
+    )
     def _compute_ledger_totals(self):
         for deal in self:
             deposits = sum(
@@ -970,13 +1090,53 @@ class SouthernDepositLedger(models.Model):
     @api.constrains("amount", "transaction_type")
     def _check_amount(self):
         for row in self:
-            if row.amount < 0 and row.transaction_type != "adjustment":
-                raise ValidationError(_("Use a positive amount; the transaction type controls direction."))
+            if row.transaction_type == "adjustment" and not row.amount:
+                raise ValidationError(_("An adjustment amount cannot be zero."))
+            if row.transaction_type != "adjustment" and row.amount <= 0:
+                raise ValidationError(
+                    _("Use a positive amount; the transaction type controls direction.")
+                )
+
+    def _sync_deposit_state(self):
+        for deal in self.mapped("deal_id"):
+            posted = deal.ledger_ids.filtered(lambda row: row.status == "posted")
+            deposits = posted.filtered(lambda row: row.transaction_type == "deposit")
+            deductions = posted.filtered(
+                lambda row: row.transaction_type
+                in ("inspection_spend", "refund", "applied_to_closing", "fee")
+            )
+            if not deposits:
+                status = (
+                    "requested"
+                    if deal.deposit_status == "requested"
+                    else "not_requested"
+                )
+            elif posted.filtered(
+                lambda row: row.transaction_type == "applied_to_closing"
+            ):
+                status = "applied"
+            elif deal.deposit_balance <= 0 and posted.filtered(
+                lambda row: row.transaction_type == "refund"
+            ):
+                status = "refunded"
+            elif deductions:
+                status = "partially_spent"
+            else:
+                status = "received"
+            deal.deposit_status = status
 
     def action_post(self):
         for row in self:
             if row.status != "draft":
                 continue
+            if (
+                row.transaction_type
+                in ("inspection_spend", "refund", "applied_to_closing", "fee")
+                and row.amount > row.deal_id.deposit_balance
+            ):
+                raise UserError(
+                    _("This transaction exceeds the available deposit balance.")
+                )
             row.status = "posted"
             if row.transaction_type == "deposit":
                 row.deal_id.write(
@@ -992,9 +1152,11 @@ class SouthernDepositLedger(models.Model):
                 row.deal_id.deposit_status = "applied"
             elif row.transaction_type == "inspection_spend":
                 row.deal_id.deposit_status = "partially_spent"
+        self._sync_deposit_state()
 
     def action_void(self):
         self.write({"status": "void"})
+        self._sync_deposit_state()
 
 
 class SouthernEquipmentComp(models.Model):
@@ -1003,6 +1165,12 @@ class SouthernEquipmentComp(models.Model):
     _order = "sale_date desc, id desc"
 
     name = fields.Char(required=True)
+    company_id = fields.Many2one(
+        "res.company",
+        required=True,
+        default=lambda self: self.env.company,
+        index=True,
+    )
     source = fields.Char(required=True)
     source_url = fields.Char()
     equipment_type = fields.Selection(
@@ -1057,14 +1225,17 @@ class SouthernEquipmentImportWizard(models.TransientModel):
         help="Update a listing when Equipment ID matches its Source Listing ID.",
     )
 
+    MAX_FILE_BYTES = 5 * 1024 * 1024
+    MAX_IMPORT_ROWS = 500
+
     def _number(self, value, integer=False):
         cleaned = re.sub(r"[^0-9.\-]", "", value or "")
         if not cleaned:
             return 0 if integer else 0.0
         try:
             number = float(cleaned)
-        except ValueError:
-            return 0 if integer else 0.0
+        except ValueError as exc:
+            raise ValueError(_("Invalid number: %s") % value) from exc
         return int(number) if integer else number
 
     def _source_key(self, value):
@@ -1088,6 +1259,8 @@ class SouthernEquipmentImportWizard(models.TransientModel):
     def _equipment_type_key(self, value):
         normalized = re.sub(r"[^a-z0-9]+", " ", (value or "").lower()).strip()
         mappings = [
+            ("compact track loader", "compact_track_loader"),
+            ("track loader", "compact_track_loader"),
             ("mini excavator", "mini_excavator"),
             ("skid steer", "skid_steer"),
             ("telehandler", "telehandler"),
@@ -1116,8 +1289,32 @@ class SouthernEquipmentImportWizard(models.TransientModel):
             return False
         return notes.split(marker, 1)[1].strip()
 
+    def _hours(self, row, notes):
+        explicit = (row.get("Hours") or "").strip()
+        if explicit:
+            return self._number(explicit)
+        raw_text = self._raw_capture(notes) or ""
+        match = re.search(r"\b([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:hours?|hrs?)\b", raw_text, re.I)
+        return self._number(match.group(1)) if match else 0.0
+
+    def _capture_run_id(self, row, notes):
+        explicit = (row.get("Capture Run ID") or "").strip()
+        if explicit:
+            return explicit
+        match = re.search(r"(?:Capture Run ID|Capture Run):\s*([^|]+)", notes or "", re.I)
+        return match.group(1).strip() if match else False
+
     def _row_values(self, row):
         equipment_id = (row.get("Equipment ID") or "").strip()
+        source_url = (
+            row.get("Source URL")
+            or row.get("Facebook URL")
+            or ""
+        ).strip()
+        if not equipment_id and not source_url:
+            raise ValueError(
+                _("Each row needs an Equipment ID or canonical source URL.")
+            )
         title = (
             row.get("Equipment Name")
             or row.get("Opportunity")
@@ -1134,12 +1331,14 @@ class SouthernEquipmentImportWizard(models.TransientModel):
             "public_status": self._public_status_key(row.get("Stage")),
             "website_published": False,
             "source": self._source_key(row.get("Source")),
-            "source_url": (row.get("Facebook URL") or "").strip(),
+            "source_url": _canonical_source_url(source_url),
             "source_listing_id": equipment_id,
+            "capture_run_id": self._capture_run_id(row, notes),
             "raw_capture_text": self._raw_capture(notes),
             "seller_name_raw": seller,
             "seller_phone": (row.get("Phone") or "").strip(),
             "seller_email": (row.get("Email") or "").strip(),
+            "seller_facebook": (row.get("Seller Facebook") or "").strip(),
             "seller_ask_price": self._number(row.get("Ask Price")),
             "seller_exact_location": (row.get("Location") or "").strip(),
             "internal_notes": f"<p>{html.escape(notes)}</p>" if notes else False,
@@ -1147,6 +1346,7 @@ class SouthernEquipmentImportWizard(models.TransientModel):
             "manufacturer": (row.get("Manufacturer") or "").strip(),
             "model": (row.get("Model") or "").strip(),
             "year": self._number(row.get("Year"), integer=True),
+            "hours": self._hours(row, notes),
             "vin_serial": serial or False,
             "ask_price": self._number(row.get("Ask Price")),
             "expected_resale": self._number(row.get("Expected Revenue")),
@@ -1158,13 +1358,24 @@ class SouthernEquipmentImportWizard(models.TransientModel):
 
     def action_import(self):
         self.ensure_one()
+        if not (self.upload_filename or "").lower().endswith(".csv"):
+            raise UserError(_("Upload a .csv file."))
         try:
-            decoded = base64.b64decode(self.upload_file).decode("utf-8-sig")
+            raw_file = base64.b64decode(self.upload_file, validate=True)
+            if len(raw_file) > self.MAX_FILE_BYTES:
+                raise UserError(_("The CSV file must be 5 MB or smaller."))
+            decoded = raw_file.decode("utf-8-sig")
         except (ValueError, UnicodeDecodeError) as exc:
             raise UserError(_("Upload a UTF-8 CSV file.")) from exc
         reader = csv.DictReader(io.StringIO(decoded))
         expected = {"Opportunity", "Equipment ID", "Equipment Name", "Source"}
-        if not reader.fieldnames or not expected.issubset(set(reader.fieldnames)):
+        if reader.fieldnames:
+            reader.fieldnames = [field.strip() if field else field for field in reader.fieldnames]
+        if (
+            not reader.fieldnames
+            or len(reader.fieldnames) != len(set(reader.fieldnames))
+            or not expected.issubset(set(reader.fieldnames))
+        ):
             raise UserError(
                 _(
                     "This file does not match the Facebook Agent Odoo export. "
@@ -1177,21 +1388,57 @@ class SouthernEquipmentImportWizard(models.TransientModel):
         imported = Listing.browse()
         skipped = 0
         for row_number, row in enumerate(reader, start=2):
-            if not any((value or "").strip() for value in row.values()):
+            if row_number > self.MAX_IMPORT_ROWS + 1:
+                raise UserError(
+                    _("A single import is limited to %s opportunity rows.")
+                    % self.MAX_IMPORT_ROWS
+                )
+            if None in row:
+                raise UserError(
+                    _("CSV row %s has more values than the header.") % row_number
+                )
+            if not any(str(value or "").strip() for value in row.values()):
                 continue
-            vals = self._row_values(row)
+            try:
+                vals = self._row_values(row)
+            except ValueError as exc:
+                raise UserError(
+                    _("CSV row %(row)s could not be imported: %(error)s",
+                      row=row_number, error=exc)
+                ) from exc
             equipment_id = vals.get("source_listing_id")
+            source = vals.get("source")
             existing = (
-                Listing.search([("source_listing_id", "=", equipment_id)], limit=1)
+                Listing.search(
+                    [
+                        ("source", "=", source),
+                        ("source_listing_id", "=", equipment_id),
+                    ],
+                    limit=1,
+                )
                 if equipment_id
                 else Listing.browse()
             )
+            if not existing and vals.get("source_url"):
+                candidates = Listing.search(
+                    [("source", "=", source), ("source_url", "!=", False)]
+                )
+                existing = candidates.filtered(
+                    lambda listing: _canonical_source_url(listing.source_url)
+                    == vals["source_url"]
+                )[:1]
             if existing and not self.update_existing:
                 skipped += 1
                 continue
             try:
                 if existing:
                     vals.pop("name", None)
+                    vals = {
+                        key: value
+                        for key, value in vals.items()
+                        if value not in (False, "", 0, 0.0)
+                        or key in ("website_published", "public_status")
+                    }
                     existing.write(vals)
                     imported |= existing
                 else:

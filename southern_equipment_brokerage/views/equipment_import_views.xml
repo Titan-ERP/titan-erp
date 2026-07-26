@@ -4,10 +4,11 @@
         <field name="name">southern.equipment.import.wizard.form</field>
         <field name="model">southern.equipment.import.wizard</field>
         <field name="arch" type="xml">
-            <form string="Import Facebook Agent Opportunities">
+            <form string="Import Equipment Opportunities">
                 <sheet>
                     <div class="alert alert-info" role="alert">
-                        Upload <strong>odoo-equipment-opportunities.csv</strong> from the Facebook Agent.
+                        Upload an authorized <strong>odoo-equipment-opportunities.csv</strong>
+                        from the local lead agent, a dealer, an auction, a referral, or an official export.
                         Imported listings remain unpublished and retain exact seller location, contact data,
                         source URL, serial, and captured notes in restricted internal fields.
                     </div>
@@ -25,7 +26,7 @@
         </field>
     </record>
     <record id="action_southern_equipment_import_wizard" model="ir.actions.act_window">
-        <field name="name">Import Facebook Agent CSV</field>
+        <field name="name">Import Equipment Opportunity CSV</field>
         <field name="res_model">southern.equipment.import.wizard</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>

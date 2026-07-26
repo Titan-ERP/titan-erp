@@ -1,6 +1,6 @@
 {
     "name": "Southern Equipment Brokerage",
-    "version": "19.0.1.0.0",
+    "version": "19.0.1.1.0",
     "category": "Sales/CRM",
     "summary": "Broker-assisted sourced equipment listings, inquiries, inspections, and assignments.",
     "description": """
