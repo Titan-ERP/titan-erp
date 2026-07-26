@@ -33,7 +33,7 @@ fields pending attorney and processor review.
 
 ## CSV import
 
-Use **Equipment Brokerage → Pipeline → Import Facebook Agent CSV** for the current
+Use **Equipment Brokerage → Pipeline → Import Equipment Opportunity CSV** for the current
 `odoo-equipment-opportunities.csv` export. The wizard accepts its exact CRM-shaped headers
 (`Opportunity`, `Customer`, `Stage`, `Expected Revenue`, `Equipment ID`, and the remaining
 export columns) and maps them into the brokerage listing model.
