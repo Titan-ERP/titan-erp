@@ -41,6 +41,22 @@
     }
 }
 
+.se-product-fulfillment-note {
+    background: #f6f2e8;
+    border-left: 4px solid #efbb2e;
+    color: #1f2328;
+    font-size: .94rem;
+    line-height: 1.45;
+    margin-bottom: 1rem;
+    padding: .85rem 1rem;
+
+    strong {
+        display: block;
+        font-weight: 900;
+        margin-bottom: .25rem;
+    }
+}
+
 .se-shop-counter__primary {
     background: #efbb2e;
     border-radius: 3px;
