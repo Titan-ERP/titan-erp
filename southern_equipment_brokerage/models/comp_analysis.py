@@ -164,7 +164,7 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
         low = _weighted_quantile(weighted, 0.25)
         median = _weighted_quantile(weighted, 0.50)
         high = _weighted_quantile(weighted, 0.75)
-        exact_count = sum(exact for _comp, _score, _weight, exact in rows)
+        exact_count = sum(score >= 80 for _comp, score, _weight, _exact in rows)
         sold_count = sum(
             comp.sale_type == "auction_result"
             for comp, _score, _weight, _exact in rows

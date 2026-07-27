@@ -139,6 +139,35 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         self.assertEqual(listing.deal_score, 0)
         self.assertEqual(listing.grade, "verify")
 
+    def test_native_comp_analysis_counts_compatible_cat_cr_family_for_confidence(self):
+        listing = self.Listing.create(
+            self._listing_values(
+                manufacturer="Caterpillar",
+                model="305",
+                year=2024,
+                hours=500,
+                seller_ask_price=40000,
+            )
+        )
+        self.Comp.create(
+            [
+                self._comp_values(
+                    name=f"CAT 305 CR Comp {index}",
+                    manufacturer="Caterpillar",
+                    model="305 CR",
+                    year=2023,
+                    hours=500,
+                    price=40000 + index * 1000,
+                )
+                for index in range(6)
+            ]
+        )
+
+        listing.action_recalculate_comp_analysis()
+
+        self.assertEqual(listing.comp_count, 6)
+        self.assertEqual(listing.comp_confidence, "high")
+
     def test_batch_slugs_are_unique_and_publish_requires_curated_fields(self):
         listings = self.Listing.create(
             [self._listing_values(), self._listing_values()]
