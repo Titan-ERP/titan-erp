@@ -73,7 +73,8 @@
             <section t-if="southern_sections" class="southern-parts-catalog">
                 <div class="container">
                     <section t-if="'specifications' in southern_sections" id="southern_specs" class="southern-parts-section">
-                        <h2><span class="southern-parts-icon">⚙</span> Specifications</h2>
+                        <p class="southern-parts-eyebrow">Product Details</p>
+                        <h2>Specifications</h2>
                         <div class="southern-spec-grid">
                             <t t-foreach="product._southern_grouped_specifications()" t-as="spec_group">
                                 <div t-foreach="spec_group['items']" t-as="spec" class="southern-spec-row">
@@ -88,7 +89,8 @@
                     </section>
 
                     <section t-if="'fitment' in southern_sections" id="southern_fitment" class="southern-parts-section">
-                        <h2><span class="southern-parts-icon">▣</span> Suitable For Make/Model</h2>
+                        <p class="southern-parts-eyebrow">Fitment</p>
+                        <h2>Suitable For Make/Model</h2>
                         <div class="table-responsive">
                             <table class="table southern-parts-table">
                                 <tbody>
@@ -108,7 +110,8 @@
                     </section>
 
                     <section t-if="'oem' in southern_sections" id="southern_oem_refs" class="southern-parts-section">
-                        <h2><span class="southern-parts-icon">⌁</span> OEM Part Numbers</h2>
+                        <p class="southern-parts-eyebrow">Cross Reference</p>
+                        <h2>OEM Part Numbers</h2>
                         <div class="table-responsive">
                             <table class="table southern-parts-table">
                                 <tbody>
@@ -124,7 +127,8 @@
                     </section>
 
                     <section t-if="'catalog' in southern_sections" id="southern_catalog_pages" class="southern-parts-section">
-                        <h2><span class="southern-parts-icon">▮</span> Catalog Pages</h2>
+                        <p class="southern-parts-eyebrow">Reference</p>
+                        <h2>Catalog Pages</h2>
                         <div class="table-responsive">
                             <table class="table southern-parts-table southern-parts-table--catalog">
                                 <thead>
@@ -152,7 +156,8 @@
                     </section>
 
                     <section t-if="'related' in southern_sections" id="southern_related_parts" class="southern-parts-section">
-                        <h2><span class="southern-parts-icon">↔</span> Related Parts</h2>
+                        <p class="southern-parts-eyebrow">Related</p>
+                        <h2>Related Parts</h2>
                         <div class="southern-related-grid">
                             <a t-foreach="product._southern_related_parts_summary()" t-as="related"
                                t-att-href="related['website_url'] or '#'"

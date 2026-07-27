@@ -116,21 +116,21 @@
     }
 
     h2 {
-        align-items: center;
-        display: flex;
         font-size: clamp(1.65rem, 2.2vw, 2.15rem);
         font-weight: 900;
-        gap: .65rem;
         letter-spacing: 0;
         line-height: 1.15;
-        margin: 0 0 1.65rem;
+        margin: 0 0 1.35rem;
     }
 }
 
-.southern-parts-icon {
-    display: inline-flex;
-    font-size: 1.3rem;
-    line-height: 1;
+.southern-parts-eyebrow {
+    color: #b98210;
+    font-size: .78rem;
+    font-weight: 900;
+    letter-spacing: .12em;
+    margin-bottom: .45rem;
+    text-transform: uppercase;
 }
 
 .southern-spec-grid {

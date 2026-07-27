@@ -1,4 +1,5 @@
 from odoo import fields, models
+from odoo.tools import html_escape
 
 
 class SaleOrder(models.Model):
@@ -10,6 +11,7 @@ class SaleOrder(models.Model):
     SOUTHERN_CARD_FEE_FIXED = 0.30
     SOUTHERN_PICKUP_CARRIER = "Pickup at Southern Equipment"
     SOUTHERN_SHIP_CARRIER = "Flat-rate shipping from Southern Equipment"
+    SOUTHERN_PARTS_PORTAL_TAG = "Website Parts Order"
 
     def _cart_add(self, *args, **kwargs):
         result = super()._cart_add(*args, **kwargs)
@@ -22,8 +24,10 @@ class SaleOrder(models.Model):
         return result
 
     def action_confirm(self):
+        self._southern_sync_website_card_fee()
         self._southern_apply_website_fulfillment_routes()
         result = super().action_confirm()
+        self._southern_note_website_purchase_orders()
         self._southern_activate_paid_memberships()
         return result
 
@@ -49,8 +53,16 @@ class SaleOrder(models.Model):
                 continue
 
             if not vendor_to_southern_routes:
+                order.message_post(
+                    body=(
+                        "Website parts order could not be routed to purchasing because "
+                        "the Buy and Replenish on Order routes were not found."
+                    )
+                )
                 continue
 
+            routed_lines = self.env["sale.order.line"]
+            skipped_lines = self.env["sale.order.line"]
             for line in order.order_line.filtered(
                 lambda order_line: not order_line.display_type
                 and not order_line.is_delivery
@@ -59,8 +71,54 @@ class SaleOrder(models.Model):
             ):
                 product = line.product_id
                 if not product.purchase_ok or not product.seller_ids:
+                    skipped_lines |= line
                     continue
                 line.route_ids = [(6, 0, vendor_to_southern_routes)]
+                routed_lines |= line
+
+            if routed_lines:
+                order.message_post(
+                    body=(
+                        "Website parts fulfillment: routed %s line(s) to vendor purchasing "
+                        "for receipt at Southern Equipment before customer fulfillment."
+                    )
+                    % len(routed_lines)
+                )
+            if skipped_lines:
+                order.message_post(
+                    body=(
+                        "Website parts fulfillment needs review: %s line(s) were not routed "
+                        "to purchasing because the product is not purchasable or has no vendor."
+                    )
+                    % len(skipped_lines)
+                )
+
+    def _southern_note_website_purchase_orders(self):
+        PurchaseOrder = self.env["purchase.order"].sudo()
+        for order in self:
+            if not order.website_id or order.company_id.id != 2:
+                continue
+
+            purchase_orders = PurchaseOrder.search([("origin", "ilike", order.name)])
+            if not purchase_orders:
+                continue
+
+            carrier_note = order.carrier_id.name or "No delivery method selected"
+            note = (
+                "Website Parts Order\n"
+                f"Customer order: {order.name}\n"
+                f"Customer: {order.partner_id.display_name}\n"
+                f"Delivery choice: {carrier_note}\n"
+                "Fulfillment rule: order vendor stock to Southern Equipment first; "
+                "then fulfill pickup or customer shipment from Southern."
+            )
+            note_html = "<br/>".join(html_escape(line) for line in note.splitlines())
+            for purchase_order in purchase_orders:
+                if self.SOUTHERN_PARTS_PORTAL_TAG not in (purchase_order.note or ""):
+                    purchase_order.note = (
+                        f"{note_html}<br/><br/>{purchase_order.note or ''}"
+                    ).strip()
+                purchase_order.message_post(body=note_html)
 
     def _southern_sync_website_card_fee(self):
         if self.env.context.get("skip_southern_card_fee"):
