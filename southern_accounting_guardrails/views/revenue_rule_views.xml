@@ -41,26 +41,9 @@
         </field>
     </record>
 
-    <record id="view_southern_revenue_rule_search" model="ir.ui.view">
-        <field name="name">southern.accounting.revenue.rule.search</field>
-        <field name="model">southern.accounting.revenue.rule</field>
-        <field name="arch" type="xml">
-            <search>
-                <field name="name"/>
-                <field name="match_text"/>
-                <filter name="active_rules" string="Active" domain="[('active', '=', True)]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_bucket" string="Bucket" context="{'group_by': 'revenue_bucket'}"/>
-                </group>
-            </search>
-        </field>
-    </record>
-
     <record id="action_southern_revenue_rules" model="ir.actions.act_window">
         <field name="name">Revenue Rules</field>
         <field name="res_model">southern.accounting.revenue.rule</field>
         <field name="view_mode">list,form</field>
-        <field name="search_view_id" ref="view_southern_revenue_rule_search"/>
-        <field name="context">{'search_default_active_rules': 1}</field>
     </record>
 </odoo>
