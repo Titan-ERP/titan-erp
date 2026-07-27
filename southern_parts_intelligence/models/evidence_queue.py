@@ -209,16 +209,40 @@ class SouthernPartsEvidenceQueue(models.Model):
     def _write_refresh_error(self, message, rate_limited=False):
         self.ensure_one()
         delay = timedelta(hours=6 if rate_limited else 24)
+        next_check_at = fields.Datetime.now() + delay
         self.write(
             {
                 "status": "rate_limited" if rate_limited else "alternate_source_needed",
                 "blocker_reason": message[:255],
                 "last_refresh_error": message[:255],
                 "last_checked_at": fields.Datetime.now(),
-                "next_check_at": fields.Datetime.now() + delay,
+                "next_check_at": next_check_at,
                 "retry_count": self.retry_count + 1,
             }
         )
+        if rate_limited and self.source_name:
+            same_source = self.search(
+                [
+                    ("id", "!=", self.id),
+                    ("active", "=", True),
+                    ("price_watch_enabled", "=", True),
+                    ("evidence_type", "=", "pricing"),
+                    ("source_name", "=", self.source_name),
+                    ("status", "not in", ["blocked", "rejected"]),
+                    "|",
+                    ("next_check_at", "=", False),
+                    ("next_check_at", "<", next_check_at),
+                ],
+                limit=500,
+            )
+            same_source.write(
+                {
+                    "status": "rate_limited",
+                    "blocker_reason": "Source rate-limited; supplier lane paused before retry.",
+                    "last_refresh_error": message[:255],
+                    "next_check_at": next_check_at,
+                }
+            )
 
     def _observation_write_values(self, observation):
         self.ensure_one()
