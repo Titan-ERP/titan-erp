@@ -140,12 +140,12 @@
                     <section t-if="'related' in southern_sections" id="southern_related_parts" class="southern-parts-section">
                         <h2><span class="southern-parts-icon">↔</span> Related Parts</h2>
                         <div class="southern-related-grid">
-                            <a t-foreach="product.sudo().southern_related_part_ids" t-as="related"
-                               t-att-href="related.related_product_tmpl_id.website_url or '#'"
+                            <a t-foreach="product._southern_related_parts_summary()" t-as="related"
+                               t-att-href="related['website_url'] or '#'"
                                class="southern-related-card">
-                                <span class="southern-related-card__type" t-field="related.relationship_type"/>
-                                <span class="southern-related-card__name" t-field="related.related_product_tmpl_id"/>
-                                <span t-if="related.related_product_tmpl_id.default_code" class="southern-related-card__sku" t-field="related.related_product_tmpl_id.default_code"/>
+                                <span class="southern-related-card__type" t-out="related['relationship_type']"/>
+                                <span class="southern-related-card__name" t-out="related['name']"/>
+                                <span t-if="related['default_code']" class="southern-related-card__sku" t-out="related['default_code']"/>
                             </a>
                         </div>
                     </section>

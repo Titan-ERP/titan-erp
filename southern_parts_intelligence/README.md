@@ -28,6 +28,13 @@ Search support:
 - Aggregates SKU, barcode, manufacturer, OEM references, fitment, catalog pages, specs, and alternate barcodes.
 - Extends the product search view with a `Parts Intelligence` search field.
 
+Internal sync support:
+
+- Adds a `Catalog Sync Jobs` menu under Parts Intelligence.
+- Refreshes cached website snapshots every 10 minutes in small batches.
+- Keeps product detail pages from loading every specification, fitment, OEM reference, catalog page, and related-part record during each website request.
+- Does not publish, price, categorize, import, or change product references. Publication and sourcing still require the guarded external scripts and review workflow.
+
 ## Deployment
 
 Install on staging before production.
@@ -46,6 +53,7 @@ py -3 scripts\odoo_import_parts_intelligence_json.py outputs\southern_parts_spar
 ```
 
 9. Check the website product pages. The product page should use Sparex-style anchored sections: product specifications, suitable make/model, OEM part numbers, catalog pages, and related parts.
+10. Open `Parts Intelligence > Catalog Sync Jobs` and run `Website Parts Snapshot Refresh` once after the module upgrade to seed the first cache batch.
 
 ## Importer
 

@@ -7,3 +7,4 @@ access_southern_parts_oem_reference_user,southern.parts.oem_reference user,model
 access_southern_parts_catalog_page_user,southern.parts.catalog_page user,model_southern_parts_catalog_page,base.group_user,1,1,1,1
 access_southern_parts_related_product_user,southern.parts.related_product user,model_southern_parts_related_product,base.group_user,1,1,1,1
 access_southern_parts_alternate_barcode_user,southern.parts.alternate_barcode user,model_southern_parts_alternate_barcode,base.group_user,1,1,1,1
+access_southern_parts_catalog_sync_user,southern.parts.catalog.sync user,model_southern_parts_catalog_sync,base.group_system,1,1,1,1
