@@ -370,9 +370,11 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
                 similarity += max(0.0, 12.0 - difference * 3.0)
                 fit_factor *= 1.0 if difference <= 1 else 0.85
             if self.hours and comp.hours:
+                hour_difference = abs(self.hours - comp.hours)
                 similarity += max(
-                    0.0, 8.0 - abs(self.hours - comp.hours) / 500.0
+                    0.0, 8.0 - hour_difference / 500.0
                 )
+                fit_factor *= 1.0 if hour_difference <= 500.0 else 0.85
 
             type_weight = {
                 "auction_result": 1.0,
