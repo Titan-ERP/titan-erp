@@ -107,6 +107,7 @@ class SouthernAccountingDailyControl(models.Model):
                     "last_refreshed_at": fields.Datetime.now(),
                 }
             )
+        return True
 
     @api.model
     def cron_refresh_daily_controls(self):
@@ -121,12 +122,15 @@ class SouthernAccountingDailyControl(models.Model):
 
     def action_mark_reviewed(self):
         self.write({"state": "reviewed"})
+        return True
 
     def action_mark_exception(self):
         self.write({"state": "exception"})
+        return True
 
     def action_reopen(self):
         self.write({"state": "open"})
+        return True
 
     def action_view_bank_review(self):
         self.ensure_one()
