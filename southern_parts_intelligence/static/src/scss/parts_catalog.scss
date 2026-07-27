@@ -1,3 +1,65 @@
+.se-shop-counter {
+    background: #15171a;
+    border-bottom: 3px solid #efbb2e;
+    color: #fff;
+    margin-bottom: 24px;
+}
+
+.se-shop-counter__eyebrow {
+    color: #efbb2e;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+}
+
+.se-shop-counter__title {
+    font-size: clamp(30px, 4vw, 44px);
+    font-weight: 900;
+    letter-spacing: 0;
+    line-height: 1.05;
+}
+
+.se-shop-counter__copy {
+    color: #d8dde2;
+    font-size: 17px;
+    line-height: 1.55;
+    max-width: 840px;
+}
+
+.se-shop-counter__fulfillment {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .65rem;
+
+    span {
+        border: 1px solid rgba(239, 187, 46, .45);
+        color: #f4f6f8;
+        font-size: .9rem;
+        font-weight: 800;
+        padding: .45rem .65rem;
+    }
+}
+
+.se-shop-counter__primary {
+    background: #efbb2e;
+    border-radius: 3px;
+    color: #17191c;
+    font-weight: 900;
+    padding: 12px 18px;
+
+    &:hover {
+        background: #f7ca49;
+        color: #17191c;
+    }
+}
+
+.se-shop-counter__secondary {
+    border-radius: 3px;
+    font-weight: 900;
+    padding: 12px 18px;
+}
+
 .southern-part-jump-links {
     border-top: 1px solid #cfd4da;
     display: grid;

@@ -14,6 +14,35 @@
         </xpath>
     </template>
 
+    <template id="southern_shop_counter_band" inherit_id="website_sale.products" name="Southern Parts Counter Notice">
+        <xpath expr="//div[@id='oe_structure_website_sale_products_1']" position="replace">
+            <div class="oe_structure oe_empty oe_structure_not_nearest" id="oe_structure_website_sale_products_1">
+                <section class="se-shop-counter py-4 py-lg-5">
+                    <div class="container">
+                        <div class="row align-items-center g-4">
+                            <div class="col-lg-8">
+                                <p class="se-shop-counter__eyebrow mb-2">Southern Parts Counter</p>
+                                <h1 class="se-shop-counter__title mb-2">Find the parts you need.</h1>
+                                <p class="se-shop-counter__copy mb-3">Search by part number, OEM reference, product name, or category. If you do not see what you need, send the machine model, OEM number, or a photo and our parts desk will verify it.</p>
+                                <div class="se-shop-counter__fulfillment">
+                                    <span>Free pickup at Southern Equipment</span>
+                                    <span>$24.99 flat-rate shipping after Southern receives and verifies the part</span>
+                                </div>
+                            </div>
+                            <div class="col-lg-4">
+                                <div class="d-grid gap-2">
+                                    <a class="btn se-shop-counter__primary" href="/request?request=parts">Request Parts Help</a>
+                                    <a class="btn btn-outline-light se-shop-counter__secondary" href="tel:+16016514555">Call (601) 651-4555</a>
+                                    <a class="btn btn-outline-light se-shop-counter__secondary" href="/membership">Membership Benefits</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </xpath>
+    </template>
+
     <template id="southern_parts_product_detail_sections" inherit_id="website_sale.product" name="Southern Parts Product Detail Sections">
         <xpath expr="//section[@id='product_detail']" position="inside">
             <t t-set="southern_sections" t-value="product._southern_website_catalog_sections() if product._southern_has_parts_catalog_data() else []"/>
