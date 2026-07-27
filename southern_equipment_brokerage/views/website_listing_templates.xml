@@ -210,12 +210,7 @@
 
                 <section class="container se-public-comps-section pb-4" t-if="listing.comp_count">
                     <t t-set="public_comps"
-                       t-value="request.env['southern.equipment.comp'].sudo().search([
-                            ('company_id', '=', listing.company_id.id),
-                            ('price', '&gt;', 0),
-                            ('manufacturer', '=ilike', listing.manufacturer or ''),
-                            ('equipment_type', '=', listing.equipment_type)
-                       ], order='sale_date desc, id desc', limit=8)"/>
+                       t-value="listing.get_public_comp_records(limit=8)"/>
                     <div t-if="public_comps" class="se-public-comps">
                         <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-3">
                             <div>

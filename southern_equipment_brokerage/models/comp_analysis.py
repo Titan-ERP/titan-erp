@@ -539,6 +539,29 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
             ),
         }
 
+    def get_public_comp_records(self, limit=8):
+        """Return only the exact evidence pool used by the listing valuation."""
+        self.ensure_one()
+        comps = self.env["southern.equipment.comp"].sudo().search(
+            [
+                ("company_id", "=", self.company_id.id),
+                ("price", ">", 0),
+            ]
+        )
+        rows = self._compatible_comp_rows(comps)
+        ranked = sorted(
+            rows,
+            key=lambda row: (
+                row[2],
+                row[0].sale_date or fields.Date.from_string("1900-01-01"),
+                row[0].id,
+            ),
+            reverse=True,
+        )
+        return self.env["southern.equipment.comp"].sudo().browse(
+            [row[0].id for row in ranked[: max(int(limit or 0), 0)]]
+        )
+
     def _recalculate_comp_analysis(self):
         Comp = self.env["southern.equipment.comp"]
         for company in self.mapped("company_id"):

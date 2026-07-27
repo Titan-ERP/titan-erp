@@ -317,6 +317,64 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         self.assertEqual(listing.comp_match_basis, "exact_model")
         self.assertEqual(listing.comp_median, 75000)
 
+    def test_public_comp_cards_use_only_selected_d39px_evidence_pool(self):
+        listing = self.Listing.create(
+            self._listing_values(
+                equipment_type="dozer",
+                manufacturer="Komatsu",
+                model="D39PX-24",
+                year=2019,
+                hours=5600,
+                seller_ask_price=57000,
+            )
+        )
+        selected = self.Comp.create(
+            [
+                self._comp_values(
+                    name=f"D39PX Selected {index}",
+                    equipment_type="dozer",
+                    manufacturer="Komatsu",
+                    model="D39PX-24",
+                    year=year,
+                    hours=hours,
+                    price=price,
+                )
+                for index, (year, hours, price) in enumerate(
+                    [
+                        (2018, 5200, 48000),
+                        (2019, 5600, 50000),
+                        (2020, 6000, 57500),
+                    ]
+                )
+            ]
+        )
+        rejected = self.Comp.create(
+            [
+                self._comp_values(
+                    name=f"Wrong Komatsu Dozer {model}",
+                    equipment_type="dozer",
+                    manufacturer="Komatsu",
+                    model=model,
+                    year=2019,
+                    hours=5600,
+                    price=price,
+                )
+                for model, price in [
+                    ("D51PX-24", 80000),
+                    ("D61PX-23", 95000),
+                    ("D65", 120000),
+                    ("D85", 175000),
+                ]
+            ]
+        )
+
+        listing.action_recalculate_comp_analysis()
+        public_comps = listing.get_public_comp_records()
+
+        self.assertEqual(listing.comp_count, 3)
+        self.assertEqual(set(public_comps.ids), set(selected.ids))
+        self.assertFalse(public_comps & rejected)
+
     def test_batch_slugs_are_unique_and_publish_requires_curated_fields(self):
         listings = self.Listing.create(
             [self._listing_values(), self._listing_values()]
