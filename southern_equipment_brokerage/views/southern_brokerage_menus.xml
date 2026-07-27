@@ -24,5 +24,8 @@
     <menuitem id="menu_southern_brokerage_analysis" name="Analysis" parent="menu_southern_brokerage_root" sequence="30"
               groups="southern_equipment_brokerage.group_southern_deal_broker"/>
     <menuitem id="menu_southern_equipment_comps" name="Equipment Comps" parent="menu_southern_brokerage_analysis"
-              action="action_southern_equipment_comps" sequence="10"/>
+              action="action_southern_equipment_comps" sequence="20"/>
+    <menuitem id="menu_southern_equipment_spec_profiles" name="Specification Catalog"
+              parent="menu_southern_brokerage_analysis"
+              action="action_southern_equipment_spec_profiles" sequence="10"/>
 </odoo>

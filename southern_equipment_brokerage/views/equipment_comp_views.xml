@@ -12,6 +12,8 @@
                 <field name="model"/>
                 <field name="year"/>
                 <field name="hours"/>
+                <field name="condition_grade"/>
+                <field name="spec_profile_id" optional="hide"/>
                 <field name="price"/>
                 <field name="sale_type"/>
                 <field name="sale_date"/>
@@ -33,6 +35,8 @@
                             <field name="model"/>
                             <field name="year"/>
                             <field name="hours"/>
+                            <field name="condition_grade"/>
+                            <field name="spec_profile_id"/>
                             <field name="location"/>
                         </group>
                         <group string="Valuation Source">

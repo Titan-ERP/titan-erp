@@ -105,6 +105,10 @@
                             string="Recalculate Comps"
                             type="object"
                             groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                    <button name="action_view_comp_audit"
+                            string="Audit Comp Selection"
+                            type="object"
+                            groups="southern_equipment_brokerage.group_southern_deal_broker"/>
                     <button name="action_publish" string="Publish" type="object" class="btn-primary"
                             invisible="website_published"
                             groups="southern_equipment_brokerage.group_southern_deal_broker"/>
@@ -140,6 +144,10 @@
                             <field name="model"/>
                             <field name="year"/>
                             <field name="hours"/>
+                            <field name="condition_grade"
+                                   groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                            <field name="spec_profile_id"
+                                   groups="southern_equipment_brokerage.group_southern_deal_broker"/>
                             <field name="public_price"/>
                             <field name="estimated_market_value"/>
                         </group>
@@ -223,6 +231,12 @@
                                 <field name="margin_pct" widget="percentage" readonly="1"/>
                                 <field name="deal_score"/>
                                 <field name="grade"/>
+                            </group>
+                            <group string="Valuation Back-Test">
+                                <field name="actual_sale_price"/>
+                                <field name="valuation_at_sale" readonly="1"/>
+                                <field name="valuation_error_pct" readonly="1"/>
+                                <field name="valuation_accuracy" readonly="1"/>
                             </group>
                         </page>
                     </notebook>

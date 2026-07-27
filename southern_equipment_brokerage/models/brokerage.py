@@ -941,7 +941,13 @@ class SouthernBrokeredDeal(models.Model):
             if not deal.all_parties_approved:
                 raise UserError(_("Record all-party approval before closing the deal."))
             deal.write({"stage": "closed", "close_date": fields.Date.context_today(deal)})
-            deal.listing_id.write({"public_status": "sold", "website_published": False})
+            listing_values = {
+                "public_status": "sold",
+                "website_published": False,
+            }
+            if deal.negotiated_purchase_price:
+                listing_values["actual_sale_price"] = deal.negotiated_purchase_price
+            deal.listing_id.write(listing_values)
             if deal.buyer_inquiry_id:
                 deal.buyer_inquiry_id.stage = "closed"
 

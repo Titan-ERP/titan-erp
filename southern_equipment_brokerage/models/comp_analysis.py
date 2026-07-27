@@ -12,7 +12,7 @@ MAX_COMP_YEAR_DIFFERENCE = 3
 MINIMUM_COMP_COUNT = 3
 GOOD_MAX_MEDIAN_MULTIPLIER = 1.10
 METHOD_VERSION = (
-    "native-v3-tiered-hours-required-3-comp-mad-outliers-"
+    "native-v4-spec-peers-condition-audit-required-3-comp-mad-outliers-"
     "500-to-1000-hours-3-years-110pct"
 )
 TERMINAL_STATUSES = ("archived", "sold")
@@ -167,6 +167,65 @@ def _cross_brand_size_tier(equipment_type, model):
     return ""
 
 
+def _within_ratio(left, right, tolerance):
+    if not left or not right:
+        return None
+    return abs(left - right) / max(left, right) <= tolerance
+
+
+def _spec_profiles_are_peers(listing_profile, comp_profile):
+    """Use documented physical capability, never type alone, for peer matching."""
+    if not listing_profile or not comp_profile:
+        return False
+    if _equipment_class(listing_profile.equipment_type) != _equipment_class(
+        comp_profile.equipment_type
+    ):
+        return False
+    if (
+        listing_profile.undercarriage
+        and comp_profile.undercarriage
+        and listing_profile.undercarriage != comp_profile.undercarriage
+    ):
+        return False
+    if (
+        listing_profile.configuration
+        and comp_profile.configuration
+        and _normalized(listing_profile.configuration)
+        != _normalized(comp_profile.configuration)
+    ):
+        return False
+    weight_fit = _within_ratio(
+        listing_profile.operating_weight_lb,
+        comp_profile.operating_weight_lb,
+        0.15,
+    )
+    horsepower_fit = _within_ratio(
+        listing_profile.horsepower,
+        comp_profile.horsepower,
+        0.20,
+    )
+    capacity_fit = _within_ratio(
+        listing_profile.rated_capacity_lb,
+        comp_profile.rated_capacity_lb,
+        0.15,
+    )
+    lift_fit = _within_ratio(
+        listing_profile.lift_height_ft,
+        comp_profile.lift_height_ft,
+        0.10,
+    )
+    known_fits = [
+        fit
+        for fit in (weight_fit, horsepower_fit, capacity_fit, lift_fit)
+        if fit is not None
+    ]
+    if not known_fits or not all(known_fits):
+        return False
+    # Weight or rated capacity must anchor the comparison. Horsepower alone is
+    # too weak to establish that two machines belong to the same size class.
+    return weight_fit is True or capacity_fit is True
+
+
 def _weighted_quantile(values, quantile):
     ordered = sorted((price, weight) for price, weight in values if weight > 0)
     total = sum(weight for _price, weight in ordered)
@@ -266,7 +325,7 @@ def _public_valuation_summary(
     basis_label = {
         "exact_model": "exact-model",
         "same_make_family": "same-manufacturer compatible-model",
-        "cross_brand_peer": "cross-brand size-tier peer",
+        "cross_brand_peer": "cross-brand specification peer",
     }[basis]
     comparison = ""
     if ask:
@@ -304,7 +363,7 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
             ("insufficient", "Insufficient Closely Matched Data"),
             ("exact_model", "Exact Model"),
             ("same_make_family", "Same-Manufacturer Compatible Model"),
-            ("cross_brand_peer", "Cross-Brand Size-Tier Peers"),
+            ("cross_brand_peer", "Cross-Brand Specification Peers"),
         ],
         string="Comp Match Basis",
         default="insufficient",
@@ -326,13 +385,28 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
         ):
             return []
         listing_family = _model_family(self.manufacturer, self.model)
-        listing_tier = _cross_brand_size_tier(self.equipment_type, self.model)
+        profiles = self.env["southern.equipment.spec.profile"].search(
+            [("company_id", "=", self.company_id.id), ("active", "=", True)]
+        )
+        profile_map = {
+            (
+                _equipment_class(profile.equipment_type),
+                _manufacturer_family(profile.manufacturer),
+                _normalized(profile.model),
+            ): profile
+            for profile in profiles
+        }
+        listing_profile = self.spec_profile_id or profile_map.get(
+            (listing_type, listing_make, listing_model)
+        )
         primary_rows = []
         cross_brand_rows = []
         seen_sources = set()
         today = fields.Date.context_today(self)
         for comp in comps:
             if comp.price <= 0:
+                continue
+            if comp.condition_grade in ("inoperable", "salvage"):
                 continue
             if _equipment_class(comp.equipment_type) != listing_type:
                 continue
@@ -344,11 +418,15 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
                 and bool(listing_family)
                 and listing_family == _model_family(comp.manufacturer, comp.model)
             )
-            cross_brand = (
-                not same_make
-                and bool(listing_tier)
-                and listing_tier
-                == _cross_brand_size_tier(comp.equipment_type, comp.model)
+            comp_profile = comp.spec_profile_id or profile_map.get(
+                (
+                    listing_type,
+                    _manufacturer_family(comp.manufacturer),
+                    comp_model,
+                )
+            )
+            cross_brand = not same_make and _spec_profiles_are_peers(
+                listing_profile, comp_profile
             )
             if not exact and not family and not cross_brand:
                 continue
@@ -514,6 +592,11 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
             )
             else "medium"
         )
+        if any(
+            comp.condition_grade in (False, "unknown")
+            for comp, _score, _weight, _exact, _cross_brand in rows
+        ):
+            confidence = "medium"
         ask = self.seller_ask_price or self.ask_price
         score, grade = _score_deal(ask, low, median, high, confidence)
         return {
@@ -561,6 +644,137 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
         return self.env["southern.equipment.comp"].sudo().browse(
             [row[0].id for row in ranked[: max(int(limit or 0), 0)]]
         )
+
+    def _comp_audit_reason(self, comp, selected_ids):
+        self.ensure_one()
+        if comp.id in selected_ids:
+            return "Included in the published valuation evidence pool"
+        if comp.price <= 0:
+            return "Excluded: missing or non-positive price"
+        if comp.condition_grade in ("inoperable", "salvage"):
+            return "Excluded: inoperable or salvage condition"
+        if _equipment_class(comp.equipment_type) != _equipment_class(
+            self.equipment_type
+        ):
+            return "Excluded: different equipment class"
+        if not comp.year:
+            return "Excluded: comp year is missing"
+        if abs(self.year - comp.year) > MAX_COMP_YEAR_DIFFERENCE:
+            return "Excluded: more than 3 model years away"
+        if not comp.hours:
+            return "Excluded: comp hours are missing"
+        if abs(self.hours - comp.hours) > MAX_COMP_HOURS_DIFFERENCE:
+            return "Excluded: more than 1,000 hours away"
+        same_make = _manufacturer_family(comp.manufacturer) == _manufacturer_family(
+            self.manufacturer
+        )
+        exact_or_family = same_make and _model_family(
+            comp.manufacturer, comp.model
+        ) == _model_family(self.manufacturer, self.model)
+        if same_make and not exact_or_family:
+            return "Excluded: different model family"
+        if not same_make:
+            profiles = self.env["southern.equipment.spec.profile"].search(
+                [("company_id", "=", self.company_id.id), ("active", "=", True)]
+            )
+            profile_map = {
+                (
+                    _equipment_class(profile.equipment_type),
+                    _manufacturer_family(profile.manufacturer),
+                    _normalized(profile.model),
+                ): profile
+                for profile in profiles
+            }
+            listing_profile = self.spec_profile_id or profile_map.get(
+                (
+                    _equipment_class(self.equipment_type),
+                    _manufacturer_family(self.manufacturer),
+                    _normalized(self.model),
+                )
+            )
+            comp_profile = comp.spec_profile_id or profile_map.get(
+                (
+                    _equipment_class(comp.equipment_type),
+                    _manufacturer_family(comp.manufacturer),
+                    _normalized(comp.model),
+                )
+            )
+            if not _spec_profiles_are_peers(listing_profile, comp_profile):
+                return "Excluded: no documented same-size specification match"
+        return (
+            "Excluded: tighter evidence pool selected, duplicate source, "
+            "or robust price-outlier rule"
+        )
+
+    def action_view_comp_audit(self):
+        self.ensure_one()
+        Comp = self.env["southern.equipment.comp"]
+        Audit = self.env["southern.equipment.comp.audit.line"]
+        comps = Comp.search(
+            [("company_id", "=", self.company_id.id), ("price", ">", 0)]
+        ).filtered(
+            lambda comp: _equipment_class(comp.equipment_type)
+            == _equipment_class(self.equipment_type)
+        )
+        rows = self._compatible_comp_rows(comps)
+        selected = {row[0].id: row for row in rows}
+        Audit.search(
+            [("user_id", "=", self.env.user.id), ("listing_id", "=", self.id)]
+        ).unlink()
+        relevant = sorted(
+            comps,
+            key=lambda comp: (
+                comp.id not in selected,
+                abs((self.year or 0) - (comp.year or 0)),
+                abs((self.hours or 0) - (comp.hours or 0)),
+                -comp.id,
+            ),
+        )[:300]
+        values = []
+        for comp in relevant:
+            row = selected.get(comp.id)
+            exact = bool(row and row[3])
+            cross_brand = bool(row and row[4])
+            values.append(
+                {
+                    "user_id": self.env.user.id,
+                    "listing_id": self.id,
+                    "comp_id": comp.id,
+                    "included": bool(row),
+                    "reason": self._comp_audit_reason(comp, set(selected)),
+                    "match_basis": (
+                        "exact_model"
+                        if exact
+                        else "spec_peer"
+                        if cross_brand
+                        else "same_make_family"
+                        if row
+                        else "excluded"
+                    ),
+                    "year_difference": (
+                        abs(self.year - comp.year) if self.year and comp.year else 0
+                    ),
+                    "hour_difference": (
+                        abs(self.hours - comp.hours)
+                        if self.hours and comp.hours
+                        else 0.0
+                    ),
+                    "match_weight": row[2] if row else 0.0,
+                }
+            )
+        if values:
+            Audit.create(values)
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Comp Selection Audit - %s") % self.public_title,
+            "res_model": "southern.equipment.comp.audit.line",
+            "view_mode": "list,form",
+            "domain": [
+                ("user_id", "=", self.env.user.id),
+                ("listing_id", "=", self.id),
+            ],
+            "context": {"create": False, "edit": False, "delete": False},
+        }
 
     def _recalculate_comp_analysis(self):
         Comp = self.env["southern.equipment.comp"]

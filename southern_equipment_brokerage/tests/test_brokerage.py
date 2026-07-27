@@ -20,6 +20,7 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         super().setUpClass()
         cls.Listing = cls.env["southern.equipment.listing"]
         cls.Comp = cls.env["southern.equipment.comp"]
+        cls.SpecProfile = cls.env["southern.equipment.spec.profile"]
         cls.Inquiry = cls.env["southern.buyer.inquiry"]
         cls.seller = cls.env["res.partner"].create(
             {"name": "Private Test Seller", "phone": "555-0100"}
@@ -198,6 +199,7 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
                     year=2023,
                     hours=500,
                     price=40000 + index * 1000,
+                    condition_grade="good",
                 )
                 for index in range(6)
             ]
@@ -208,7 +210,18 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         self.assertEqual(listing.comp_count, 6)
         self.assertEqual(listing.comp_confidence, "high")
 
-    def test_native_cross_brand_requires_three_allowlisted_size_tier_peers(self):
+    def test_native_cross_brand_requires_three_documented_specification_peers(self):
+        listing_profile = self.SpecProfile.create(
+            {
+                "equipment_type": "dozer",
+                "manufacturer": "Caterpillar",
+                "model": "D5K2",
+                "operating_weight_lb": 21000,
+                "horsepower": 105,
+                "undercarriage": "tracked",
+                "source_note": "Authorized manufacturer specification fixture",
+            }
+        )
         listing = self.Listing.create(
             self._listing_values(
                 equipment_type="dozer",
@@ -217,6 +230,7 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
                 year=2020,
                 hours=2000,
                 seller_ask_price=65000,
+                spec_profile_id=listing_profile.id,
             )
         )
         peer_values = [
@@ -224,8 +238,20 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
             ("Komatsu", "D51PX-24", 2020, 2100, 70000),
             ("Case", "850M WT", 2021, 2200, 72000),
         ]
-        peers = self.Comp.create(
-            [
+        peer_records = []
+        for index, (manufacturer, model, year, hours, price) in enumerate(peer_values):
+            profile = self.SpecProfile.create(
+                {
+                    "equipment_type": "dozer",
+                    "manufacturer": manufacturer,
+                    "model": model,
+                    "operating_weight_lb": 20500 + index * 250,
+                    "horsepower": 103 + index,
+                    "undercarriage": "tracked",
+                    "source_note": "Authorized manufacturer specification fixture",
+                }
+            )
+            peer_records.append(
                 self._comp_values(
                     name=f"Cross Brand Peer {index}",
                     equipment_type="dozer",
@@ -234,18 +260,17 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
                     year=year,
                     hours=hours,
                     price=price,
+                    spec_profile_id=profile.id,
                 )
-                for index, (manufacturer, model, year, hours, price)
-                in enumerate(peer_values)
-            ]
-        )
+            )
+        peers = self.Comp.create(peer_records)
 
         listing.action_recalculate_comp_analysis()
 
         self.assertEqual(listing.comp_count, 3)
         self.assertEqual(listing.comp_match_basis, "cross_brand_peer")
         self.assertEqual(listing.comp_confidence, "medium")
-        self.assertIn("cross-brand size-tier", listing.public_deal_summary)
+        self.assertIn("cross-brand specification", listing.public_deal_summary)
         self.assertIn("not an appraisal", listing.public_deal_summary)
 
         peers[0].unlink()
@@ -253,6 +278,111 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         self.assertEqual(listing.comp_count, 0)
         self.assertEqual(listing.comp_match_basis, "insufficient")
         self.assertIn("not enough closely matched", listing.public_deal_summary)
+
+    def test_native_cross_brand_rejects_specification_size_mismatch(self):
+        listing_profile = self.SpecProfile.create(
+            {
+                "equipment_type": "dozer",
+                "manufacturer": "Test Make",
+                "model": "Small 100",
+                "operating_weight_lb": 20000,
+                "horsepower": 100,
+                "source_note": "Authorized specification fixture",
+            }
+        )
+        large_profile = self.SpecProfile.create(
+            {
+                "equipment_type": "dozer",
+                "manufacturer": "Other Make",
+                "model": "Large 900",
+                "operating_weight_lb": 70000,
+                "horsepower": 300,
+                "source_note": "Authorized specification fixture",
+            }
+        )
+        listing = self.Listing.create(
+            self._listing_values(
+                equipment_type="dozer",
+                manufacturer="Test Make",
+                model="Small 100",
+                spec_profile_id=listing_profile.id,
+            )
+        )
+        self.Comp.create(
+            [
+                self._comp_values(
+                    name=f"Wrong Size Peer {index}",
+                    equipment_type="dozer",
+                    manufacturer="Other Make",
+                    model="Large 900",
+                    spec_profile_id=large_profile.id,
+                )
+                for index in range(3)
+            ]
+        )
+
+        listing.action_recalculate_comp_analysis()
+
+        self.assertEqual(listing.comp_count, 0)
+        self.assertEqual(listing.comp_match_basis, "insufficient")
+
+    def test_comp_audit_explains_condition_and_hour_rejections(self):
+        listing = self.Listing.create(
+            self._listing_values(seller_ask_price=45000)
+        )
+        included = self.Comp.create(
+            [
+                self._comp_values(
+                    name=f"Audit Included {index}",
+                    source_url=f"https://example.test/included/{index}",
+                    condition_grade="good",
+                )
+                for index in range(3)
+            ]
+        )
+        salvage = self.Comp.create(
+            self._comp_values(
+                name="Audit Salvage",
+                source_url="https://example.test/salvage",
+                condition_grade="salvage",
+            )
+        )
+        far_hours = self.Comp.create(
+            self._comp_values(
+                name="Audit Far Hours",
+                source_url="https://example.test/far-hours",
+                hours=2500,
+            )
+        )
+
+        listing.action_view_comp_audit()
+        audit = self.env["southern.equipment.comp.audit.line"].search(
+            [("listing_id", "=", listing.id), ("user_id", "=", self.env.user.id)]
+        )
+
+        self.assertEqual(
+            set(audit.filtered("included").mapped("comp_id").ids),
+            set(included.ids),
+        )
+        self.assertIn(
+            "inoperable or salvage",
+            audit.filtered(lambda line: line.comp_id == salvage).reason,
+        )
+        self.assertIn(
+            "more than 1,000 hours",
+            audit.filtered(lambda line: line.comp_id == far_hours).reason,
+        )
+
+    def test_sold_listing_snapshots_valuation_and_backtests_actual_price(self):
+        listing = self.Listing.create(
+            self._listing_values(comp_median=50000, actual_sale_price=47500)
+        )
+
+        listing.write({"public_status": "sold"})
+
+        self.assertEqual(listing.valuation_at_sale, 50000)
+        self.assertEqual(listing.valuation_accuracy, "within_10")
+        self.assertAlmostEqual(listing.valuation_error_pct, 5.263, places=2)
 
     def test_native_primary_comp_excludes_cross_brand_and_wrong_size_tier(self):
         listing = self.Listing.create(
