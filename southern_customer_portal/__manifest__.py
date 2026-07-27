@@ -9,6 +9,8 @@
         "account",
         "repair",
         "mail",
+        "sale_stock",
+        "delivery",
         "website_sale",
         "sale_subscription",
         "website_sale_subscription",

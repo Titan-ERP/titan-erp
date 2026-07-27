@@ -8,6 +8,8 @@ class SaleOrder(models.Model):
     SOUTHERN_CARD_FEE_CODE = "CARD-FEE"
     SOUTHERN_CARD_FEE_RATE = 0.035
     SOUTHERN_CARD_FEE_FIXED = 0.30
+    SOUTHERN_PICKUP_CARRIER = "Pickup at Southern Equipment"
+    SOUTHERN_SHIP_CARRIER = "Ship to billing/shipping address"
 
     def _cart_add(self, *args, **kwargs):
         result = super()._cart_add(*args, **kwargs)
@@ -20,9 +22,48 @@ class SaleOrder(models.Model):
         return result
 
     def action_confirm(self):
+        self._southern_apply_website_fulfillment_routes()
         result = super().action_confirm()
         self._southern_activate_paid_memberships()
         return result
+
+    def _southern_apply_website_fulfillment_routes(self):
+        Route = self.env["stock.route"].sudo()
+        dropship_route = Route.search([("name", "=", "Dropship")], limit=1)
+        buy_route = Route.search([("name", "=", "Buy")], limit=1)
+        mto_route = Route.search([("name", "=", "Replenish on Order (MTO)")], limit=1)
+
+        pickup_routes = (mto_route | buy_route).ids
+        dropship_routes = dropship_route.ids
+
+        for order in self:
+            if (
+                not order.website_id
+                or order.company_id.id != 2
+                or order.state not in ("draft", "sent")
+                or not order.carrier_id
+            ):
+                continue
+
+            is_pickup = order.carrier_id.name == self.SOUTHERN_PICKUP_CARRIER
+            is_ship = order.carrier_id.name == self.SOUTHERN_SHIP_CARRIER
+            if not is_pickup and not is_ship:
+                continue
+
+            target_routes = pickup_routes if is_pickup else dropship_routes
+            if not target_routes:
+                continue
+
+            for line in order.order_line.filtered(
+                lambda order_line: not order_line.display_type
+                and not order_line.is_delivery
+                and order_line.product_id.default_code
+                not in (self.SOUTHERN_MEMBERSHIP_CODE, self.SOUTHERN_CARD_FEE_CODE)
+            ):
+                product = line.product_id
+                if not product.purchase_ok or not product.seller_ids:
+                    continue
+                line.route_ids = [(6, 0, target_routes)]
 
     def _southern_sync_website_card_fee(self):
         if self.env.context.get("skip_southern_card_fee"):
