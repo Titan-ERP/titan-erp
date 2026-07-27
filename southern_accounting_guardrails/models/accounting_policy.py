@@ -155,3 +155,4 @@ class SouthernAccountingPolicy(models.Model):
                     vals[field_name] = account.id
             if vals:
                 policy.write(vals)
+        return True
