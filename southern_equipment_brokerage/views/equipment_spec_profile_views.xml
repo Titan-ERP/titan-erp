@@ -15,6 +15,7 @@
                 <field name="lift_height_ft"/>
                 <field name="undercarriage"/>
                 <field name="configuration"/>
+                <field name="documented_lineage" optional="show"/>
                 <field name="source_note"/>
             </list>
         </field>
@@ -36,6 +37,7 @@
                             <field name="model"/>
                             <field name="configuration"/>
                             <field name="undercarriage"/>
+                            <field name="documented_lineage"/>
                         </group>
                         <group string="Comparable-Matching Specifications">
                             <field name="operating_weight_lb"/>

@@ -194,6 +194,15 @@ def _spec_profiles_are_peers(listing_profile, comp_profile):
         != _normalized(comp_profile.configuration)
     ):
         return False
+    same_manufacturer_lineage = (
+        _manufacturer_family(listing_profile.manufacturer)
+        == _manufacturer_family(comp_profile.manufacturer)
+        and bool(_normalized(listing_profile.documented_lineage))
+        and _normalized(listing_profile.documented_lineage)
+        == _normalized(comp_profile.documented_lineage)
+    )
+    if same_manufacturer_lineage:
+        return True
     weight_fit = _within_ratio(
         listing_profile.operating_weight_lb,
         comp_profile.operating_weight_lb,

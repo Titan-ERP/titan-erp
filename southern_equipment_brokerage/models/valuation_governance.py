@@ -59,6 +59,14 @@ class SouthernEquipmentSpecProfile(models.Model):
     configuration = fields.Char(
         help="Important configuration such as LGP, XL, high-flow, or long reach."
     )
+    documented_lineage = fields.Char(
+        string="Documented Model Lineage",
+        help=(
+            "Optional manufacturer-backed lineage shared by predecessor and successor "
+            "models. It may only be used for same-manufacturer comparisons and must be "
+            "supported by the cited source."
+        ),
+    )
     source_note = fields.Char(
         required=True,
         help="Document the manufacturer sheet, handbook, or other authorized source.",

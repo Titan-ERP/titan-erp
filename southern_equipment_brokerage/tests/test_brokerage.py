@@ -380,6 +380,62 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         self.assertEqual(listing.comp_count, 3)
         self.assertEqual(listing.comp_match_basis, "same_make_family")
 
+    def test_native_same_make_documented_lineage_allows_successor_rating_change(self):
+        listing_profile = self.SpecProfile.create(
+            {
+                "equipment_type": "mini_excavator",
+                "manufacturer": "Caterpillar",
+                "model": "303.5E CR",
+                "operating_weight_lb": 7734,
+                "horsepower": 31.6,
+                "undercarriage": "tracked",
+                "documented_lineage": "303.5 E-Series",
+                "source_note": "Authorized Caterpillar lineage fixture",
+            }
+        )
+        comp_profile = self.SpecProfile.create(
+            {
+                "equipment_type": "mini_excavator",
+                "manufacturer": "Caterpillar",
+                "model": "303.5E2 CR",
+                "operating_weight_lb": 8209,
+                "horsepower": 23.5,
+                "undercarriage": "tracked",
+                "documented_lineage": "303.5 E-Series",
+                "source_note": "Authorized Caterpillar lineage fixture",
+            }
+        )
+        listing = self.Listing.create(
+            self._listing_values(
+                equipment_type="mini_excavator",
+                manufacturer="Caterpillar",
+                model="303.5E CR",
+                year=2016,
+                hours=2800,
+                spec_profile_id=listing_profile.id,
+            )
+        )
+        self.Comp.create(
+            [
+                self._comp_values(
+                    name=f"303.5E2 CR Successor {index}",
+                    equipment_type="mini_excavator",
+                    manufacturer="Caterpillar",
+                    model="303.5E2 CR",
+                    year=2016,
+                    hours=2600 + index * 100,
+                    spec_profile_id=comp_profile.id,
+                    source_url=f"https://example.test/3035e2/{index}",
+                )
+                for index in range(3)
+            ]
+        )
+
+        listing.action_recalculate_comp_analysis()
+
+        self.assertEqual(listing.comp_count, 3)
+        self.assertEqual(listing.comp_match_basis, "same_make_family")
+
     def test_comp_audit_explains_condition_and_hour_rejections(self):
         listing = self.Listing.create(
             self._listing_values(seller_ask_price=45000)
