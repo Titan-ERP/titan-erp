@@ -117,6 +117,7 @@ class SouthernAccountingDailyControl(models.Model):
             if not control:
                 control = self.create({"company_id": company.id, "control_date": today})
             control.action_refresh_counts()
+        return True
 
     def action_mark_reviewed(self):
         self.write({"state": "reviewed"})
