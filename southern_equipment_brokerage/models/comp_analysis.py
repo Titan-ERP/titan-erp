@@ -12,7 +12,7 @@ MAX_COMP_YEAR_DIFFERENCE = 3
 MINIMUM_COMP_COUNT = 3
 GOOD_MAX_MEDIAN_MULTIPLIER = 1.10
 METHOD_VERSION = (
-    "native-v4-spec-peers-condition-audit-required-3-comp-mad-outliers-"
+    "native-v5-spec-peers-documented-lineage-condition-audit-required-3-comp-mad-outliers-"
     "500-to-1000-hours-3-years-110pct"
 )
 TERMINAL_STATUSES = ("archived", "sold")
