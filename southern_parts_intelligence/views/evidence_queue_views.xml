@@ -14,6 +14,9 @@
                 <field name="default_code"/>
                 <field name="source_name"/>
                 <field name="observed_price"/>
+                <field name="previous_observed_price" optional="hide"/>
+                <field name="price_delta" optional="show"/>
+                <field name="price_changed" optional="show"/>
                 <field name="currency_code"/>
                 <field name="confidence"/>
                 <field name="last_checked_at"/>
@@ -37,6 +40,8 @@
                     <button name="action_mark_alternate_source_needed" string="Alternate Source Needed" type="object"
                             invisible="status == 'alternate_source_needed'"/>
                     <button name="action_mark_rate_limited" string="Rate Limited" type="object"/>
+                    <button name="action_refresh_price_now" string="Refresh Price Now" type="object"
+                            invisible="evidence_type != 'pricing'"/>
                     <button name="action_requeue" string="Requeue" type="object"
                             invisible="status == 'queued'"/>
                     <button name="action_mark_applied" string="Mark Applied" type="object"
@@ -63,15 +68,20 @@
                     <group string="Evidence">
                         <group>
                             <field name="observed_price"/>
+                            <field name="previous_observed_price"/>
+                            <field name="price_delta"/>
+                            <field name="price_changed"/>
                             <field name="currency_code"/>
                             <field name="source_url" widget="url"/>
                             <field name="source_search_url" widget="url"/>
                         </group>
                         <group>
+                            <field name="price_watch_enabled"/>
                             <field name="last_checked_at"/>
                             <field name="next_check_at"/>
                             <field name="retry_count"/>
                             <field name="blocker_reason"/>
+                            <field name="last_refresh_error"/>
                         </group>
                     </group>
                     <group string="Review">
@@ -103,6 +113,7 @@
                 <filter string="Alternate Source Needed" name="alternate_source_needed" domain="[('status','=','alternate_source_needed')]"/>
                 <filter string="Rate Limited" name="rate_limited" domain="[('status','=','rate_limited')]"/>
                 <filter string="Ready for Review" name="ready_for_review" domain="[('status','=','ready_for_products_agent_review')]"/>
+                <filter string="Price Changed" name="price_changed" domain="[('price_changed','=',True)]"/>
                 <filter string="Applied" name="applied" domain="[('status','=','applied')]"/>
                 <separator/>
                 <filter string="Pricing" name="pricing" domain="[('evidence_type','=','pricing')]"/>

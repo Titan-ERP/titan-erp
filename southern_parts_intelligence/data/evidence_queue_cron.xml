@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="ir_cron_southern_parts_price_evidence_refresh" model="ir.cron">
+        <field name="name">Southern Parts Price Evidence Refresh</field>
+        <field name="model_id" ref="model_southern_parts_evidence_queue"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_refresh_price_evidence()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">hours</field>
+        <field name="active">True</field>
+    </record>
+</odoo>
