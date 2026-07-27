@@ -93,6 +93,10 @@
         <field name="arch" type="xml">
             <form>
                 <header>
+                    <button name="action_recalculate_comp_analysis"
+                            string="Recalculate Comps"
+                            type="object"
+                            groups="southern_equipment_brokerage.group_southern_deal_broker"/>
                     <button name="action_publish" string="Publish" type="object" class="btn-primary"
                             invisible="website_published"
                             groups="southern_equipment_brokerage.group_southern_deal_broker"/>
@@ -190,6 +194,8 @@
                                     <field name="comp_high"/>
                                     <field name="comp_count"/>
                                     <field name="comp_confidence"/>
+                                    <field name="comp_last_calculated_at" readonly="1"/>
+                                    <field name="comp_method_version" readonly="1"/>
                                     <field name="expected_resale"/>
                                 </group>
                                 <group string="Acquisition">

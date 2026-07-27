@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <record id="ir_cron_southern_equipment_comp_analysis" model="ir.cron">
+        <field name="name">Southern Equipment: Refresh Comparable Analysis</field>
+        <field name="model_id" ref="model_southern_equipment_listing"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_recalculate_comp_analysis()</field>
+        <field name="interval_number">15</field>
+        <field name="interval_type">minutes</field>
+        <field name="active">True</field>
+    </record>
+</odoo>

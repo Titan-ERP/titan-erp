@@ -19,6 +19,7 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.Listing = cls.env["southern.equipment.listing"]
+        cls.Comp = cls.env["southern.equipment.comp"]
         cls.Inquiry = cls.env["southern.buyer.inquiry"]
         cls.seller = cls.env["res.partner"].create(
             {"name": "Private Test Seller", "phone": "555-0100"}
@@ -57,6 +58,86 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         }
         values.update(overrides)
         return values
+
+    def _comp_values(self, **overrides):
+        values = {
+            "name": "Authorized T100 Auction Comp",
+            "company_id": self.env.company.id,
+            "source": "Authorized manual auction result",
+            "equipment_type": "skid_steer",
+            "manufacturer": "Test Make",
+            "model": "T100",
+            "year": 2022,
+            "hours": 1300,
+            "price": 48000,
+            "sale_type": "auction_result",
+            "sale_date": fields.Date.today(),
+        }
+        values.update(overrides)
+        return values
+
+    def test_native_comp_analysis_uses_one_compatible_comp(self):
+        listing = self.Listing.create(
+            self._listing_values(seller_ask_price=50000)
+        )
+        self.Comp.create(self._comp_values())
+
+        listing.action_recalculate_comp_analysis()
+
+        self.assertEqual(listing.comp_count, 1)
+        self.assertEqual(listing.comp_confidence, "medium")
+        self.assertEqual(listing.comp_median, 48000)
+        self.assertEqual(listing.estimated_market_value, 48000)
+        self.assertEqual(listing.grade, "good")
+        self.assertTrue(listing.comp_last_calculated_at)
+        self.assertIn("500-hours", listing.comp_method_version)
+
+    def test_native_comp_analysis_excludes_outside_hours_and_year_windows(self):
+        listing = self.Listing.create(
+            self._listing_values(seller_ask_price=45000)
+        )
+        self.Comp.create(
+            [
+                self._comp_values(),
+                self._comp_values(
+                    name="Too Many Hours",
+                    hours=1701,
+                    price=10000,
+                    source_url="https://example.test/hours",
+                ),
+                self._comp_values(
+                    name="Too Many Years",
+                    year=2018,
+                    hours=1200,
+                    price=10000,
+                    source_url="https://example.test/year",
+                ),
+            ]
+        )
+
+        listing.action_recalculate_comp_analysis()
+
+        self.assertEqual(listing.comp_count, 1)
+        self.assertEqual(listing.comp_median, 48000)
+
+    def test_native_comp_analysis_never_matches_missing_identity(self):
+        listing = self.Listing.create(
+            self._listing_values(
+                manufacturer=False,
+                seller_ask_price=20000,
+                comp_median=99999,
+                deal_score=99,
+                grade="strong",
+            )
+        )
+        self.Comp.create(self._comp_values())
+
+        listing.action_recalculate_comp_analysis()
+
+        self.assertEqual(listing.comp_count, 0)
+        self.assertEqual(listing.comp_median, 0)
+        self.assertEqual(listing.deal_score, 0)
+        self.assertEqual(listing.grade, "verify")
 
     def test_batch_slugs_are_unique_and_publish_requires_curated_fields(self):
         listings = self.Listing.create(
