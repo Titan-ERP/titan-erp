@@ -449,7 +449,6 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
         default="missing_identity",
         readonly=True,
         index=True,
-        groups=BROKER_GROUPS,
     )
     valuation_blockers = fields.Char(
         readonly=True,
