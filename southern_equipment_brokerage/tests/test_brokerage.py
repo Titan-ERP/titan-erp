@@ -21,6 +21,7 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         cls.Listing = cls.env["southern.equipment.listing"]
         cls.Comp = cls.env["southern.equipment.comp"]
         cls.SpecProfile = cls.env["southern.equipment.spec.profile"]
+        cls.ModelAlias = cls.env["southern.equipment.model.alias"]
         cls.Inquiry = cls.env["southern.buyer.inquiry"]
         cls.seller = cls.env["res.partner"].create(
             {"name": "Private Test Seller", "phone": "555-0100"}
@@ -112,6 +113,8 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         self.assertIn("hours were not provided", listing.public_deal_summary)
         self.assertIn("listing remains available", listing.public_deal_summary)
         self.assertFalse(listing.website_published)
+        self.assertEqual(listing.valuation_readiness, "missing_hours")
+        self.assertEqual(listing.comp_hours_window, "none")
 
     def test_native_comp_analysis_excludes_outside_hours_and_year_windows(self):
         listing = self.Listing.create(
@@ -179,6 +182,115 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         self.assertEqual(listing.comp_median, 0)
         self.assertEqual(listing.deal_score, 0)
         self.assertEqual(listing.grade, "verify")
+        self.assertEqual(listing.valuation_readiness, "missing_identity")
+
+    def test_reviewed_model_alias_maps_only_supported_equivalent_names(self):
+        self.ModelAlias.create(
+            {
+                "equipment_type": "skid_steer",
+                "manufacturer": "Test Make",
+                "alias": "T-100 Series II",
+                "canonical_model": "T100-2",
+                "source_note": "Authorized manufacturer model bulletin fixture",
+            }
+        )
+        listing = self.Listing.create(
+            self._listing_values(
+                model="T-100 Series II",
+                seller_ask_price=45000,
+            )
+        )
+        self.Comp.create(
+            [
+                self._comp_values(
+                    name=f"Canonical Alias Comp {index}",
+                    model="T100-2",
+                    source_url=f"https://example.test/alias/{index}",
+                )
+                for index in range(3)
+            ]
+        )
+
+        listing.action_recalculate_comp_analysis()
+
+        self.assertEqual(listing.comp_count, 3)
+        self.assertEqual(listing.comp_match_basis, "exact_model")
+        self.assertEqual(listing.valuation_readiness, "ready")
+
+    def test_material_configuration_mismatch_is_excluded(self):
+        listing = self.Listing.create(
+            self._listing_values(
+                equipment_type="dozer",
+                manufacturer="Test Make",
+                model="D100",
+                valuation_configuration="LGP",
+                seller_ask_price=50000,
+            )
+        )
+        self.Comp.create(
+            [
+                self._comp_values(
+                    name=f"Wrong XL Configuration {index}",
+                    equipment_type="dozer",
+                    model="D100",
+                    valuation_configuration="XL",
+                    source_url=f"https://example.test/config/{index}",
+                )
+                for index in range(3)
+            ]
+        )
+
+        listing.action_recalculate_comp_analysis()
+
+        self.assertEqual(listing.comp_count, 0)
+        self.assertEqual(listing.valuation_readiness, "insufficient_comps")
+
+    def test_stale_comps_are_excluded_and_freshness_is_disclosed(self):
+        listing = self.Listing.create(
+            self._listing_values(seller_ask_price=45000)
+        )
+        today = fields.Date.today()
+        self.Comp.create(
+            [
+                self._comp_values(
+                    name=f"Current Comp {index}",
+                    source_url=f"https://example.test/current/{index}",
+                    sale_date=today,
+                )
+                for index in range(3)
+            ]
+            + [
+                self._comp_values(
+                    name="Stale Five-Year Comp",
+                    source_url="https://example.test/stale",
+                    sale_date=fields.Date.subtract(today, years=6),
+                    price=999999,
+                )
+            ]
+        )
+
+        listing.action_recalculate_comp_analysis()
+
+        self.assertEqual(listing.comp_count, 3)
+        self.assertEqual(listing.comp_freshness, "current")
+        self.assertEqual(listing.comp_hours_window, "tight_500")
+        self.assertIn("within 3 model years and 500 hours", listing.public_deal_summary)
+        self.assertIn("current freshness", listing.public_deal_summary)
+
+    def test_completed_sale_records_aggregate_backtest_error(self):
+        listing = self.Listing.create(
+            self._listing_values(
+                comp_median=50000,
+                actual_sale_price=40000,
+            )
+        )
+
+        listing.write({"public_status": "sold"})
+
+        self.assertEqual(listing.valuation_at_sale, 50000)
+        self.assertEqual(listing.valuation_error_pct, 25.0)
+        self.assertEqual(listing.valuation_absolute_error_pct, 25.0)
+        self.assertEqual(listing.valuation_accuracy, "outside_20")
 
     def test_native_comp_analysis_counts_compatible_cat_cr_family_for_confidence(self):
         listing = self.Listing.create(

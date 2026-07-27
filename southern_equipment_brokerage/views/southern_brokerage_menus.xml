@@ -28,4 +28,13 @@
     <menuitem id="menu_southern_equipment_spec_profiles" name="Specification Catalog"
               parent="menu_southern_brokerage_analysis"
               action="action_southern_equipment_spec_profiles" sequence="10"/>
+    <menuitem id="menu_southern_equipment_model_aliases" name="Reviewed Model Aliases"
+              parent="menu_southern_brokerage_analysis"
+              action="action_southern_equipment_model_aliases" sequence="15"/>
+    <menuitem id="menu_southern_equipment_valuation_readiness" name="Valuation Readiness"
+              parent="menu_southern_brokerage_analysis"
+              action="action_southern_equipment_valuation_readiness" sequence="30"/>
+    <menuitem id="menu_southern_equipment_valuation_backtesting" name="Valuation Backtesting"
+              parent="menu_southern_brokerage_analysis"
+              action="action_southern_equipment_valuation_backtesting" sequence="40"/>
 </odoo>

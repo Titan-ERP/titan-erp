@@ -48,6 +48,12 @@
                 <field name="website_published"/>
                 <field name="deal_score" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
                 <field name="grade" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                <field name="valuation_readiness" optional="show"
+                       groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                <field name="comp_count" optional="show"
+                       groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                <field name="comp_freshness" optional="hide"
+                       groups="southern_equipment_brokerage.group_southern_deal_broker"/>
                 <field name="broker_id" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
             </list>
         </field>
@@ -148,6 +154,8 @@
                                    groups="southern_equipment_brokerage.group_southern_deal_broker"/>
                             <field name="spec_profile_id"
                                    groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                            <field name="valuation_configuration"
+                                   groups="southern_equipment_brokerage.group_southern_deal_broker"/>
                             <field name="public_price"/>
                             <field name="estimated_market_value"/>
                         </group>
@@ -211,6 +219,12 @@
                                     <field name="comp_count"/>
                                     <field name="comp_confidence"/>
                                     <field name="comp_match_basis"/>
+                                    <field name="valuation_readiness"/>
+                                    <field name="valuation_blockers"/>
+                                    <field name="comp_hours_window"/>
+                                    <field name="comp_freshness"/>
+                                    <field name="comp_oldest_sale_date"/>
+                                    <field name="comp_newest_sale_date"/>
                                     <field name="comp_last_calculated_at" readonly="1"/>
                                     <field name="comp_method_version" readonly="1"/>
                                     <field name="expected_resale"/>
@@ -236,6 +250,7 @@
                                 <field name="actual_sale_price"/>
                                 <field name="valuation_at_sale" readonly="1"/>
                                 <field name="valuation_error_pct" readonly="1"/>
+                                <field name="valuation_absolute_error_pct" readonly="1"/>
                                 <field name="valuation_accuracy" readonly="1"/>
                             </group>
                         </page>

@@ -9,11 +9,12 @@ BROKER_GROUPS = (
 )
 MAX_COMP_HOURS_DIFFERENCE = 1000.0
 MAX_COMP_YEAR_DIFFERENCE = 3
+MAX_COMP_AGE_DAYS = 1825
 MINIMUM_COMP_COUNT = 3
 GOOD_MAX_MEDIAN_MULTIPLIER = 1.10
 METHOD_VERSION = (
-    "native-v5-spec-peers-documented-lineage-condition-audit-required-3-comp-mad-outliers-"
-    "500-to-1000-hours-3-years-110pct"
+    "native-v6-readiness-reviewed-alias-configuration-freshness-spec-peers-"
+    "required-3-comp-mad-outliers-500-to-1000-hours-3-years-110pct"
 )
 TERMINAL_STATUSES = ("archived", "sold")
 TARGET_COMPANY_ID = 2
@@ -151,6 +152,44 @@ def _model_family(manufacturer, model):
     if _normalized(manufacturer) in {"cat", "caterpillar"}:
         family = re.sub(r"cr$", "", family)
     return family
+
+
+def _configuration_tokens(explicit_configuration="", model=""):
+    text = f"{explicit_configuration or ''} {model or ''}".lower()
+    words = set(re.findall(r"[a-z0-9]+", text))
+    model_key = _normalized(model)
+    explicit_key = _normalized(explicit_configuration)
+    tokens = set()
+    if "lgp" in words or "lowgroundpressure" in explicit_key or model_key.endswith("lgp"):
+        tokens.add("lgp")
+    if "xl" in words or "extrawide" in explicit_key or model_key.endswith("xl"):
+        tokens.add("xl")
+    if "wlt" in words or "widelongtrack" in explicit_key or model_key.endswith("wlt"):
+        tokens.add("wlt")
+    if "lt" in words or "longtrack" in explicit_key or model_key.endswith("lt"):
+        tokens.add("lt")
+    if (
+        "highflow" in explicit_key
+        or {"xhp", "xps"} & words
+        or model_key.endswith(("xhp", "xps"))
+    ):
+        tokens.add("high_flow")
+    if "longreach" in explicit_key:
+        tokens.add("long_reach")
+    return tokens
+
+
+def _configurations_are_compatible(
+    listing_configuration,
+    listing_model,
+    comp_configuration,
+    comp_model,
+):
+    """Prevent materially different machine configurations from sharing a range."""
+    listing_tokens = _configuration_tokens(listing_configuration, listing_model)
+    comp_tokens = _configuration_tokens(comp_configuration, comp_model)
+    material = {"lgp", "xl", "wlt", "lt", "high_flow", "long_reach"}
+    return (listing_tokens & material) == (comp_tokens & material)
 
 
 def _cross_brand_size_tier(equipment_type, model):
@@ -310,6 +349,9 @@ def _public_valuation_summary(
     confidence,
     unavailable_reason="",
     expanded_hours=False,
+    oldest_sale_date=None,
+    newest_sale_date=None,
+    freshness="unknown",
 ):
     if not count or not median:
         if unavailable_reason == "missing_hours":
@@ -326,6 +368,12 @@ def _public_valuation_summary(
             return (
                 "Comparable valuation is pending until manufacturer, model, and "
                 "equipment class are confirmed. The seller's asking price is shown."
+            )
+        if unavailable_reason == "missing_specification":
+            return (
+                "Comparable valuation is pending until a reviewed specification or "
+                "model-alias record supports the available peer data. The displayed "
+                "price is the seller's ask."
             )
         return (
             "Comparable valuation is not available because there is not enough "
@@ -350,10 +398,20 @@ def _public_valuation_summary(
         if expanded_hours
         else ""
     )
+    window = "within 3 model years and 1,000 hours" if expanded_hours else (
+        "within 3 model years and 500 hours"
+    )
+    date_note = ""
+    if oldest_sale_date and newest_sale_date:
+        date_note = (
+            f" Evidence dates span {oldest_sale_date:%b %Y} to "
+            f"{newest_sale_date:%b %Y}; older records are time-weighted."
+        )
     return (
         f"Market comparison: {count} {basis_label} comp(s), "
         f"${low:,.0f}-${high:,.0f} range, ${median:,.0f} median, "
-        f"{confidence} confidence.{comparison}{hour_note} "
+        f"{confidence} confidence, {window}, {freshness} freshness."
+        f"{comparison}{hour_note}{date_note} "
         "This is a comparison, not an appraisal."
     )
 
@@ -379,12 +437,134 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
         readonly=True,
         groups=BROKER_GROUPS,
     )
+    valuation_readiness = fields.Selection(
+        [
+            ("ready", "Valuation Ready"),
+            ("missing_identity", "Missing Make / Model / Class"),
+            ("missing_year", "Missing Year"),
+            ("missing_hours", "Missing Hours"),
+            ("missing_specification", "Missing Reviewed Specifications"),
+            ("insufficient_comps", "Insufficient Compatible Comps"),
+        ],
+        default="missing_identity",
+        readonly=True,
+        index=True,
+        groups=BROKER_GROUPS,
+    )
+    valuation_blockers = fields.Char(
+        readonly=True,
+        groups=BROKER_GROUPS,
+    )
+    comp_hours_window = fields.Selection(
+        [
+            ("none", "No Numeric Range"),
+            ("tight_500", "±500 Hours"),
+            ("expanded_1000", "±1,000 Hours"),
+        ],
+        default="none",
+        readonly=True,
+        groups=BROKER_GROUPS,
+    )
+    comp_oldest_sale_date = fields.Date(readonly=True, groups=BROKER_GROUPS)
+    comp_newest_sale_date = fields.Date(readonly=True, groups=BROKER_GROUPS)
+    comp_freshness = fields.Selection(
+        [
+            ("current", "Current (≤ 6 months)"),
+            ("recent", "Recent (≤ 12 months)"),
+            ("aging", "Aging (≤ 24 months)"),
+            ("stale", "Stale (> 24 months)"),
+            ("unknown", "Unknown"),
+        ],
+        default="unknown",
+        readonly=True,
+        index=True,
+        groups=BROKER_GROUPS,
+    )
+
+    def _model_alias_map(self):
+        aliases = self.env["southern.equipment.model.alias"].search(
+            [
+                ("company_id", "in", self.mapped("company_id").ids),
+                ("active", "=", True),
+            ]
+        )
+        return {
+            (
+                alias.company_id.id,
+                _equipment_class(alias.equipment_type),
+                _manufacturer_family(alias.manufacturer),
+                _normalized(alias.alias),
+            ): _normalized(alias.canonical_model)
+            for alias in aliases
+        }
+
+    def _canonical_model(self, alias_map, equipment_type, manufacturer, model):
+        return alias_map.get(
+            (
+                self.company_id.id,
+                _equipment_class(equipment_type),
+                _manufacturer_family(manufacturer),
+                _normalized(model),
+            ),
+            _normalized(model),
+        )
+
+    def _has_reviewed_identity_support(self, comps):
+        """Distinguish missing governance data from a merely thin comp pool."""
+        self.ensure_one()
+        listing_type = _equipment_class(self.equipment_type)
+        listing_make = _manufacturer_family(self.manufacturer)
+        alias_map = self._model_alias_map()
+        listing_model = self._canonical_model(
+            alias_map, self.equipment_type, self.manufacturer, self.model
+        )
+        listing_family = _model_family(self.manufacturer, listing_model)
+        profiles = self.env["southern.equipment.spec.profile"].search(
+            [("company_id", "=", self.company_id.id), ("active", "=", True)]
+        )
+        profile_map = {
+            (
+                _equipment_class(profile.equipment_type),
+                _manufacturer_family(profile.manufacturer),
+                self._canonical_model(
+                    alias_map,
+                    profile.equipment_type,
+                    profile.manufacturer,
+                    profile.model,
+                ),
+            ): profile
+            for profile in profiles
+        }
+        listing_profile = self.spec_profile_id or profile_map.get(
+            (listing_type, listing_make, listing_model)
+        )
+        for comp in comps:
+            if _equipment_class(comp.equipment_type) != listing_type:
+                continue
+            comp_make = _manufacturer_family(comp.manufacturer)
+            comp_model = self._canonical_model(
+                alias_map, comp.equipment_type, comp.manufacturer, comp.model
+            )
+            if comp_make == listing_make and (
+                comp_model == listing_model
+                or _model_family(comp.manufacturer, comp_model) == listing_family
+            ):
+                return True
+            comp_profile = comp.spec_profile_id or profile_map.get(
+                (listing_type, comp_make, comp_model)
+            )
+            if _spec_profiles_are_peers(listing_profile, comp_profile):
+                return True
+        return bool(listing_profile)
 
     def _compatible_comp_rows(self, comps):
         self.ensure_one()
         listing_make = _manufacturer_family(self.manufacturer)
-        listing_model = _normalized(self.model)
         listing_type = _equipment_class(self.equipment_type)
+        alias_map = self._model_alias_map()
+        listing_model = self._canonical_model(
+            alias_map, self.equipment_type, self.manufacturer, self.model
+        )
         if (
             not listing_make
             or not listing_model
@@ -401,7 +581,12 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
             (
                 _equipment_class(profile.equipment_type),
                 _manufacturer_family(profile.manufacturer),
-                _normalized(profile.model),
+                self._canonical_model(
+                    alias_map,
+                    profile.equipment_type,
+                    profile.manufacturer,
+                    profile.model,
+                ),
             ): profile
             for profile in profiles
         }
@@ -420,7 +605,9 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
             if _equipment_class(comp.equipment_type) != listing_type:
                 continue
             same_make = _manufacturer_family(comp.manufacturer) == listing_make
-            comp_model = _normalized(comp.model)
+            comp_model = self._canonical_model(
+                alias_map, comp.equipment_type, comp.manufacturer, comp.model
+            )
             exact = same_make and comp_model == listing_model
             comp_profile = comp.spec_profile_id or profile_map.get(
                 (
@@ -442,6 +629,21 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
             )
             cross_brand = not same_make and specification_peer
             if not exact and not family and not cross_brand:
+                continue
+            listing_configuration = (
+                self.valuation_configuration
+                or (listing_profile.configuration if listing_profile else "")
+            )
+            comp_configuration = (
+                comp.valuation_configuration
+                or (comp_profile.configuration if comp_profile else "")
+            )
+            if not _configurations_are_compatible(
+                listing_configuration,
+                self.model,
+                comp_configuration,
+                comp.model,
+            ):
                 continue
             if self.year and (
                 not comp.year
@@ -485,6 +687,8 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
             age_weight = 1.0
             if comp.sale_date:
                 days = max((today - comp.sale_date).days, 0)
+                if days > MAX_COMP_AGE_DAYS:
+                    continue
                 age_weight = 0.5 ** (days / 730.0)
             weight = (
                 type_weight
@@ -543,8 +747,23 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
                 if not self.year
                 else "missing_hours"
                 if not self.hours
-                else ""
+                else "missing_specification"
+                if not self._has_reviewed_identity_support(comps)
+                else "insufficient_comps"
             )
+            blocker_labels = {
+                "missing_identity": "Confirm manufacturer, model, and equipment class.",
+                "missing_year": "Confirm the machine's model year.",
+                "missing_hours": "Confirm machine hours before producing a numeric range.",
+                "missing_specification": (
+                    "Add a source-documented specification profile or reviewed alias "
+                    "before using peer-model comps."
+                ),
+                "insufficient_comps": (
+                    "Fewer than three compatible, non-stale comps remain after year, "
+                    "hours, configuration, duplicate, and outlier controls."
+                ),
+            }
             return {
                 **base_values,
                 "comp_low": 0.0,
@@ -556,6 +775,12 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
                 "deal_score": 0.0,
                 "grade": "verify",
                 "comp_match_basis": "insufficient",
+                "valuation_readiness": unavailable_reason,
+                "valuation_blockers": blocker_labels[unavailable_reason],
+                "comp_hours_window": "none",
+                "comp_oldest_sale_date": False,
+                "comp_newest_sale_date": False,
+                "comp_freshness": "unknown",
                 "public_deal_summary": _public_valuation_summary(
                     0.0,
                     0.0,
@@ -579,6 +804,29 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
         expanded_hours = any(
             abs(self.hours - comp.hours) > 500.0
             for comp, _score, _weight, _exact, _cross_brand in rows
+        )
+        sale_dates = [
+            comp.sale_date
+            for comp, _score, _weight, _exact, _cross_brand in rows
+            if comp.sale_date
+        ]
+        oldest_sale_date = min(sale_dates) if sale_dates else False
+        newest_sale_date = max(sale_dates) if sale_dates else False
+        newest_age_days = (
+            max((fields.Date.context_today(self) - newest_sale_date).days, 0)
+            if newest_sale_date
+            else None
+        )
+        freshness = (
+            "unknown"
+            if newest_age_days is None
+            else "current"
+            if newest_age_days <= 183
+            else "recent"
+            if newest_age_days <= 365
+            else "aging"
+            if newest_age_days <= 730
+            else "stale"
         )
         basis = (
             "cross_brand_peer"
@@ -610,6 +858,8 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
             for comp, _score, _weight, _exact, _cross_brand in rows
         ):
             confidence = "medium"
+        if freshness in ("aging", "stale", "unknown"):
+            confidence = "medium"
         ask = self.seller_ask_price or self.ask_price
         score, grade = _score_deal(ask, low, median, high, confidence)
         return {
@@ -623,6 +873,14 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
             "deal_score": score,
             "grade": grade,
             "comp_match_basis": basis,
+            "valuation_readiness": "ready",
+            "valuation_blockers": False,
+            "comp_hours_window": (
+                "expanded_1000" if expanded_hours else "tight_500"
+            ),
+            "comp_oldest_sale_date": oldest_sale_date,
+            "comp_newest_sale_date": newest_sale_date,
+            "comp_freshness": freshness,
             "public_deal_summary": _public_valuation_summary(
                 ask,
                 low,
@@ -632,6 +890,9 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
                 basis,
                 confidence,
                 expanded_hours=expanded_hours,
+                oldest_sale_date=oldest_sale_date,
+                newest_sale_date=newest_sale_date,
+                freshness=freshness,
             ),
         }
 
@@ -666,6 +927,13 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
             return "Excluded: missing or non-positive price"
         if comp.condition_grade in ("inoperable", "salvage"):
             return "Excluded: inoperable or salvage condition"
+        if (
+            comp.sale_date
+            and (
+                fields.Date.context_today(self) - comp.sale_date
+            ).days > MAX_COMP_AGE_DAYS
+        ):
+            return "Excluded: sale evidence is more than five years old"
         if _equipment_class(comp.equipment_type) != _equipment_class(
             self.equipment_type
         ):
@@ -680,6 +948,13 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
             return "Excluded: more than 1,000 hours away"
         same_make = _manufacturer_family(comp.manufacturer) == _manufacturer_family(
             self.manufacturer
+        )
+        alias_map = self._model_alias_map()
+        listing_model = self._canonical_model(
+            alias_map, self.equipment_type, self.manufacturer, self.model
+        )
+        comp_model = self._canonical_model(
+            alias_map, comp.equipment_type, comp.manufacturer, comp.model
         )
         profiles = self.env["southern.equipment.spec.profile"].search(
             [("company_id", "=", self.company_id.id), ("active", "=", True)]
@@ -709,9 +984,19 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
         specification_peer = _spec_profiles_are_peers(
             listing_profile, comp_profile
         )
+        if not _configurations_are_compatible(
+            self.valuation_configuration
+            or (listing_profile.configuration if listing_profile else ""),
+            self.model,
+            comp.valuation_configuration
+            or (comp_profile.configuration if comp_profile else ""),
+            comp.model,
+        ):
+            return "Excluded: material machine configuration does not match"
         exact_or_family = same_make and (
-            _model_family(comp.manufacturer, comp.model)
-            == _model_family(self.manufacturer, self.model)
+            comp_model == listing_model
+            or _model_family(comp.manufacturer, comp_model)
+            == _model_family(self.manufacturer, listing_model)
             or specification_peer
         )
         if same_make and not exact_or_family:

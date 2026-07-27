@@ -17,6 +17,42 @@ CONDITION_SELECTION = [
 ]
 
 
+class SouthernEquipmentModelAlias(models.Model):
+    _name = "southern.equipment.model.alias"
+    _description = "Reviewed Equipment Model Alias"
+    _order = "equipment_type, manufacturer, alias"
+    _rec_name = "alias"
+
+    active = fields.Boolean(default=True)
+    company_id = fields.Many2one(
+        "res.company",
+        required=True,
+        default=lambda self: self.env.company,
+        index=True,
+    )
+    equipment_type = fields.Selection(
+        selection=lambda self: self.env["southern.equipment.listing"]._fields[
+            "equipment_type"
+        ].selection,
+        required=True,
+        index=True,
+    )
+    manufacturer = fields.Char(required=True, index=True)
+    alias = fields.Char(required=True, index=True)
+    canonical_model = fields.Char(required=True, index=True)
+    source_note = fields.Char(
+        required=True,
+        help="Explain why this alias is equivalent to the canonical model.",
+    )
+    source_url = fields.Char()
+    notes = fields.Text()
+
+    _alias_identity_unique = models.Constraint(
+        "unique(company_id, equipment_type, manufacturer, alias)",
+        "This reviewed model alias already exists.",
+    )
+
+
 class SouthernEquipmentSpecProfile(models.Model):
     _name = "southern.equipment.spec.profile"
     _description = "Equipment Specification Profile"
@@ -125,6 +161,15 @@ class SouthernEquipmentListingValuationGovernance(models.Model):
         default="unknown",
         groups=BROKER_GROUPS,
     )
+    valuation_configuration = fields.Char(
+        string="Valuation Configuration",
+        groups=BROKER_GROUPS,
+        help=(
+            "Document material pricing configurations such as LGP, XL, high-flow, "
+            "long reach, cab, or canopy. Material configurations are matched "
+            "conservatively."
+        ),
+    )
     actual_sale_price = fields.Monetary(
         string="Actual Sale Price",
         groups=BROKER_GROUPS,
@@ -137,6 +182,12 @@ class SouthernEquipmentListingValuationGovernance(models.Model):
     )
     valuation_error_pct = fields.Float(
         string="Valuation Error %",
+        compute="_compute_valuation_accuracy",
+        store=True,
+        groups=BROKER_GROUPS,
+    )
+    valuation_absolute_error_pct = fields.Float(
+        string="Absolute Valuation Error %",
         compute="_compute_valuation_accuracy",
         store=True,
         groups=BROKER_GROUPS,
@@ -158,6 +209,7 @@ class SouthernEquipmentListingValuationGovernance(models.Model):
         for listing in self:
             if not listing.actual_sale_price or not listing.valuation_at_sale:
                 listing.valuation_error_pct = 0.0
+                listing.valuation_absolute_error_pct = 0.0
                 listing.valuation_accuracy = "unavailable"
                 continue
             error = (
@@ -167,6 +219,7 @@ class SouthernEquipmentListingValuationGovernance(models.Model):
             )
             listing.valuation_error_pct = error
             absolute_error = abs(error)
+            listing.valuation_absolute_error_pct = absolute_error
             listing.valuation_accuracy = (
                 "within_10"
                 if absolute_error <= 10.0
@@ -201,6 +254,10 @@ class SouthernEquipmentCompValuationGovernance(models.Model):
         CONDITION_SELECTION,
         string="Documented Condition",
         default="unknown",
+    )
+    valuation_configuration = fields.Char(
+        string="Valuation Configuration",
+        help="Document material configuration such as LGP, XL, high-flow, or long reach.",
     )
 
 
