@@ -156,12 +156,12 @@
                         <section class="southern-parts-section">
                             <h3>Related Parts</h3>
                             <div class="southern-related-grid">
-                                <a t-foreach="product.sudo().southern_related_part_ids" t-as="related"
-                                   t-att-href="related.related_product_tmpl_id.website_url or '#'"
+                                <a t-foreach="product._southern_related_parts_summary()" t-as="related"
+                                   t-att-href="related['website_url'] or '#'"
                                    class="southern-related-card">
-                                    <span class="southern-related-card__type" t-field="related.relationship_type"/>
-                                    <span class="southern-related-card__name" t-field="related.related_product_tmpl_id"/>
-                                    <span t-if="related.related_product_tmpl_id.default_code" class="southern-related-card__sku" t-field="related.related_product_tmpl_id.default_code"/>
+                                    <span class="southern-related-card__type" t-out="related['relationship_type']"/>
+                                    <span class="southern-related-card__name" t-out="related['name']"/>
+                                    <span t-if="related['default_code']" class="southern-related-card__sku" t-out="related['default_code']"/>
                                 </a>
                             </div>
                         </section>
@@ -173,16 +173,16 @@
 
     <template id="southern_parts_product_item_metadata" inherit_id="website_sale.products_item" name="Southern Parts Product Card Metadata">
         <xpath expr="//div[hasclass('o_wsale_product_information_text')]" position="inside">
-            <div t-if="product.default_code or product.southern_oem_reference_ids or product.southern_fitment_ids"
+            <div t-if="product.default_code or product.southern_oem_reference_count or product.southern_fitment_count"
                  class="southern-product-card-meta">
                 <span t-if="product.default_code" class="southern-product-card-meta__sku">
                     <span>SKU </span><span t-field="product.default_code"/>
                 </span>
-                <span t-if="product.southern_oem_reference_ids" class="southern-product-card-meta__item">
-                    <span>OEM refs </span><span t-out="len(product.sudo().southern_oem_reference_ids)"/>
+                <span t-if="product.southern_oem_reference_count" class="southern-product-card-meta__item">
+                    <span>OEM refs </span><span t-out="product.southern_oem_reference_count"/>
                 </span>
-                <span t-if="product.southern_fitment_ids" class="southern-product-card-meta__item">
-                    <span>Fits </span><span t-out="len(product.sudo().southern_fitment_ids.mapped('model_id'))"/><span> models</span>
+                <span t-if="product.southern_fitment_count" class="southern-product-card-meta__item">
+                    <span>Fits </span><span t-out="product.southern_fitment_model_count"/><span> models</span>
                 </span>
             </div>
         </xpath>

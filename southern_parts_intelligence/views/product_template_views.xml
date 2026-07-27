@@ -15,7 +15,18 @@
                         <group>
                             <field name="southern_enrichment_status"/>
                             <field name="southern_parts_search_text" invisible="1"/>
+                            <field name="southern_parts_snapshot_refreshed_at" readonly="1"/>
                         </group>
+                    </group>
+                    <group string="Website Snapshot">
+                        <field name="southern_specification_count" readonly="1"/>
+                        <field name="southern_fitment_count" readonly="1"/>
+                        <field name="southern_fitment_make_count" readonly="1"/>
+                        <field name="southern_fitment_model_count" readonly="1"/>
+                        <field name="southern_oem_reference_count" readonly="1"/>
+                        <field name="southern_catalog_page_count" readonly="1"/>
+                        <field name="southern_related_part_count" readonly="1"/>
+                        <field name="southern_alternate_barcode_count" readonly="1"/>
                     </group>
                     <notebook>
                         <page string="Specifications" name="southern_specifications">
@@ -106,4 +117,5 @@
             </xpath>
         </field>
     </record>
+
 </odoo>

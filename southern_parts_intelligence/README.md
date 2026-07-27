@@ -28,6 +28,14 @@ Search support:
 - Aggregates SKU, barcode, manufacturer, OEM references, fitment, catalog pages, specs, and alternate barcodes.
 - Extends the product search view with a `Parts Intelligence` search field.
 - Extends website shop search so the eCommerce search box can match enriched parts data.
+- Adds a trigram index to the stored parts search text for faster large-catalog website searches.
+
+Performance support:
+
+- Stores a website-ready parts catalog snapshot on each product.
+- Product pages render specifications, fitment, OEM references, catalog pages, and related parts from that snapshot instead of walking every child table on every page load.
+- A backend `Catalog Sync Jobs` screen tracks recurring catalog maintenance.
+- A 10-minute cron refreshes product website snapshots in small batches. It does not publish products, change pricing, change images, or alter taxonomy.
 
 ## Deployment
 
@@ -47,6 +55,18 @@ py -3 scripts\odoo_import_parts_intelligence_json.py outputs\southern_parts_spar
 ```
 
 9. Check the website product pages. The product page should use Sparex-style anchored sections: product specifications, suitable make/model, OEM part numbers, catalog pages, and related parts.
+
+## Internal Sync
+
+The module creates a default `Website Parts Snapshot Refresh` job under:
+
+```text
+Inventory > Configuration > Parts Intelligence > Catalog Sync Jobs
+```
+
+The job runs every 10 minutes through `Southern Parts Catalog Sync` and refreshes stored website snapshots in batches of 500 products. This is intentionally safe for production: it only updates internal snapshot/cache fields used for faster website rendering.
+
+Do not add publication, price updates, image assignment, taxonomy changes, or procurement changes to this cron. Those remain explicitly reviewed workflows.
 
 ## Importer
 

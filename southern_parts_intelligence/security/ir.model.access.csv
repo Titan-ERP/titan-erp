@@ -23,3 +23,4 @@ access_southern_parts_oem_reference_portal,southern.parts.oem_reference portal,m
 access_southern_parts_catalog_page_portal,southern.parts.catalog_page portal,model_southern_parts_catalog_page,base.group_portal,1,0,0,0
 access_southern_parts_related_product_portal,southern.parts.related_product portal,model_southern_parts_related_product,base.group_portal,1,0,0,0
 access_southern_parts_alternate_barcode_portal,southern.parts.alternate_barcode portal,model_southern_parts_alternate_barcode,base.group_portal,1,0,0,0
+access_southern_parts_catalog_sync_user,southern.parts.catalog.sync user,model_southern_parts_catalog_sync,base.group_system,1,1,1,1
