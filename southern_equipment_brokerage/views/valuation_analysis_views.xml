@@ -57,6 +57,7 @@
         <field name="name">Valuation Readiness</field>
         <field name="res_model">southern.equipment.listing</field>
         <field name="view_mode">list,pivot,form</field>
+        <field name="view_id" ref="view_southern_equipment_valuation_readiness_list"/>
         <field name="search_view_id" ref="view_southern_equipment_valuation_readiness_search"/>
         <field name="domain">[('company_id', '=', 2), ('public_status', 'not in', ['sold', 'archived'])]</field>
         <field name="context">{'search_default_group_readiness': 1}</field>
@@ -89,6 +90,7 @@
         <field name="name">Valuation Backtesting</field>
         <field name="res_model">southern.equipment.listing</field>
         <field name="view_mode">list,pivot,graph,form</field>
+        <field name="view_id" ref="view_southern_equipment_backtest_list"/>
         <field name="domain">[('company_id', '=', 2), ('actual_sale_price', '&gt;', 0)]</field>
         <field name="context">{'group_by': ['equipment_type']}</field>
         <field name="help" type="html">
