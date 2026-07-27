@@ -80,6 +80,9 @@ class ProductTemplate(models.Model):
             prefix = expected_prefix.get(template.southern_revenue_bucket)
             account = template.property_account_income_id or template.categ_id.property_account_income_categ_id
             code = account.code or ""
-            template.southern_income_account_review = (
-                "needs_review" if prefix and account and not code.startswith(prefix) else "ok"
-            )
+            if template.southern_expected_income_account_id and account and account != template.southern_expected_income_account_id:
+                template.southern_income_account_review = "needs_review"
+            elif prefix and account and code and not code.startswith(prefix):
+                template.southern_income_account_review = "needs_review"
+            else:
+                template.southern_income_account_review = "ok"

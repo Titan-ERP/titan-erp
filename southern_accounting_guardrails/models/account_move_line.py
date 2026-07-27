@@ -173,7 +173,12 @@ class AccountMoveLine(models.Model):
                 continue
             prefix = expected_prefix.get(line.southern_revenue_bucket)
             code = line.account_id.code or ""
-            if prefix and not code.startswith(prefix):
+            if line.southern_expected_income_account_id and line.account_id != line.southern_expected_income_account_id:
+                line.southern_revenue_bucket_review = "needs_review"
+                line.southern_revenue_bucket_note = (
+                    f"Expected {line.southern_expected_income_account_id.display_name}; currently {line.account_id.display_name}."
+                )
+            elif prefix and code and not code.startswith(prefix):
                 line.southern_revenue_bucket_review = "needs_review"
                 line.southern_revenue_bucket_note = (
                     f"Expected {line.southern_revenue_bucket} revenue account; currently {code or line.account_id.display_name}."

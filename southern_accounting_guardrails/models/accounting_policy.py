@@ -120,6 +120,14 @@ class SouthernAccountingPolicy(models.Model):
             "payment_clearing_account_id": "109998",
             "check_review_account_id": "699998",
         }
+        names = {
+            "parts_revenue_account_id": "Parts Revenue",
+            "service_revenue_account_id": "Service Revenue",
+            "rental_revenue_account_id": "Rental Revenue",
+            "merchant_fee_account_id": "Bank Merchant Fees",
+            "payment_clearing_account_id": "Shop Boss Payment Clearing",
+            "check_review_account_id": "Checks Pending Payee Review",
+        }
         for policy in self:
             vals = {}
             for field_name, code in codes.items():
@@ -131,6 +139,18 @@ class SouthernAccountingPolicy(models.Model):
                 )
                 if not account:
                     account = Account.search([("code", "=", code)], limit=1)
+                if account:
+                    vals[field_name] = account.id
+            for field_name, name in names.items():
+                if policy[field_name] or field_name in vals:
+                    continue
+                account = Account.search(
+                    [
+                        ("company_ids", "in", policy.company_id.id),
+                        ("name", "=", name),
+                    ],
+                    limit=1,
+                )
                 if account:
                     vals[field_name] = account.id
             if vals:
