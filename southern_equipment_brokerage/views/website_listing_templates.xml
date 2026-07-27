@@ -107,6 +107,7 @@
                                     <div class="se-card-facts mb-3">
                                         <span><strong>Region</strong><t t-out="listing.public_region"/></span>
                                         <span t-if="listing.hours"><strong>Hours</strong><t t-out="'{:,.0f}'.format(listing.hours)"/></span>
+                                        <span t-if="listing.comp_median"><strong>Median comp price</strong>$<t t-out="'{:,.0f}'.format(listing.comp_median)"/></span>
                                     </div>
                                     <p t-if="listing.public_deal_summary" class="se-listing-note">
                                         <t t-out="listing.public_deal_summary"/>
@@ -222,13 +223,19 @@
                                 <h2 class="h3 fw-bold mt-2 mb-1">Recent comparable transactions</h2>
                                 <p class="text-muted mb-0">Representative comparable records used to support this listing.</p>
                             </div>
-                            <div class="se-comp-range" t-if="listing.comp_median">
-                                <strong>Supported range</strong>
-                                <span>
-                                    <t t-if="listing.comp_low">$<t t-out="'{:,.0f}'.format(listing.comp_low)"/></t>
-                                    <t t-if="listing.comp_low and listing.comp_high"> - </t>
-                                    <t t-if="listing.comp_high">$<t t-out="'{:,.0f}'.format(listing.comp_high)"/></t>
-                                </span>
+                            <div class="se-comp-stats" t-if="listing.comp_median" style="display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));gap:10px;">
+                                <div class="se-comp-stat" style="min-width:180px;padding:12px 14px;border-left:4px solid #f2b632;background:#fff;">
+                                    <strong>Median comp price</strong>
+                                    <span>$<t t-out="'{:,.0f}'.format(listing.comp_median)"/></span>
+                                </div>
+                                <div class="se-comp-stat" style="min-width:180px;padding:12px 14px;border-left:4px solid #f2b632;background:#fff;">
+                                    <strong>Supported range</strong>
+                                    <span>
+                                        <t t-if="listing.comp_low">$<t t-out="'{:,.0f}'.format(listing.comp_low)"/></t>
+                                        <t t-if="listing.comp_low and listing.comp_high"> - </t>
+                                        <t t-if="listing.comp_high">$<t t-out="'{:,.0f}'.format(listing.comp_high)"/></t>
+                                    </span>
+                                </div>
                             </div>
                         </div>
                         <div class="se-comp-grid">

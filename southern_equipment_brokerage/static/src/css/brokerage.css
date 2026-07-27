@@ -222,13 +222,18 @@
     border-radius: 8px;
     background: #f8f6ef;
 }
-.se-comp-range {
-    min-width: 240px;
+.se-comp-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+    gap: 10px;
+}
+.se-comp-stat {
+    min-width: 180px;
     padding: 12px 14px;
     border-left: 4px solid var(--se-yellow);
     background: #fff;
 }
-.se-comp-range strong {
+.se-comp-stat strong {
     display: block;
     color: #7a6a37;
     font-size: 11px;
@@ -236,7 +241,7 @@
     letter-spacing: .08em;
     text-transform: uppercase;
 }
-.se-comp-range span {
+.se-comp-stat span {
     color: #000;
     font-size: 18px;
     font-weight: 900;
