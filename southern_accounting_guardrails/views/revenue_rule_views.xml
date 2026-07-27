@@ -48,7 +48,7 @@
             <search>
                 <field name="name"/>
                 <field name="match_text"/>
-                <filter name="active" string="Active" domain="[('active', '=', True)]"/>
+                <filter name="active_rules" string="Active" domain="[('active', '=', True)]"/>
                 <group expand="0" string="Group By">
                     <filter name="group_bucket" string="Bucket" context="{'group_by': 'revenue_bucket'}"/>
                 </group>
@@ -61,6 +61,6 @@
         <field name="res_model">southern.accounting.revenue.rule</field>
         <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_southern_revenue_rule_search"/>
-        <field name="context">{'search_default_active': 1}</field>
+        <field name="context">{'search_default_active_rules': 1}</field>
     </record>
 </odoo>
