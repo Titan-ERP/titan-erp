@@ -1,5 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
+    <template id="southern_parts_all_products_link_name" inherit_id="website_sale.all_products_link_name" name="Southern Parts Shop Link Name">
+        <xpath expr="//span" position="replace">
+            <span placeholder="All products">Parts</span>
+        </xpath>
+    </template>
+
+    <template id="southern_parts_shop_title" inherit_id="website_sale.products" name="Southern Parts Shop Title">
+        <xpath expr="//h1[contains(@class, 'o_wsale_shop_title')]" position="replace">
+            <h1 class="o_wsale_shop_title h4-fs" t-if="not category and not search">
+                Parts Catalog
+            </h1>
+        </xpath>
+    </template>
+
     <template id="southern_parts_product_detail_sections" inherit_id="website_sale.product" name="Southern Parts Product Detail Sections">
         <xpath expr="//section[@id='product_detail']" position="inside">
             <t t-set="southern_sections" t-value="product._southern_website_catalog_sections() if product._southern_has_parts_catalog_data() else []"/>
