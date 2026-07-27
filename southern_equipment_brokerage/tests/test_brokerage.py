@@ -92,6 +92,21 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         self.assertTrue(listing.comp_last_calculated_at)
         self.assertIn("500-hours", listing.comp_method_version)
 
+    def test_native_missing_hours_suppresses_range_but_keeps_listing_available(self):
+        listing = self.Listing.create(
+            self._listing_values(hours=0, seller_ask_price=50000)
+        )
+        self.Comp.create(self._comp_values())
+
+        listing.action_recalculate_comp_analysis()
+
+        self.assertEqual(listing.comp_count, 0)
+        self.assertEqual(listing.comp_match_basis, "insufficient")
+        self.assertEqual(listing.grade, "verify")
+        self.assertIn("hours were not provided", listing.public_deal_summary)
+        self.assertIn("listing remains available", listing.public_deal_summary)
+        self.assertFalse(listing.website_published)
+
     def test_native_comp_analysis_excludes_outside_hours_and_year_windows(self):
         listing = self.Listing.create(
             self._listing_values(seller_ask_price=45000)
@@ -185,6 +200,110 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
 
         self.assertEqual(listing.comp_count, 6)
         self.assertEqual(listing.comp_confidence, "high")
+
+    def test_native_cross_brand_requires_three_allowlisted_size_tier_peers(self):
+        listing = self.Listing.create(
+            self._listing_values(
+                equipment_type="dozer",
+                manufacturer="Caterpillar",
+                model="D5K2",
+                year=2020,
+                hours=2000,
+                seller_ask_price=65000,
+            )
+        )
+        peer_values = [
+            ("John Deere", "650K", 2019, 1800, 68000),
+            ("Komatsu", "D51PX-24", 2020, 2100, 70000),
+            ("Case", "850M WT", 2021, 2200, 72000),
+        ]
+        peers = self.Comp.create(
+            [
+                self._comp_values(
+                    name=f"Cross Brand Peer {index}",
+                    equipment_type="dozer",
+                    manufacturer=manufacturer,
+                    model=model,
+                    year=year,
+                    hours=hours,
+                    price=price,
+                )
+                for index, (manufacturer, model, year, hours, price)
+                in enumerate(peer_values)
+            ]
+        )
+
+        listing.action_recalculate_comp_analysis()
+
+        self.assertEqual(listing.comp_count, 3)
+        self.assertEqual(listing.comp_match_basis, "cross_brand_peer")
+        self.assertEqual(listing.comp_confidence, "medium")
+        self.assertIn("cross-brand size-tier", listing.public_deal_summary)
+        self.assertIn("not an appraisal", listing.public_deal_summary)
+
+        peers[0].unlink()
+        listing.action_recalculate_comp_analysis()
+        self.assertEqual(listing.comp_count, 0)
+        self.assertEqual(listing.comp_match_basis, "insufficient")
+        self.assertIn("not enough closely matched", listing.public_deal_summary)
+
+    def test_native_primary_comp_excludes_cross_brand_and_wrong_size_tier(self):
+        listing = self.Listing.create(
+            self._listing_values(
+                equipment_type="dozer",
+                manufacturer="Caterpillar",
+                model="D5K2",
+                year=2020,
+                hours=2000,
+                seller_ask_price=65000,
+            )
+        )
+        self.Comp.create(
+            [
+                self._comp_values(
+                    name="Exact Primary",
+                    equipment_type="dozer",
+                    manufacturer="Caterpillar",
+                    model="D5K2",
+                    year=2020,
+                    hours=2000,
+                    price=74000,
+                ),
+                self._comp_values(
+                    name="Wrong Size",
+                    equipment_type="dozer",
+                    manufacturer="Caterpillar",
+                    model="D8T",
+                    year=2020,
+                    hours=2000,
+                    price=150000,
+                ),
+                *[
+                    self._comp_values(
+                        name=f"Cross Brand Peer {index}",
+                        equipment_type="dozer",
+                        manufacturer=manufacturer,
+                        model=model,
+                        year=2020,
+                        hours=2000,
+                        price=price,
+                    )
+                    for index, (manufacturer, model, price) in enumerate(
+                        [
+                            ("John Deere", "650K", 68000),
+                            ("Komatsu", "D51PX-24", 70000),
+                            ("Case", "850M", 72000),
+                        ]
+                    )
+                ],
+            ]
+        )
+
+        listing.action_recalculate_comp_analysis()
+
+        self.assertEqual(listing.comp_count, 1)
+        self.assertEqual(listing.comp_match_basis, "exact_model")
+        self.assertEqual(listing.comp_median, 74000)
 
     def test_batch_slugs_are_unique_and_publish_requires_curated_fields(self):
         listings = self.Listing.create(

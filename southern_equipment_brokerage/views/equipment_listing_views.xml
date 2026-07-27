@@ -27,6 +27,14 @@
         <field name="model">southern.equipment.listing</field>
         <field name="arch" type="xml">
             <list decoration-muted="public_status in ['sold', 'archived', 'unavailable']">
+                <header>
+                    <button name="action_recalculate_all_comp_analysis"
+                            string="Recalculate All Comps"
+                            type="object"
+                            display="always"
+                            class="btn-primary"
+                            groups="southern_equipment_brokerage.group_southern_deal_broker,southern_equipment_brokerage.group_southern_equipment_admin"/>
+                </header>
                 <field name="name" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
                 <field name="public_title"/>
                 <field name="equipment_type"/>
@@ -194,6 +202,7 @@
                                     <field name="comp_high"/>
                                     <field name="comp_count"/>
                                     <field name="comp_confidence"/>
+                                    <field name="comp_match_basis"/>
                                     <field name="comp_last_calculated_at" readonly="1"/>
                                     <field name="comp_method_version" readonly="1"/>
                                     <field name="expected_resale"/>
