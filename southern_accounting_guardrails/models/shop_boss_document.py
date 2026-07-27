@@ -110,13 +110,10 @@ class SouthernShopBossDocument(models.Model):
     )
     review_note = fields.Text(tracking=True)
 
-    _sql_constraints = [
-        (
-            "southern_shop_boss_doc_unique",
-            "unique(company_id, document_type, document_number)",
-            "A Shop Boss document with this type and number already exists for this company.",
-        )
-    ]
+    _southern_shop_boss_doc_unique = models.Constraint(
+        "UNIQUE(company_id, document_type, document_number)",
+        "A Shop Boss document with this type and number already exists for this company.",
+    )
 
     @api.depends("document_type", "document_number")
     def _compute_name(self):

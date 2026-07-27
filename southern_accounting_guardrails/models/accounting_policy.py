@@ -73,13 +73,10 @@ class SouthernAccountingPolicy(models.Model):
     currency_id = fields.Many2one(related="company_id.currency_id", readonly=True)
     note = fields.Text()
 
-    _sql_constraints = [
-        (
-            "southern_accounting_policy_company_unique",
-            "unique(company_id)",
-            "Only one Southern accounting policy can be active per company.",
-        )
-    ]
+    _southern_accounting_policy_company_unique = models.Constraint(
+        "UNIQUE(company_id)",
+        "Only one Southern accounting policy can be active per company.",
+    )
 
     @api.depends("company_id")
     def _compute_name(self):

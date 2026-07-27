@@ -11,7 +11,7 @@
             <t t-set="additional_title" t-value="category.name if category else 'Parts Catalog'"/>
         </xpath>
 
-        <xpath expr="//h1[contains(@class, 'o_wsale_shop_title')]" position="replace">
+        <xpath expr="//h1[hasclass('o_wsale_shop_title')]" position="replace">
             <h1 class="o_wsale_shop_title h4-fs" t-if="not category and not search">
                 Parts Catalog
             </h1>
@@ -49,7 +49,7 @@
     </template>
 
     <template id="southern_parts_product_fulfillment_note" inherit_id="website_sale.product" name="Southern Parts Fulfillment Note">
-        <xpath expr="//div[contains(@class, 'o_wsale_product_details_content_section_price')]" position="after">
+        <xpath expr="//div[hasclass('o_wsale_product_details_content_section_price')]" position="after">
             <div t-if="product.type != 'service' and product.default_code != 'SEC-MEMBERSHIP-STANDARD'" class="se-product-fulfillment-note">
                 <strong>Parts fulfillment:</strong>
                 <span>Free pickup at Southern Equipment, or $24.99 flat-rate shipping after Southern receives and verifies standard parts. Heavy or oversized items may require a freight quote.</span>

@@ -36,13 +36,10 @@ class SouthernAccountingDailyControl(models.Model):
     last_refreshed_at = fields.Datetime(readonly=True)
     review_note = fields.Text(tracking=True)
 
-    _sql_constraints = [
-        (
-            "southern_daily_control_unique",
-            "unique(company_id, control_date)",
-            "A daily accounting control already exists for this company and date.",
-        )
-    ]
+    _southern_daily_control_unique = models.Constraint(
+        "UNIQUE(company_id, control_date)",
+        "A daily accounting control already exists for this company and date.",
+    )
 
     @api.depends("control_date", "company_id")
     def _compute_name(self):
