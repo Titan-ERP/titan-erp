@@ -7,15 +7,16 @@ BROKER_GROUPS = (
     "southern_equipment_brokerage.group_southern_equipment_admin,"
     "southern_equipment_brokerage.group_southern_deal_broker"
 )
-MAX_COMP_HOURS_DIFFERENCE = 500.0
+MAX_COMP_HOURS_DIFFERENCE = 1000.0
 MAX_COMP_YEAR_DIFFERENCE = 3
-CROSS_BRAND_MINIMUM_COMP_COUNT = 3
+MINIMUM_COMP_COUNT = 3
 GOOD_MAX_MEDIAN_MULTIPLIER = 1.10
 METHOD_VERSION = (
-    "native-v2-tiered-hours-required-cross-brand-3-comp-mad-outliers-"
-    "500-hours-3-years-110pct"
+    "native-v3-tiered-hours-required-3-comp-mad-outliers-"
+    "500-to-1000-hours-3-years-110pct"
 )
 TERMINAL_STATUSES = ("archived", "sold")
+TARGET_COMPANY_ID = 2
 
 EQUIPMENT_CLASS_ALIASES = {
     "bulldozer": "dozer",
@@ -232,7 +233,15 @@ def _score_deal(ask, low, median, high, confidence):
 
 
 def _public_valuation_summary(
-    ask, low, median, high, count, basis, confidence, unavailable_reason=""
+    ask,
+    low,
+    median,
+    high,
+    count,
+    basis,
+    confidence,
+    unavailable_reason="",
+    expanded_hours=False,
 ):
     if not count or not median:
         if unavailable_reason == "missing_hours":
@@ -268,10 +277,16 @@ def _public_valuation_summary(
             if position != "at"
             else " Seller ask is at the matched median."
         )
+    hour_note = (
+        " The comparison window was expanded from 500 to 1,000 hours."
+        if expanded_hours
+        else ""
+    )
     return (
         f"Market comparison: {count} {basis_label} comp(s), "
         f"${low:,.0f}-${high:,.0f} range, ${median:,.0f} median, "
-        f"{confidence} confidence.{comparison} This is a comparison, not an appraisal."
+        f"{confidence} confidence.{comparison}{hour_note} "
+        "This is a comparison, not an appraisal."
     )
 
 
@@ -390,10 +405,29 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
                     cross_brand_rows.append(row)
                 else:
                     primary_rows.append(row)
-        if primary_rows:
-            return _filter_price_outliers(primary_rows)
+        close_primary = _filter_price_outliers(
+            [
+                row
+                for row in primary_rows
+                if abs(self.hours - row[0].hours) <= 500.0
+            ]
+        )
+        if len(close_primary) >= MINIMUM_COMP_COUNT:
+            return close_primary
+        primary_rows = _filter_price_outliers(primary_rows)
+        if len(primary_rows) >= MINIMUM_COMP_COUNT:
+            return primary_rows
+        close_cross_brand = _filter_price_outliers(
+            [
+                row
+                for row in cross_brand_rows
+                if abs(self.hours - row[0].hours) <= 500.0
+            ]
+        )
+        if len(close_cross_brand) >= MINIMUM_COMP_COUNT:
+            return close_cross_brand
         cross_brand_rows = _filter_price_outliers(cross_brand_rows)
-        if len(cross_brand_rows) >= CROSS_BRAND_MINIMUM_COMP_COUNT:
+        if len(cross_brand_rows) >= MINIMUM_COMP_COUNT:
             return cross_brand_rows
         return []
 
@@ -449,6 +483,10 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
         median = _weighted_quantile(weighted, 0.50)
         high = _weighted_quantile(weighted, 0.75)
         cross_brand = all(row[4] for row in rows)
+        expanded_hours = any(
+            abs(self.hours - comp.hours) > 500.0
+            for comp, _score, _weight, _exact, _cross_brand in rows
+        )
         basis = (
             "cross_brand_peer"
             if cross_brand
@@ -467,6 +505,7 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
             "high"
             if (
                 not cross_brand
+                and not expanded_hours
                 and len(rows) >= 6
                 and exact_count >= 4
                 and sold_count >= 3
@@ -487,7 +526,14 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
             "grade": grade,
             "comp_match_basis": basis,
             "public_deal_summary": _public_valuation_summary(
-                ask, low, median, high, len(rows), basis, confidence
+                ask,
+                low,
+                median,
+                high,
+                len(rows),
+                basis,
+                confidence,
+                expanded_hours=expanded_hours,
             ),
         }
 
@@ -516,7 +562,7 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
     def action_recalculate_all_comp_analysis(self):
         listings = self.search(
             [
-                ("company_id", "=", self.env.company.id),
+                ("company_id", "=", TARGET_COMPANY_ID),
                 ("public_status", "not in", list(TERMINAL_STATUSES)),
             ]
         )
@@ -534,7 +580,10 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
 
     def _cron_recalculate_comp_analysis(self):
         listings = self.sudo().search(
-            [("public_status", "not in", list(TERMINAL_STATUSES))]
+            [
+                ("company_id", "=", TARGET_COMPANY_ID),
+                ("public_status", "not in", list(TERMINAL_STATUSES)),
+            ]
         )
         listings._recalculate_comp_analysis()
         return True

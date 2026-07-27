@@ -76,21 +76,26 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         values.update(overrides)
         return values
 
-    def test_native_comp_analysis_uses_one_compatible_comp(self):
+    def test_native_comp_analysis_requires_three_compatible_comps(self):
         listing = self.Listing.create(
             self._listing_values(seller_ask_price=50000)
         )
-        self.Comp.create(self._comp_values())
+        self.Comp.create(
+            [
+                self._comp_values(name=f"Compatible Comp {index}")
+                for index in range(3)
+            ]
+        )
 
         listing.action_recalculate_comp_analysis()
 
-        self.assertEqual(listing.comp_count, 1)
+        self.assertEqual(listing.comp_count, 3)
         self.assertEqual(listing.comp_confidence, "medium")
         self.assertEqual(listing.comp_median, 48000)
         self.assertEqual(listing.estimated_market_value, 48000)
         self.assertEqual(listing.grade, "good")
         self.assertTrue(listing.comp_last_calculated_at)
-        self.assertIn("500-hours", listing.comp_method_version)
+        self.assertIn("1000-hours", listing.comp_method_version)
 
     def test_native_missing_hours_suppresses_range_but_keeps_listing_available(self):
         listing = self.Listing.create(
@@ -114,9 +119,11 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         self.Comp.create(
             [
                 self._comp_values(),
+                self._comp_values(name="Valid Comp Two"),
+                self._comp_values(name="Valid Comp Three"),
                 self._comp_values(
                     name="Too Many Hours",
-                    hours=1701,
+                    hours=2201,
                     price=10000,
                     source_url="https://example.test/hours",
                 ),
@@ -150,7 +157,7 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
 
         listing.action_recalculate_comp_analysis()
 
-        self.assertEqual(listing.comp_count, 1)
+        self.assertEqual(listing.comp_count, 3)
         self.assertEqual(listing.comp_median, 48000)
 
     def test_native_comp_analysis_never_matches_missing_identity(self):
@@ -260,15 +267,20 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         )
         self.Comp.create(
             [
-                self._comp_values(
-                    name="Exact Primary",
-                    equipment_type="dozer",
-                    manufacturer="Caterpillar",
-                    model="D5K2",
-                    year=2020,
-                    hours=2000,
-                    price=74000,
-                ),
+                *[
+                    self._comp_values(
+                        name=f"Exact Primary {index}",
+                        equipment_type="dozer",
+                        manufacturer="Caterpillar",
+                        model="D5K2",
+                        year=2020,
+                        hours=hours,
+                        price=price,
+                    )
+                    for index, (hours, price) in enumerate(
+                        [(1800, 74000), (2000, 75000), (2200, 76000)]
+                    )
+                ],
                 self._comp_values(
                     name="Wrong Size",
                     equipment_type="dozer",
@@ -301,9 +313,9 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
 
         listing.action_recalculate_comp_analysis()
 
-        self.assertEqual(listing.comp_count, 1)
+        self.assertEqual(listing.comp_count, 3)
         self.assertEqual(listing.comp_match_basis, "exact_model")
-        self.assertEqual(listing.comp_median, 74000)
+        self.assertEqual(listing.comp_median, 75000)
 
     def test_batch_slugs_are_unique_and_publish_requires_curated_fields(self):
         listings = self.Listing.create(
