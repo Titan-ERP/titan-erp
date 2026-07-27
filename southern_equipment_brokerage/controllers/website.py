@@ -55,12 +55,12 @@ class SouthernEquipmentBrokerageWebsite(http.Controller):
             url_args={"equipment_type": equipment_type, "region": region},
             total=total,
             page=page,
-            step=12,
+            step=9,
         )
         listings = Listing.search(
             domain,
             order="deal_score desc, create_date desc",
-            limit=12,
+            limit=9,
             offset=pager["offset"],
         )
         regions = [

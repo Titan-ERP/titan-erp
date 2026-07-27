@@ -8,11 +8,10 @@
                     <div class="container py-lg-4">
                         <div class="row align-items-end g-4">
                             <div class="col-lg-8">
-                                <span class="se-eyebrow">Southern Equipment sourced deals</span>
-                                <h1 class="display-4 fw-bold mt-2">Heavy equipment opportunities, handled by people who know the iron.</h1>
+                                <span class="se-eyebrow">Equipment Listings</span>
+                                <h1 class="display-4 fw-bold mt-2">Equipment listings, handled by people who know the iron.</h1>
                                 <p class="lead mb-0">
-                                    We source opportunities, verify seller information and availability,
-                                    coordinate inspections, and negotiate the deal from first call through closing.
+                                    Browse available machines and request current details from the Southern Equipment team.
                                 </p>
                             </div>
                             <div class="col-lg-4">
@@ -26,10 +25,10 @@
                 </section>
 
                 <section class="container py-5">
-                    <form method="get" action="/equipment-opportunities" class="row g-3 align-items-end mb-5 se-filter">
+                    <form method="get" action="/equipment-opportunities" class="row g-3 align-items-end mb-3 se-filter" id="se_equipment_filter_form">
                         <div class="col-md-5">
                             <label for="equipment_type" class="form-label">Equipment type</label>
-                            <select id="equipment_type" name="equipment_type" class="form-select">
+                            <select id="equipment_type" name="equipment_type" class="form-select" onchange="this.form.submit()">
                                 <option value="">All equipment</option>
                                 <option t-foreach="equipment_types" t-as="type_row"
                                         t-att-value="type_row[0]"
@@ -40,7 +39,7 @@
                         </div>
                         <div class="col-md-5">
                             <label for="region" class="form-label">Region</label>
-                            <select id="region" name="region" class="form-select">
+                            <select id="region" name="region" class="form-select" onchange="this.form.submit()">
                                 <option value="">All regions</option>
                                 <option t-foreach="regions" t-as="region_name"
                                         t-att-value="region_name"
@@ -54,6 +53,25 @@
                         </div>
                     </form>
 
+                    <div class="se-filter-summary d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+                        <div>
+                            <strong>
+                                Showing <t t-out="pager.get('total', 0)"/>
+                                <t t-if="pager.get('total', 0) == 1">listing</t><t t-else="">listings</t>
+                            </strong>
+                            <span t-if="equipment_type or region" class="text-muted ms-2">matching your filters</span>
+                        </div>
+                        <div t-if="equipment_type or region" class="d-flex flex-wrap align-items-center gap-2">
+                            <span t-if="equipment_type" class="se-filter-chip">
+                                <t t-foreach="equipment_types" t-as="type_row">
+                                    <t t-if="equipment_type == type_row[0]"><t t-out="type_row[1]"/></t>
+                                </t>
+                            </span>
+                            <span t-if="region" class="se-filter-chip"><t t-out="region"/></span>
+                            <a href="/equipment-opportunities" class="se-filter-clear">Clear filters</a>
+                        </div>
+                    </div>
+
                     <div t-if="not listings" class="se-empty text-center py-5">
                         <h2>No matching opportunities right now.</h2>
                         <p class="text-muted">Check back soon or contact Southern Equipment with the machine you need.</p>
@@ -64,8 +82,10 @@
                             <article class="card se-listing-card h-100 border-0">
                                 <div class="se-card-media">
                                     <img t-if="listing.image_1920"
-                                         t-att-src="image_data_uri(listing.image_1920)"
+                                         t-att-src="'/web/image/southern.equipment.listing/%s/image_1920?width=640' % listing.id"
                                          t-att-alt="listing.public_title"
+                                         loading="lazy"
+                                         decoding="async"
                                          class="w-100 h-100 object-fit-cover"/>
                                     <div t-else="" class="se-card-placeholder">
                                         <span><t t-out="listing.manufacturer or 'Southern Equipment'"/></span>
@@ -84,11 +104,11 @@
                                         <span t-if="listing.model"><t t-out="listing.model"/></span>
                                     </div>
                                     <h2 class="h4"><t t-out="listing.public_title"/></h2>
-                                    <div class="d-flex gap-3 text-muted small mb-3">
-                                        <span><i class="fa fa-map-marker me-1"/> <t t-out="listing.public_region"/></span>
-                                        <span t-if="listing.hours"><i class="fa fa-clock-o me-1"/> <t t-out="'{:,.0f}'.format(listing.hours)"/> hrs</span>
+                                    <div class="se-card-facts mb-3">
+                                        <span><strong>Region</strong><t t-out="listing.public_region"/></span>
+                                        <span t-if="listing.hours"><strong>Hours</strong><t t-out="'{:,.0f}'.format(listing.hours)"/></span>
                                     </div>
-                                    <p t-if="listing.public_deal_summary" class="se-deal-note">
+                                    <p t-if="listing.public_deal_summary" class="se-listing-note">
                                         <t t-out="listing.public_deal_summary"/>
                                     </p>
                                     <div class="mt-auto pt-3">
@@ -96,8 +116,8 @@
                                             <span t-field="listing.public_price"
                                                   t-options="{'widget': 'monetary', 'display_currency': listing.currency_id}"/>
                                         </div>
-                                        <div t-else="" class="se-price mb-3">Request deal range</div>
-                                        <a t-att-href="listing.website_url" class="btn btn-warning w-100">Request this deal</a>
+                                        <div t-else="" class="se-price mb-3">Request Price</div>
+                                        <a t-att-href="listing.website_url" class="btn btn-warning w-100">Request Info</a>
                                     </div>
                                 </div>
                             </article>
@@ -113,7 +133,7 @@
         <t t-call="website.layout">
             <t t-set="additional_title"><t t-out="listing.public_title"/></t>
             <main id="wrap" class="se-brokerage">
-                <section class="container py-4 py-lg-5">
+                <section class="container py-4 py-lg-5 se-detail-top">
                     <a href="/equipment-opportunities" class="se-back-link">
                         <i class="fa fa-arrow-left me-2"/>All equipment opportunities
                     </a>
@@ -121,8 +141,10 @@
                         <div class="col-lg-7">
                             <div class="se-detail-media">
                                 <img t-if="listing.image_1920"
-                                     t-att-src="image_data_uri(listing.image_1920)"
+                                     t-att-src="'/web/image/southern.equipment.listing/%s/image_1920?width=1000' % listing.id"
                                      t-att-alt="listing.public_title"
+                                     loading="eager"
+                                     decoding="async"
                                      class="w-100 h-100 object-fit-cover"/>
                                 <div t-else="" class="se-card-placeholder h-100">
                                     <span><t t-out="listing.manufacturer or 'Southern Equipment'"/></span>
@@ -135,25 +157,40 @@
                             <div t-if="listing.photo_ids" class="row g-3 mt-1">
                                 <div t-foreach="listing.photo_ids.filtered(lambda photo: photo.mimetype and photo.mimetype.startswith('image/'))[:6]"
                                      t-as="photo" class="col-4">
-                                    <img t-att-src="image_data_uri(photo.datas)" class="se-thumb w-100 object-fit-cover"
+                                    <img t-att-src="'/web/image/ir.attachment/%s/datas' % photo.id"
+                                         loading="lazy"
+                                         decoding="async"
+                                         class="se-thumb w-100 object-fit-cover"
                                          t-att-alt="listing.public_title"/>
                                 </div>
                             </div>
+                            <div class="se-machine-notes mt-4"
+                                 t-if="listing.public_deal_summary or listing.public_description">
+                                <span class="se-eyebrow">Listing Notes</span>
+                                <p t-if="listing.public_deal_summary" class="mb-0 mt-2">
+                                    <t t-out="listing.public_deal_summary"/>
+                                </p>
+                                <div t-elif="listing.public_description" t-field="listing.public_description" class="se-description mt-2"/>
+                            </div>
                         </div>
-                        <div class="col-lg-5">
+                        <div class="col-lg-5 se-detail-sidebar">
                             <div class="d-flex flex-wrap gap-2 mb-3">
                                 <span class="badge rounded-pill text-bg-warning">
                                     <span t-field="listing.public_status"/>
                                 </span>
                                 <span t-if="listing.inspection_available" class="badge rounded-pill text-bg-light border">Inspection available</span>
                                 <span t-if="listing.is_southern_owned" class="badge rounded-pill text-bg-success">Southern-owned</span>
-                                <span t-else="" class="badge rounded-pill text-bg-dark">Broker-assisted sourced deal</span>
+                                <span t-else="" class="badge rounded-pill text-bg-dark">Listing</span>
                             </div>
                             <h1 class="display-5 fw-bold"><t t-out="listing.public_title"/></h1>
                             <div class="se-detail-price my-4">
                                 <span t-if="listing.public_price" t-field="listing.public_price"
                                       t-options="{'widget': 'monetary', 'display_currency': listing.currency_id}"/>
-                                <span t-else="">Request deal range</span>
+                                <span t-else="">Request Price</span>
+                            </div>
+                            <div t-if="listing.hours" class="se-detail-hour-callout mb-4">
+                                <strong>Hours</strong>
+                                <span><t t-out="'{:,.0f}'.format(listing.hours)"/></span>
                             </div>
                             <dl class="row se-specs">
                                 <dt class="col-5">Region</dt><dd class="col-7"><t t-out="listing.public_region"/></dd>
@@ -165,48 +202,68 @@
                                 <dt class="col-5" t-if="listing.show_vin_serial_publicly and listing.vin_serial">VIN / Serial</dt>
                                 <dd class="col-7" t-if="listing.show_vin_serial_publicly and listing.vin_serial"><t t-out="listing.vin_serial"/></dd>
                             </dl>
-                            <a href="#inquiry" class="btn btn-warning btn-lg w-100 mt-3">Have Southern Equipment negotiate</a>
+                            <a href="#inquiry" class="btn btn-warning btn-lg w-100 mt-3">Request Info</a>
                         </div>
                     </div>
                 </section>
 
-                <section class="se-detail-section py-5">
-                    <div class="container">
-                        <div class="row g-5">
-                            <div class="col-lg-7">
-                                <h2>About this opportunity</h2>
-                                <div t-if="listing.public_description" t-field="listing.public_description" class="se-description"/>
-                                <p t-else="" class="text-muted">Contact us for the curated details on this equipment opportunity.</p>
+                <section class="container se-public-comps-section pb-4" t-if="listing.comp_count">
+                    <t t-set="public_comps"
+                       t-value="request.env['southern.equipment.comp'].sudo().search([
+                            ('company_id', '=', listing.company_id.id),
+                            ('price', '&gt;', 0),
+                            ('manufacturer', '=ilike', listing.manufacturer or ''),
+                            ('equipment_type', '=', listing.equipment_type)
+                       ], order='sale_date desc, id desc', limit=8)"/>
+                    <div t-if="public_comps" class="se-public-comps">
+                        <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-3">
+                            <div>
+                                <span class="se-eyebrow">Comparable Data Used</span>
+                                <h2 class="h3 fw-bold mt-2 mb-1">Recent comparable transactions</h2>
+                                <p class="text-muted mb-0">Representative comparable records used to support this listing.</p>
                             </div>
-                            <div class="col-lg-5">
-                                <div class="se-verification-box">
-                                    <span class="se-eyebrow">Verification</span>
-                                    <h3 class="h4 mt-2">Southern Equipment coordinates the legwork.</h3>
-                                    <p t-if="listing.verification_note"><t t-out="listing.verification_note"/></p>
-                                    <p t-else="">Availability and seller information are verified as the buyer proceeds.</p>
-                                    <p t-if="listing.deposit_required" class="small mb-0">
-                                        <strong>Deposit note:</strong>
-                                        <t t-out="listing.deposit_public_note"/>
-                                    </p>
+                            <div class="se-comp-range" t-if="listing.comp_median">
+                                <strong>Supported range</strong>
+                                <span>
+                                    <t t-if="listing.comp_low">$<t t-out="'{:,.0f}'.format(listing.comp_low)"/></t>
+                                    <t t-if="listing.comp_low and listing.comp_high"> - </t>
+                                    <t t-if="listing.comp_high">$<t t-out="'{:,.0f}'.format(listing.comp_high)"/></t>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="se-comp-grid">
+                            <article t-foreach="public_comps" t-as="comp" class="se-comp-card">
+                                <div class="d-flex justify-content-between gap-3 align-items-start">
+                                    <h3 class="h6 fw-bold mb-1">
+                                        <t t-if="comp.year"><t t-out="comp.year"/> </t><t t-out="comp.manufacturer or ''"/> <t t-out="comp.model or comp.name"/>
+                                    </h3>
+                                    <strong class="se-comp-price">$<t t-out="'{:,.0f}'.format(comp.price)"/></strong>
                                 </div>
-                            </div>
+                                <div class="se-comp-meta">
+                                    <span t-if="comp.hours"><strong>Hours</strong><t t-out="'{:,.0f}'.format(comp.hours)"/></span>
+                                    <span t-if="comp.sale_date"><strong>Date</strong><t t-out="comp.sale_date"/></span>
+                                    <span t-if="comp.location"><strong>Location</strong><t t-out="comp.location"/></span>
+                                    <span t-if="comp.sale_type"><strong>Type</strong><t t-out="comp.sale_type"/></span>
+                                </div>
+                                <p class="small text-muted mb-0 mt-2" t-if="comp.source"><t t-out="comp.source"/></p>
+                            </article>
                         </div>
                     </div>
                 </section>
 
-                <section id="inquiry" class="container py-5">
+                <section id="inquiry" class="container py-5 se-inquiry-container">
                     <div class="row justify-content-center">
-                        <div class="col-xl-9">
+                        <div class="col-12">
                             <div class="se-inquiry-panel">
                                 <div class="row g-5">
                                     <div class="col-lg-5">
                                         <span class="se-eyebrow">Start the conversation</span>
-                                        <h2 class="display-6 fw-bold mt-2">Request this deal.</h2>
-                                        <p>Tell us what you need. A Southern Equipment broker will contact you to qualify the opportunity and discuss verification, inspection, negotiation, and next steps.</p>
+                                        <h2 class="display-6 fw-bold mt-2">Request information.</h2>
+                                        <p>Tell us what you need. A Southern Equipment team member will contact you to verify availability, answer questions, and discuss next steps.</p>
                                     </div>
                                     <div class="col-lg-7">
                                         <div t-if="submitted" class="alert alert-success">
-                                            Your request is in. A Southern Equipment broker will follow up.
+                                            Your request is in. A Southern Equipment team member will follow up.
                                         </div>
                                         <div t-if="error == 'missing'" class="alert alert-danger">Please provide your name, a valid email, and phone number.</div>
                                         <div t-if="error == 'budget'" class="alert alert-danger">Please enter a valid budget.</div>
@@ -244,7 +301,7 @@
                                                         <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.
                                                     </label>
                                                 </div>
-                                                <div class="col-12"><button class="btn btn-warning btn-lg w-100" type="submit">Request this deal</button></div>
+                                                <div class="col-12"><button class="btn btn-warning btn-lg w-100" type="submit">Request Info</button></div>
                                             </div>
                                         </form>
                                     </div>
@@ -256,13 +313,8 @@
 
                 <section class="container pb-5">
                     <div class="alert se-disclosure mb-0">
-                        <strong>Broker-assisted opportunity disclosure:</strong>
-                        This is a broker-assisted sourced equipment opportunity
-                        <t t-if="listing.is_southern_owned">currently marked as Southern-owned inventory.</t>
-                        <t t-else="">and is not represented as Southern Equipment-owned inventory.</t>
-                        Southern Equipment verifies availability, coordinates inspection, negotiates terms,
-                        and may assign a purchase contract to the buyer after all parties agree.
-                        Seller details are withheld during sourcing and verification.
+                        <strong>Listing note:</strong>
+                        Availability, condition, attachments, final price, and transport details should be confirmed before purchase.
                     </div>
                 </section>
             </main>
@@ -354,16 +406,15 @@
                 <div class="container py-lg-4">
                     <div class="row align-items-end g-3 mb-4">
                         <div class="col-lg-8">
-                            <span class="se-eyebrow">Broker-assisted sourced deals</span>
-                            <h2 class="display-5 fw-bold mt-2 mb-2">Equipment opportunities worth a closer look.</h2>
+                            <span class="se-eyebrow">Equipment Listings</span>
+                            <h2 class="display-5 fw-bold mt-2 mb-2">Equipment listings worth a closer look.</h2>
                             <p class="lead text-muted mb-0">
-                                Southern Equipment verifies availability and seller information,
-                                coordinates inspections, and negotiates the deal on your behalf.
+                                Southern Equipment helps confirm availability, condition, photos, and next steps.
                             </p>
                         </div>
                         <div class="col-lg-4 text-lg-end">
                             <a href="/equipment-opportunities" class="btn btn-dark btn-lg">
-                                View all opportunities <i class="fa fa-arrow-right ms-2"/>
+                                View all listings <i class="fa fa-arrow-right ms-2"/>
                             </a>
                         </div>
                     </div>
@@ -374,8 +425,10 @@
                                 <a t-att-href="'/equipment-opportunities/' + listing.public_slug"
                                    class="se-home-card-media text-decoration-none">
                                     <img t-if="listing.image_1920"
-                                         t-att-src="image_data_uri(listing.image_1920)"
+                                         t-att-src="'/web/image/southern.equipment.listing/%s/image_1920?width=640' % listing.id"
                                          t-att-alt="listing.public_title"
+                                         loading="lazy"
+                                         decoding="async"
                                          class="w-100 h-100 object-fit-cover"/>
                                     <div t-else="" class="se-card-placeholder">
                                         <span><t t-out="listing.manufacturer or 'Southern Equipment'"/></span>
@@ -419,9 +472,7 @@
                     </div>
 
                     <p class="se-home-disclosure mt-4 mb-0">
-                        Listings are broker-assisted sourced equipment opportunities unless clearly marked
-                        Southern-owned. Seller identity and original source details remain confidential during
-                        sourcing and verification.
+                        Listings are subject to availability. Final condition, attachments, price, and transport details should be confirmed before purchase.
                     </p>
                 </div>
             </section>
