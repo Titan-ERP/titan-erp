@@ -34,35 +34,11 @@
         </field>
     </record>
 
-    <record id="view_product_template_southern_accounting_search" model="ir.ui.view">
-        <field name="name">product.template.southern.accounting.search</field>
-        <field name="model">product.template</field>
-        <field name="arch" type="xml">
-            <search>
-                <field name="name"/>
-                <field name="default_code"/>
-                <field name="categ_id"/>
-                <filter name="saleable" string="Saleable" domain="[('sale_ok', '=', True)]"/>
-                <filter name="needs_review" string="Needs Review" domain="[('southern_income_account_review', '=', 'needs_review')]"/>
-                <filter name="rental" string="Rental" domain="[('southern_revenue_bucket', '=', 'rental')]"/>
-                <filter name="service" string="Service" domain="[('southern_revenue_bucket', '=', 'service')]"/>
-                <filter name="parts" string="Parts" domain="[('southern_revenue_bucket', '=', 'parts')]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_bucket" string="Bucket" context="{'group_by': 'southern_revenue_bucket'}"/>
-                    <filter name="group_category" string="Category" context="{'group_by': 'categ_id'}"/>
-                    <filter name="group_review" string="Review" context="{'group_by': 'southern_income_account_review'}"/>
-                </group>
-            </search>
-        </field>
-    </record>
-
     <record id="action_southern_product_accounting_review" model="ir.actions.act_window">
         <field name="name">Product Accounting Review</field>
         <field name="res_model">product.template</field>
         <field name="view_mode">list,form</field>
         <field name="domain">[('sale_ok', '=', True)]</field>
-        <field name="search_view_id" ref="view_product_template_southern_accounting_search"/>
-        <field name="context">{'search_default_needs_review': 1, 'search_default_saleable': 1, 'search_default_group_bucket': 1}</field>
     </record>
 
     <record id="view_product_category_form_southern_accounting_guardrails" model="ir.ui.view">

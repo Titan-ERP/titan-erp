@@ -23,31 +23,6 @@
         </field>
     </record>
 
-    <record id="view_southern_shop_boss_document_search" model="ir.ui.view">
-        <field name="name">southern.shop.boss.document.search</field>
-        <field name="model">southern.shop_boss.document</field>
-        <field name="arch" type="xml">
-            <search>
-                <field name="name"/>
-                <field name="document_number"/>
-                <field name="customer_name"/>
-                <field name="partner_id"/>
-                <filter name="needs_invoice" string="Needs Invoice" domain="[('coverage_status', '=', 'needs_invoice')]"/>
-                <filter name="not_reviewed" string="Not Reviewed" domain="[('coverage_status', '=', 'not_reviewed')]"/>
-                <filter name="covered" string="Covered" domain="[('coverage_status', 'in', ['invoice_linked', 'summary_revenue', 'bank_matched', 'asset_sale'])]"/>
-                <filter name="exceptions" string="Exceptions" domain="[('coverage_status', '=', 'exception')]"/>
-                <filter name="repair_orders" string="Repair Orders" domain="[('document_type', '=', 'ro')]"/>
-                <filter name="part_sales" string="Part Sales" domain="[('document_type', '=', 'ps')]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_month" string="Month" context="{'group_by': 'document_date:month'}"/>
-                    <filter name="group_status" string="Coverage" context="{'group_by': 'coverage_status'}"/>
-                    <filter name="group_bucket" string="Bucket" context="{'group_by': 'accounting_bucket'}"/>
-                    <filter name="group_type" string="Document Type" context="{'group_by': 'document_type'}"/>
-                </group>
-            </search>
-        </field>
-    </record>
-
     <record id="view_southern_shop_boss_document_form" model="ir.ui.view">
         <field name="name">southern.shop.boss.document.form</field>
         <field name="model">southern.shop_boss.document</field>
@@ -134,7 +109,5 @@
         <field name="name">Shop Boss Documents</field>
         <field name="res_model">southern.shop_boss.document</field>
         <field name="view_mode">list,form</field>
-        <field name="search_view_id" ref="view_southern_shop_boss_document_search"/>
-        <field name="context">{'search_default_group_status': 1}</field>
     </record>
 </odoo>

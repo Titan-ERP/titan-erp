@@ -22,30 +22,6 @@
         </field>
     </record>
 
-    <record id="view_southern_account_move_guardrail_search" model="ir.ui.view">
-        <field name="name">southern.account.move.guardrail.search</field>
-        <field name="model">account.move</field>
-        <field name="arch" type="xml">
-            <search>
-                <field name="name"/>
-                <field name="partner_id"/>
-                <field name="southern_shop_boss_reference"/>
-                <filter name="customer_invoices" string="Customer Invoices" domain="[('move_type', '=', 'out_invoice')]"/>
-                <filter name="needs_review" string="Needs Review" domain="[('southern_review_status', '=', 'needs_review')]"/>
-                <filter name="verified" string="Verified" domain="[('southern_review_status', '=', 'verified')]"/>
-                <filter name="missing_shop_boss" string="Missing Shop Boss Ref"
-                        domain="[('move_type', '=', 'out_invoice'), ('southern_has_shop_boss_reference', '=', False), ('state', '!=', 'cancel')]"/>
-                <filter name="posted" string="Posted" domain="[('state', '=', 'posted')]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_review" string="Review Status" context="{'group_by': 'southern_review_status'}"/>
-                    <filter name="group_source" string="Source" context="{'group_by': 'southern_source_system'}"/>
-                    <filter name="group_payment" string="Payment Status" context="{'group_by': 'payment_state'}"/>
-                    <filter name="group_month" string="Invoice Month" context="{'group_by': 'invoice_date:month'}"/>
-                </group>
-            </search>
-        </field>
-    </record>
-
     <record id="view_move_form_southern_accounting_guardrails" model="ir.ui.view">
         <field name="name">account.move.form.southern.accounting.guardrails</field>
         <field name="model">account.move</field>
@@ -79,7 +55,5 @@
         <field name="res_model">account.move</field>
         <field name="view_mode">list,form</field>
         <field name="domain">[('move_type', 'in', ['out_invoice', 'out_refund']), ('state', '!=', 'cancel')]</field>
-        <field name="search_view_id" ref="view_southern_account_move_guardrail_search"/>
-        <field name="context">{'search_default_customer_invoices': 1, 'search_default_group_review': 1}</field>
     </record>
 </odoo>

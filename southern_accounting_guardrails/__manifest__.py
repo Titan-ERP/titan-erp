@@ -1,6 +1,6 @@
 {
     "name": "Southern Accounting Guardrails",
-    "version": "19.0.1.2.2",
+    "version": "19.0.1.3.0",
     "category": "Accounting/Accounting",
     "summary": "Review fields and queues for Shop Boss-backed accounting cleanup.",
     "depends": [

@@ -29,39 +29,10 @@
         </field>
     </record>
 
-    <record id="view_southern_revenue_bucket_line_search" model="ir.ui.view">
-        <field name="name">southern.revenue.bucket.line.search</field>
-        <field name="model">account.move.line</field>
-        <field name="arch" type="xml">
-            <search>
-                <field name="move_id"/>
-                <field name="partner_id"/>
-                <field name="product_id"/>
-                <field name="name"/>
-                <filter name="needs_review" string="Needs Review" domain="[('southern_revenue_bucket_review', '=', 'needs_review')]"/>
-                <filter name="exceptions" string="Exceptions" domain="[('southern_revenue_bucket_review', '=', 'exception')]"/>
-                <filter name="draft_fixable" string="Draft Fixable"
-                        domain="[('move_id.state', '=', 'draft'), ('southern_revenue_bucket_review', '=', 'needs_review'), ('southern_expected_income_account_id', '!=', False)]"/>
-                <filter name="posted_customer_revenue" string="Posted Customer Revenue"
-                        domain="[('move_id.state', '=', 'posted'), ('move_id.move_type', 'in', ['out_invoice', 'out_refund']), ('account_id.account_type', '=', 'income'), ('display_type', '=', False)]"/>
-                <filter name="rental" string="Rental" domain="[('southern_revenue_bucket', '=', 'rental')]"/>
-                <filter name="service" string="Service" domain="[('southern_revenue_bucket', '=', 'service')]"/>
-                <filter name="parts" string="Parts" domain="[('southern_revenue_bucket', '=', 'parts')]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_bucket" string="Bucket" context="{'group_by': 'southern_revenue_bucket'}"/>
-                    <filter name="group_account" string="Current Account" context="{'group_by': 'account_id'}"/>
-                    <filter name="group_month" string="Month" context="{'group_by': 'date:month'}"/>
-                </group>
-            </search>
-        </field>
-    </record>
-
     <record id="action_southern_revenue_bucket_review" model="ir.actions.act_window">
         <field name="name">Revenue Bucket Review</field>
         <field name="res_model">account.move.line</field>
         <field name="view_mode">list,form</field>
         <field name="domain">[('move_id.move_type', 'in', ['out_invoice', 'out_refund']), ('account_id.account_type', '=', 'income'), ('display_type', '=', False)]</field>
-        <field name="search_view_id" ref="view_southern_revenue_bucket_line_search"/>
-        <field name="context">{'search_default_needs_review': 1, 'search_default_posted_customer_revenue': 1, 'search_default_group_bucket': 1}</field>
     </record>
 </odoo>

@@ -21,25 +21,6 @@
         </field>
     </record>
 
-    <record id="view_southern_shop_boss_payment_batch_search" model="ir.ui.view">
-        <field name="name">southern.shop.boss.payment.batch.search</field>
-        <field name="model">southern.shop_boss.payment.batch</field>
-        <field name="arch" type="xml">
-            <search>
-                <field name="name"/>
-                <field name="shop_boss_reference"/>
-                <filter name="needs_bank_match" string="Needs Bank Match" domain="[('review_status', '=', 'needs_bank_match')]"/>
-                <filter name="matched" string="Matched" domain="[('review_status', '=', 'matched')]"/>
-                <filter name="exceptions" string="Exceptions" domain="[('review_status', '=', 'exception')]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_status" string="Status" context="{'group_by': 'review_status'}"/>
-                    <filter name="group_source" string="Payment Source" context="{'group_by': 'payment_source'}"/>
-                    <filter name="group_month" string="Month" context="{'group_by': 'batch_date:month'}"/>
-                </group>
-            </search>
-        </field>
-    </record>
-
     <record id="view_southern_shop_boss_payment_batch_form" model="ir.ui.view">
         <field name="name">southern.shop.boss.payment.batch.form</field>
         <field name="model">southern.shop_boss.payment.batch</field>
@@ -106,7 +87,5 @@
         <field name="name">Shop Boss Payment Batches</field>
         <field name="res_model">southern.shop_boss.payment.batch</field>
         <field name="view_mode">list,form</field>
-        <field name="search_view_id" ref="view_southern_shop_boss_payment_batch_search"/>
-        <field name="context">{'search_default_needs_bank_match': 1}</field>
     </record>
 </odoo>
