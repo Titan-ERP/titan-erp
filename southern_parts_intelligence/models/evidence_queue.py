@@ -183,7 +183,7 @@ class SouthernPartsEvidenceQueue(models.Model):
         Product = self.env["product.template"].sudo()
         for vals in vals_list:
             if vals.get("default_code") and not vals.get("product_tmpl_id"):
-                product = Product.search([("default_code", "=", vals["default_code"])], limit=1)
+                product = self._find_product_by_default_code(vals["default_code"], Product)
                 if product:
                     vals["product_tmpl_id"] = product.id
             if vals.get("product_tmpl_id") and not vals.get("default_code"):
@@ -232,6 +232,16 @@ class SouthernPartsEvidenceQueue(models.Model):
 
     def action_requeue(self):
         self.write({"status": "queued", "blocker_reason": False})
+        return True
+
+    def action_link_product_by_sku(self):
+        Product = self.env["product.template"].sudo()
+        for queue in self:
+            if queue.product_tmpl_id or not queue.default_code:
+                continue
+            product = queue._find_product_by_default_code(queue.default_code, Product)
+            if product:
+                queue.product_tmpl_id = product.id
         return True
 
     def action_approve_usd_price(self):
@@ -306,6 +316,7 @@ class SouthernPartsEvidenceQueue(models.Model):
         batch._refresh_price_observations()
 
     def _refresh_price_observations(self):
+        self.action_link_product_by_sku()
         for queue in self:
             if queue.evidence_type != "pricing":
                 continue
@@ -430,7 +441,39 @@ class SouthernPartsEvidenceQueue(models.Model):
     def _normalized_sparex_sku(self, value):
         value = re.sub(r"\s+", "", (value or "").strip().upper())
         match = re.search(r"S\.?(\d+)", value)
-        return f"S.{match.group(1)}" if match else value
+        if not match:
+            return value
+        digits = str(int(match.group(1))) if match.group(1).isdigit() else match.group(1)
+        return f"S.{digits}"
+
+    @api.model
+    def _sparex_sku_variants(self, value):
+        raw = re.sub(r"\s+", "", (value or "").strip().upper())
+        variants = []
+        if raw:
+            variants.append(raw)
+        match = re.search(r"S\.?(\d+)", raw)
+        if match:
+            digits_raw = match.group(1)
+            digits = str(int(digits_raw)) if digits_raw.isdigit() else digits_raw
+            variants.extend(
+                [
+                    f"S.{digits_raw}",
+                    f"S{digits_raw}",
+                    f"S.{digits}",
+                    f"S{digits}",
+                ]
+            )
+        return list(dict.fromkeys(variants))
+
+    @api.model
+    def _find_product_by_default_code(self, default_code, Product=None):
+        Product = Product or self.env["product.template"].sudo()
+        for candidate in self._sparex_sku_variants(default_code):
+            product = Product.search([("default_code", "=ilike", candidate)], limit=1)
+            if product:
+                return product
+        return Product.browse()
 
     @api.model
     def _clean_text(self, value):

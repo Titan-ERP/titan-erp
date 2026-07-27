@@ -44,6 +44,7 @@ Evidence queue support:
 - Refreshes saved pricing evidence URLs hourly in small batches, detects observed retail price changes, routes non-USD prices to currency review, and pauses a supplier lane when that source rate-limits.
 - Adds a guarded USD pricing apply lane: exact USD evidence can be approved, then separately applied to the product sale price. Non-USD, low-confidence, placeholder, and unlinked evidence stays blocked from direct apply.
 - Adds dedicated internal menus for pricing evidence, image evidence, publication readiness, and supplier coverage so the catalog agent can work continuously from one controlled cockpit.
+- Links evidence rows to products using normalized Sparex SKU variants, including `S.00610`, `S.610`, and `S610` style references.
 
 ## Deployment
 

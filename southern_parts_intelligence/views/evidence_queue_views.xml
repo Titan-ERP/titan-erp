@@ -44,6 +44,8 @@
                     <button name="action_mark_rate_limited" string="Rate Limited" type="object"/>
                     <button name="action_refresh_price_now" string="Refresh Price Now" type="object"
                             invisible="evidence_type != 'pricing'"/>
+                    <button name="action_link_product_by_sku" string="Link Product by SKU" type="object"
+                            invisible="product_tmpl_id"/>
                     <button name="action_approve_usd_price" string="Approve USD Price" type="object" class="btn-primary"
                             invisible="evidence_type != 'pricing' or status not in ('ready_for_products_agent_review', 'exact_evidence_found')"/>
                     <button name="action_apply_approved_price" string="Apply Approved Price" type="object" class="btn-primary"
