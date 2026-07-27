@@ -7,6 +7,10 @@
     </template>
 
     <template id="southern_parts_shop_title" inherit_id="website_sale.products" name="Southern Parts Shop Title">
+        <xpath expr="//t[@t-set='additional_title']" position="replace">
+            <t t-set="additional_title" t-value="category.name if category else 'Parts Catalog'"/>
+        </xpath>
+
         <xpath expr="//h1[contains(@class, 'o_wsale_shop_title')]" position="replace">
             <h1 class="o_wsale_shop_title h4-fs" t-if="not category and not search">
                 Parts Catalog
