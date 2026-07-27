@@ -80,13 +80,16 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
         self.ensure_one()
         listing_make = _normalized(self.manufacturer)
         listing_model = _normalized(self.model)
-        if not listing_make or not listing_model:
+        listing_type = _normalized(self.equipment_type)
+        if not listing_make or not listing_model or not listing_type:
             return []
         listing_family = _model_family(self.manufacturer, self.model)
         rows = []
         today = fields.Date.context_today(self)
         for comp in comps:
             if comp.price <= 0 or _normalized(comp.manufacturer) != listing_make:
+                continue
+            if _normalized(comp.equipment_type) != listing_type:
                 continue
             comp_model = _normalized(comp.model)
             exact = comp_model == listing_model
@@ -96,12 +99,14 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
             )
             if not exact and not family:
                 continue
-            if self.year and comp.year and abs(self.year - comp.year) > MAX_COMP_YEAR_DIFFERENCE:
+            if self.year and (
+                not comp.year
+                or abs(self.year - comp.year) > MAX_COMP_YEAR_DIFFERENCE
+            ):
                 continue
-            if (
-                self.hours
-                and comp.hours
-                and abs(self.hours - comp.hours) > MAX_COMP_HOURS_DIFFERENCE
+            if self.hours and (
+                not comp.hours
+                or abs(self.hours - comp.hours) > MAX_COMP_HOURS_DIFFERENCE
             ):
                 continue
 

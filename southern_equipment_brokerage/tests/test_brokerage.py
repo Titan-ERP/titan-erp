@@ -112,6 +112,24 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
                     price=10000,
                     source_url="https://example.test/year",
                 ),
+                self._comp_values(
+                    name="Missing Hours",
+                    hours=0,
+                    price=10000,
+                    source_url="https://example.test/missing-hours",
+                ),
+                self._comp_values(
+                    name="Missing Year",
+                    year=0,
+                    price=10000,
+                    source_url="https://example.test/missing-year",
+                ),
+                self._comp_values(
+                    name="Wrong Equipment Class",
+                    equipment_type="excavator",
+                    price=10000,
+                    source_url="https://example.test/wrong-type",
+                ),
             ]
         )
 
