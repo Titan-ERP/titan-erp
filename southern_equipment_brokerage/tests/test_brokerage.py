@@ -326,6 +326,60 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         self.assertEqual(listing.comp_count, 0)
         self.assertEqual(listing.comp_match_basis, "insufficient")
 
+    def test_native_same_make_successor_model_can_use_documented_specs(self):
+        listing_profile = self.SpecProfile.create(
+            {
+                "equipment_type": "skid_steer",
+                "manufacturer": "Kubota",
+                "model": "SVL75",
+                "operating_weight_lb": 9000,
+                "horsepower": 74,
+                "rated_capacity_lb": 2300,
+                "undercarriage": "tracked",
+                "source_note": "Authorized specification fixture",
+            }
+        )
+        comp_profile = self.SpecProfile.create(
+            {
+                "equipment_type": "skid_steer",
+                "manufacturer": "Kubota",
+                "model": "SVL75-2",
+                "operating_weight_lb": 9039,
+                "horsepower": 74.3,
+                "rated_capacity_lb": 2300,
+                "undercarriage": "tracked",
+                "source_note": "Authorized specification fixture",
+            }
+        )
+        listing = self.Listing.create(
+            self._listing_values(
+                manufacturer="Kubota",
+                model="SVL75",
+                year=2020,
+                hours=3000,
+                spec_profile_id=listing_profile.id,
+            )
+        )
+        self.Comp.create(
+            [
+                self._comp_values(
+                    name=f"SVL75-2 Successor {index}",
+                    manufacturer="Kubota",
+                    model="SVL75-2",
+                    year=2020,
+                    hours=2800 + index * 100,
+                    spec_profile_id=comp_profile.id,
+                    source_url=f"https://example.test/svl75/{index}",
+                )
+                for index in range(3)
+            ]
+        )
+
+        listing.action_recalculate_comp_analysis()
+
+        self.assertEqual(listing.comp_count, 3)
+        self.assertEqual(listing.comp_match_basis, "same_make_family")
+
     def test_comp_audit_explains_condition_and_hour_rejections(self):
         listing = self.Listing.create(
             self._listing_values(seller_ask_price=45000)

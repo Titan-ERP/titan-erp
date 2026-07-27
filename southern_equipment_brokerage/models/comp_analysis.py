@@ -413,11 +413,6 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
             same_make = _manufacturer_family(comp.manufacturer) == listing_make
             comp_model = _normalized(comp.model)
             exact = same_make and comp_model == listing_model
-            family = (
-                same_make
-                and bool(listing_family)
-                and listing_family == _model_family(comp.manufacturer, comp.model)
-            )
             comp_profile = comp.spec_profile_id or profile_map.get(
                 (
                     listing_type,
@@ -425,9 +420,18 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
                     comp_model,
                 )
             )
-            cross_brand = not same_make and _spec_profiles_are_peers(
+            specification_peer = _spec_profiles_are_peers(
                 listing_profile, comp_profile
             )
+            family = same_make and (
+                (
+                    bool(listing_family)
+                    and listing_family
+                    == _model_family(comp.manufacturer, comp.model)
+                )
+                or specification_peer
+            )
+            cross_brand = not same_make and specification_peer
             if not exact and not family and not cross_brand:
                 continue
             if self.year and (
@@ -668,39 +672,43 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
         same_make = _manufacturer_family(comp.manufacturer) == _manufacturer_family(
             self.manufacturer
         )
-        exact_or_family = same_make and _model_family(
-            comp.manufacturer, comp.model
-        ) == _model_family(self.manufacturer, self.model)
+        profiles = self.env["southern.equipment.spec.profile"].search(
+            [("company_id", "=", self.company_id.id), ("active", "=", True)]
+        )
+        profile_map = {
+            (
+                _equipment_class(profile.equipment_type),
+                _manufacturer_family(profile.manufacturer),
+                _normalized(profile.model),
+            ): profile
+            for profile in profiles
+        }
+        listing_profile = self.spec_profile_id or profile_map.get(
+            (
+                _equipment_class(self.equipment_type),
+                _manufacturer_family(self.manufacturer),
+                _normalized(self.model),
+            )
+        )
+        comp_profile = comp.spec_profile_id or profile_map.get(
+            (
+                _equipment_class(comp.equipment_type),
+                _manufacturer_family(comp.manufacturer),
+                _normalized(comp.model),
+            )
+        )
+        specification_peer = _spec_profiles_are_peers(
+            listing_profile, comp_profile
+        )
+        exact_or_family = same_make and (
+            _model_family(comp.manufacturer, comp.model)
+            == _model_family(self.manufacturer, self.model)
+            or specification_peer
+        )
         if same_make and not exact_or_family:
-            return "Excluded: different model family"
-        if not same_make:
-            profiles = self.env["southern.equipment.spec.profile"].search(
-                [("company_id", "=", self.company_id.id), ("active", "=", True)]
-            )
-            profile_map = {
-                (
-                    _equipment_class(profile.equipment_type),
-                    _manufacturer_family(profile.manufacturer),
-                    _normalized(profile.model),
-                ): profile
-                for profile in profiles
-            }
-            listing_profile = self.spec_profile_id or profile_map.get(
-                (
-                    _equipment_class(self.equipment_type),
-                    _manufacturer_family(self.manufacturer),
-                    _normalized(self.model),
-                )
-            )
-            comp_profile = comp.spec_profile_id or profile_map.get(
-                (
-                    _equipment_class(comp.equipment_type),
-                    _manufacturer_family(comp.manufacturer),
-                    _normalized(comp.model),
-                )
-            )
-            if not _spec_profiles_are_peers(listing_profile, comp_profile):
-                return "Excluded: no documented same-size specification match"
+            return "Excluded: different model family without a specification match"
+        if not same_make and not specification_peer:
+            return "Excluded: no documented same-size specification match"
         return (
             "Excluded: tighter evidence pool selected, duplicate source, "
             "or robust price-outlier rule"
