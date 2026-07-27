@@ -17,6 +17,7 @@
                 <field name="previous_observed_price" optional="hide"/>
                 <field name="price_delta" optional="show"/>
                 <field name="price_changed" optional="show"/>
+                <field name="recommended_sale_price" optional="show"/>
                 <field name="approved_sale_price" optional="show"/>
                 <field name="currency_code"/>
                 <field name="confidence"/>
@@ -76,6 +77,8 @@
                             <field name="previous_observed_price"/>
                             <field name="price_delta"/>
                             <field name="price_changed"/>
+                            <field name="pricing_formula"/>
+                            <field name="recommended_sale_price"/>
                             <field name="approved_sale_price"/>
                             <field name="currency_code"/>
                             <field name="source_url" widget="url"/>
@@ -97,6 +100,8 @@
                         <field name="applied_by_id"/>
                         <field name="product_price_before_apply"/>
                         <field name="product_price_after_apply"/>
+                        <field name="publication_ready"/>
+                        <field name="publication_blocker_reason"/>
                     </group>
                     <group string="Notes">
                         <field name="notes" nolabel="1"/>
@@ -124,6 +129,7 @@
                 <filter string="Ready for Review" name="ready_for_review" domain="[('status','=','ready_for_products_agent_review')]"/>
                 <filter string="Approved for Apply" name="approved_for_apply" domain="[('status','=','approved_for_apply')]"/>
                 <filter string="Exact USD Ready" name="exact_usd_ready" domain="[('evidence_type','=','pricing'), ('currency_code','=','USD'), ('observed_price','>',1.0), ('confidence','>=',0.8), ('status','in',['ready_for_products_agent_review','exact_evidence_found'])]"/>
+                <filter string="Publication Ready" name="publication_ready" domain="[('publication_ready','=',True)]"/>
                 <filter string="Price Changed" name="price_changed" domain="[('price_changed','=',True)]"/>
                 <filter string="Applied" name="applied" domain="[('status','=','applied')]"/>
                 <separator/>
@@ -147,9 +153,64 @@
         <field name="context">{'search_default_queued': 1}</field>
     </record>
 
+    <record id="action_southern_parts_pricing_queue" model="ir.actions.act_window">
+        <field name="name">Pricing Evidence</field>
+        <field name="res_model">southern.parts.evidence.queue</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="southern_parts_evidence_queue_search"/>
+        <field name="domain">[('evidence_type','=','pricing')]</field>
+        <field name="context">{'search_default_exact_usd_ready': 1}</field>
+    </record>
+
+    <record id="action_southern_parts_image_queue" model="ir.actions.act_window">
+        <field name="name">Image Evidence</field>
+        <field name="res_model">southern.parts.evidence.queue</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="southern_parts_evidence_queue_search"/>
+        <field name="domain">[('evidence_type','=','image')]</field>
+        <field name="context">{'search_default_queued': 1}</field>
+    </record>
+
+    <record id="action_southern_parts_publication_queue" model="ir.actions.act_window">
+        <field name="name">Publication Readiness</field>
+        <field name="res_model">southern.parts.evidence.queue</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="southern_parts_evidence_queue_search"/>
+        <field name="domain">[('evidence_type','in',['publication','pricing','image','parts_intelligence','taxonomy'])]</field>
+        <field name="context">{'search_default_publication_ready': 1}</field>
+    </record>
+
+    <record id="action_southern_parts_supplier_coverage" model="ir.actions.act_window">
+        <field name="name">Supplier Coverage</field>
+        <field name="res_model">southern.parts.evidence.queue</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="southern_parts_evidence_queue_search"/>
+        <field name="context">{'group_by': 'source_name'}</field>
+    </record>
+
     <menuitem id="menu_southern_parts_evidence_queue"
               name="Evidence Queue"
               parent="menu_southern_parts_intelligence_root"
               action="action_southern_parts_evidence_queue"
               sequence="6"/>
+    <menuitem id="menu_southern_parts_pricing_queue"
+              name="Pricing Evidence"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_parts_pricing_queue"
+              sequence="7"/>
+    <menuitem id="menu_southern_parts_image_queue"
+              name="Image Evidence"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_parts_image_queue"
+              sequence="8"/>
+    <menuitem id="menu_southern_parts_publication_queue"
+              name="Publication Readiness"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_parts_publication_queue"
+              sequence="9"/>
+    <menuitem id="menu_southern_parts_supplier_coverage"
+              name="Supplier Coverage"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_parts_supplier_coverage"
+              sequence="10"/>
 </odoo>

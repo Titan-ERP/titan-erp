@@ -67,6 +67,20 @@ class SouthernPartsEvidenceQueue(models.Model):
     previous_observed_price = fields.Float(string="Previous Observed Price")
     price_delta = fields.Float(string="Price Delta", compute="_compute_price_delta", store=True)
     price_changed = fields.Boolean(string="Price Changed", compute="_compute_price_delta", store=True)
+    pricing_formula = fields.Selection(
+        [
+            ("market_match", "Market Match"),
+            ("manual_review", "Manual Review"),
+        ],
+        default="market_match",
+        required=True,
+        index=True,
+    )
+    recommended_sale_price = fields.Float(
+        string="Recommended Sale Price",
+        compute="_compute_recommended_sale_price",
+        store=True,
+    )
     approved_sale_price = fields.Float(string="Approved Sale Price")
     product_price_before_apply = fields.Float(string="Product Price Before Apply", readonly=True)
     product_price_after_apply = fields.Float(string="Product Price After Apply", readonly=True)
@@ -84,6 +98,8 @@ class SouthernPartsEvidenceQueue(models.Model):
     applied_at = fields.Datetime()
     reviewed_by_id = fields.Many2one("res.users", readonly=True)
     applied_by_id = fields.Many2one("res.users", readonly=True)
+    publication_ready = fields.Boolean(string="Publication Ready", compute="_compute_publication_readiness", store=True)
+    publication_blocker_reason = fields.Char(string="Publication Blocker", compute="_compute_publication_readiness", store=True)
 
     @api.depends("default_code", "evidence_type", "source_name", "status")
     def _compute_name(self):
@@ -101,6 +117,60 @@ class SouthernPartsEvidenceQueue(models.Model):
         for queue in self:
             queue.price_delta = queue.observed_price - queue.previous_observed_price
             queue.price_changed = bool(queue.previous_observed_price and abs(queue.price_delta) >= 0.01)
+
+    @api.depends("evidence_type", "currency_code", "observed_price", "confidence", "pricing_formula")
+    def _compute_recommended_sale_price(self):
+        for queue in self:
+            if (
+                queue.evidence_type == "pricing"
+                and queue.pricing_formula == "market_match"
+                and (queue.currency_code or "").upper() == "USD"
+                and queue.observed_price > 1.0
+                and queue.confidence >= 0.8
+            ):
+                queue.recommended_sale_price = queue.observed_price
+            else:
+                queue.recommended_sale_price = 0.0
+
+    @api.depends(
+        "product_tmpl_id",
+        "product_tmpl_id.active",
+        "product_tmpl_id.sale_ok",
+        "product_tmpl_id.list_price",
+        "product_tmpl_id.public_categ_ids",
+        "product_tmpl_id.image_1920",
+        "product_tmpl_id.description_sale",
+    )
+    def _compute_publication_readiness(self):
+        for queue in self:
+            product = queue.product_tmpl_id
+            blockers = []
+            if not product:
+                blockers.append("No linked product")
+            else:
+                if not product.active:
+                    blockers.append("Product is archived")
+                if not product.sale_ok:
+                    blockers.append("Sales disabled")
+                if product.list_price <= 1.0:
+                    blockers.append("Sale price is not customer-ready")
+                if "public_categ_ids" in product._fields and not product.public_categ_ids:
+                    blockers.append("Missing ecommerce category")
+                if "image_1920" in product._fields and not product.image_1920:
+                    blockers.append("Missing product image")
+                customer_copy = (product.description_sale or "").strip()
+                if not customer_copy:
+                    blockers.append("Missing sales description")
+                internal_markers = (
+                    "detail enrichment pending",
+                    "pricing requires separate review",
+                    "public blumaq page harvested",
+                    "sparex source:",
+                )
+                if any(marker in customer_copy.lower() for marker in internal_markers):
+                    blockers.append("Sales description contains internal sourcing text")
+            queue.publication_ready = not blockers
+            queue.publication_blocker_reason = "; ".join(blockers)
 
     @api.onchange("product_tmpl_id")
     def _onchange_product_tmpl_id(self):
@@ -170,7 +240,7 @@ class SouthernPartsEvidenceQueue(models.Model):
             queue.write(
                 {
                     "status": "approved_for_apply",
-                    "approved_sale_price": queue.observed_price,
+                    "approved_sale_price": queue.recommended_sale_price or queue.observed_price,
                     "reviewed_at": fields.Datetime.now(),
                     "reviewed_by_id": self.env.user.id,
                     "blocker_reason": False,
