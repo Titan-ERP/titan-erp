@@ -9,7 +9,7 @@ class SaleOrder(models.Model):
     SOUTHERN_CARD_FEE_RATE = 0.035
     SOUTHERN_CARD_FEE_FIXED = 0.30
     SOUTHERN_PICKUP_CARRIER = "Pickup at Southern Equipment"
-    SOUTHERN_SHIP_CARRIER = "Ship to billing/shipping address"
+    SOUTHERN_SHIP_CARRIER = "Flat-rate shipping from Southern Equipment"
 
     def _cart_add(self, *args, **kwargs):
         result = super()._cart_add(*args, **kwargs)
@@ -29,12 +29,10 @@ class SaleOrder(models.Model):
 
     def _southern_apply_website_fulfillment_routes(self):
         Route = self.env["stock.route"].sudo()
-        dropship_route = Route.search([("name", "=", "Dropship")], limit=1)
         buy_route = Route.search([("name", "=", "Buy")], limit=1)
         mto_route = Route.search([("name", "=", "Replenish on Order (MTO)")], limit=1)
 
-        pickup_routes = (mto_route | buy_route).ids
-        dropship_routes = dropship_route.ids
+        vendor_to_southern_routes = (mto_route | buy_route).ids
 
         for order in self:
             if (
@@ -50,8 +48,7 @@ class SaleOrder(models.Model):
             if not is_pickup and not is_ship:
                 continue
 
-            target_routes = pickup_routes if is_pickup else dropship_routes
-            if not target_routes:
+            if not vendor_to_southern_routes:
                 continue
 
             for line in order.order_line.filtered(
@@ -63,7 +60,7 @@ class SaleOrder(models.Model):
                 product = line.product_id
                 if not product.purchase_ok or not product.seller_ids:
                     continue
-                line.route_ids = [(6, 0, target_routes)]
+                line.route_ids = [(6, 0, vendor_to_southern_routes)]
 
     def _southern_sync_website_card_fee(self):
         if self.env.context.get("skip_southern_card_fee"):
