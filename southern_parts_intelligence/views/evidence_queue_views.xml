@@ -17,6 +17,7 @@
                 <field name="previous_observed_price" optional="hide"/>
                 <field name="price_delta" optional="show"/>
                 <field name="price_changed" optional="show"/>
+                <field name="approved_sale_price" optional="show"/>
                 <field name="currency_code"/>
                 <field name="confidence"/>
                 <field name="last_checked_at"/>
@@ -42,12 +43,16 @@
                     <button name="action_mark_rate_limited" string="Rate Limited" type="object"/>
                     <button name="action_refresh_price_now" string="Refresh Price Now" type="object"
                             invisible="evidence_type != 'pricing'"/>
+                    <button name="action_approve_usd_price" string="Approve USD Price" type="object" class="btn-primary"
+                            invisible="evidence_type != 'pricing' or status not in ('ready_for_products_agent_review', 'exact_evidence_found')"/>
+                    <button name="action_apply_approved_price" string="Apply Approved Price" type="object" class="btn-primary"
+                            invisible="status != 'approved_for_apply'"/>
                     <button name="action_requeue" string="Requeue" type="object"
                             invisible="status == 'queued'"/>
                     <button name="action_mark_applied" string="Mark Applied" type="object"
                             invisible="status == 'applied'"/>
                     <field name="status" widget="statusbar"
-                           statusbar_visible="queued,exact_evidence_found,currency_review,ready_for_products_agent_review,applied"/>
+                           statusbar_visible="queued,exact_evidence_found,currency_review,ready_for_products_agent_review,approved_for_apply,applied"/>
                 </header>
                 <sheet>
                     <group>
@@ -71,6 +76,7 @@
                             <field name="previous_observed_price"/>
                             <field name="price_delta"/>
                             <field name="price_changed"/>
+                            <field name="approved_sale_price"/>
                             <field name="currency_code"/>
                             <field name="source_url" widget="url"/>
                             <field name="source_search_url" widget="url"/>
@@ -88,6 +94,9 @@
                         <field name="reviewed_at"/>
                         <field name="reviewed_by_id"/>
                         <field name="applied_at"/>
+                        <field name="applied_by_id"/>
+                        <field name="product_price_before_apply"/>
+                        <field name="product_price_after_apply"/>
                     </group>
                     <group string="Notes">
                         <field name="notes" nolabel="1"/>
@@ -113,6 +122,8 @@
                 <filter string="Alternate Source Needed" name="alternate_source_needed" domain="[('status','=','alternate_source_needed')]"/>
                 <filter string="Rate Limited" name="rate_limited" domain="[('status','=','rate_limited')]"/>
                 <filter string="Ready for Review" name="ready_for_review" domain="[('status','=','ready_for_products_agent_review')]"/>
+                <filter string="Approved for Apply" name="approved_for_apply" domain="[('status','=','approved_for_apply')]"/>
+                <filter string="Exact USD Ready" name="exact_usd_ready" domain="[('evidence_type','=','pricing'), ('currency_code','=','USD'), ('observed_price','>',1.0), ('confidence','>=',0.8), ('status','in',['ready_for_products_agent_review','exact_evidence_found'])]"/>
                 <filter string="Price Changed" name="price_changed" domain="[('price_changed','=',True)]"/>
                 <filter string="Applied" name="applied" domain="[('status','=','applied')]"/>
                 <separator/>

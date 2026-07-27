@@ -42,6 +42,7 @@ Evidence queue support:
 - Stores source URLs, observed prices, currency, confidence, retry state, blocker reason, and review/apply status.
 - Keeps exact evidence separate from live catalog writes. Queue rows may be created continuously; applying prices, images, or publication still requires a separate guarded workflow.
 - Refreshes saved pricing evidence URLs hourly in small batches, detects observed retail price changes, routes non-USD prices to currency review, and pauses a supplier lane when that source rate-limits.
+- Adds a guarded USD pricing apply lane: exact USD evidence can be approved, then separately applied to the product sale price. Non-USD, low-confidence, placeholder, and unlinked evidence stays blocked from direct apply.
 
 ## Deployment
 

@@ -7,6 +7,7 @@ import urllib.request
 from datetime import timedelta
 
 from odoo import api, fields, models
+from odoo.exceptions import UserError
 
 
 class SouthernPartsEvidenceQueue(models.Model):
@@ -35,6 +36,7 @@ class SouthernPartsEvidenceQueue(models.Model):
             ("alternate_source_needed", "Alternate Source Needed"),
             ("rate_limited", "Rate Limited"),
             ("ready_for_products_agent_review", "Ready for Products Agent Review"),
+            ("approved_for_apply", "Approved for Price Apply"),
             ("applied", "Applied"),
             ("blocked", "Blocked"),
             ("rejected", "Rejected"),
@@ -65,6 +67,9 @@ class SouthernPartsEvidenceQueue(models.Model):
     previous_observed_price = fields.Float(string="Previous Observed Price")
     price_delta = fields.Float(string="Price Delta", compute="_compute_price_delta", store=True)
     price_changed = fields.Boolean(string="Price Changed", compute="_compute_price_delta", store=True)
+    approved_sale_price = fields.Float(string="Approved Sale Price")
+    product_price_before_apply = fields.Float(string="Product Price Before Apply", readonly=True)
+    product_price_after_apply = fields.Float(string="Product Price After Apply", readonly=True)
     currency_code = fields.Char(string="Currency", index=True)
     confidence = fields.Float(default=0.0)
     blocker_reason = fields.Char(index=True)
@@ -78,6 +83,7 @@ class SouthernPartsEvidenceQueue(models.Model):
     reviewed_at = fields.Datetime()
     applied_at = fields.Datetime()
     reviewed_by_id = fields.Many2one("res.users", readonly=True)
+    applied_by_id = fields.Many2one("res.users", readonly=True)
 
     @api.depends("default_code", "evidence_type", "source_name", "status")
     def _compute_name(self):
@@ -157,6 +163,55 @@ class SouthernPartsEvidenceQueue(models.Model):
     def action_requeue(self):
         self.write({"status": "queued", "blocker_reason": False})
         return True
+
+    def action_approve_usd_price(self):
+        for queue in self:
+            queue._check_price_apply_ready(allow_approved_price_missing=True)
+            queue.write(
+                {
+                    "status": "approved_for_apply",
+                    "approved_sale_price": queue.observed_price,
+                    "reviewed_at": fields.Datetime.now(),
+                    "reviewed_by_id": self.env.user.id,
+                    "blocker_reason": False,
+                }
+            )
+        return True
+
+    def action_apply_approved_price(self):
+        for queue in self:
+            queue._check_price_apply_ready()
+            product = queue.product_tmpl_id.sudo()
+            before_price = product.list_price
+            product.write({"list_price": queue.approved_sale_price})
+            queue.write(
+                {
+                    "status": "applied",
+                    "product_price_before_apply": before_price,
+                    "product_price_after_apply": queue.approved_sale_price,
+                    "applied_at": fields.Datetime.now(),
+                    "applied_by_id": self.env.user.id,
+                    "blocker_reason": False,
+                }
+            )
+        return True
+
+    def _check_price_apply_ready(self, allow_approved_price_missing=False):
+        self.ensure_one()
+        if self.evidence_type != "pricing":
+            raise UserError("Only pricing evidence can apply a sale price.")
+        if not self.product_tmpl_id:
+            raise UserError("A linked product is required before applying a price.")
+        if (self.currency_code or "").upper() != "USD":
+            raise UserError("Only exact USD pricing can be approved for direct price apply.")
+        if self.observed_price <= 1.0:
+            raise UserError("Observed price must be greater than $1.00 before applying.")
+        if self.confidence < 0.8:
+            raise UserError("Pricing confidence must be at least 0.80 before applying.")
+        if not allow_approved_price_missing and self.approved_sale_price <= 1.0:
+            raise UserError("Approved sale price must be greater than $1.00 before applying.")
+        if not allow_approved_price_missing and self.status != "approved_for_apply":
+            raise UserError("Price evidence must be approved before it can be applied.")
 
     def action_refresh_price_now(self):
         self.filtered(lambda row: row.evidence_type == "pricing").sudo()._refresh_price_observations()
@@ -261,6 +316,7 @@ class SouthernPartsEvidenceQueue(models.Model):
             "priority": priority,
             "previous_observed_price": previous_price,
             "observed_price": observed_price,
+            "approved_sale_price": False,
             "currency_code": observation.get("currency_code"),
             "source_title": observation.get("source_title") or self.source_title,
             "source_url": observation.get("source_url") or self.source_url,
