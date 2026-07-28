@@ -392,6 +392,31 @@ class SouthernEquipmentListing(models.Model):
             counter += 1
         return slug
 
+    def _sync_facebook_source_photo_preview(self):
+        if self.env.context.get("skip_facebook_photo_preview"):
+            return
+        for listing in self:
+            if listing.website_published or (
+                listing.image_1920 and not listing.image_is_representative
+            ):
+                continue
+            image_attachments = listing.facebook_source_photo_ids.filtered(
+                lambda attachment: attachment.datas
+                and attachment.mimetype
+                and attachment.mimetype.startswith("image/")
+            )
+            if not image_attachments:
+                continue
+            listing.with_context(skip_facebook_photo_preview=True).write(
+                {
+                    "image_1920": image_attachments[0].datas,
+                    "image_is_representative": False,
+                    "photo_rights_confirmed": False,
+                    "photo_source_note": False,
+                    "website_published": False,
+                }
+            )
+
     @api.model_create_multi
     def create(self, vals_list):
         reserved_slugs = set(
@@ -415,7 +440,9 @@ class SouthernEquipmentListing(models.Model):
                 vals["name"] = self.env["ir.sequence"].next_by_code(
                     "southern.equipment.listing"
                 ) or _("New")
-        return super().create(vals_list)
+        listings = super().create(vals_list)
+        listings._sync_facebook_source_photo_preview()
+        return listings
 
     def write(self, vals):
         if vals.get("public_slug"):
@@ -424,7 +451,10 @@ class SouthernEquipmentListing(models.Model):
             vals["source_url"] = _canonical_source_url(vals["source_url"])
         if vals.get("public_status") in TERMINAL_LISTING_STATUSES:
             vals["website_published"] = False
-        return super().write(vals)
+        result = super().write(vals)
+        if "facebook_source_photo_ids" in vals:
+            self._sync_facebook_source_photo_preview()
+        return result
 
     @api.constrains(
         "website_published",

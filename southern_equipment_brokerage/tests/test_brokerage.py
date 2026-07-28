@@ -823,6 +823,28 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         self.assertTrue(representative.website_published)
         self.assertTrue(representative.image_is_representative)
 
+    def test_facebook_source_photos_become_private_listing_preview(self):
+        source_photo = self.env["ir.attachment"].create(
+            {
+                "name": "facebook-private-preview.png",
+                "datas": TEST_IMAGE,
+                "mimetype": "image/png",
+            }
+        )
+        listing = self.Listing.create(
+            self._listing_values(
+                image_1920=False,
+                facebook_source_photo_ids=[Command.set(source_photo.ids)],
+            )
+        )
+
+        self.assertTrue(listing.image_1920)
+        self.assertFalse(listing.image_is_representative)
+        self.assertFalse(listing.photo_rights_confirmed)
+        self.assertFalse(listing.photo_source_note)
+        self.assertFalse(listing.website_published)
+        self.assertFalse(listing.photo_ids)
+
     def test_facebook_photos_require_documented_reuse_permission(self):
         listing = self.Listing.create(
             self._listing_values(image_is_representative=True)
