@@ -57,6 +57,35 @@
     }
 }
 
+#product_full_description {
+    > .se-product-summary {
+        display: none;
+    }
+
+    &:has(> .se-product-summary) {
+        margin: 0 !important;
+        min-height: 0;
+    }
+}
+
+.o_wsale_product_details_content_section_title {
+    .se-product-summary {
+        border-left: 3px solid #efbb2e;
+        color: #4b5563;
+        margin-top: .8rem;
+        padding-left: .85rem;
+
+        p {
+            margin-bottom: .45rem;
+        }
+
+        ul {
+            margin-bottom: .45rem;
+            padding-left: 1.1rem;
+        }
+    }
+}
+
 .se-shop-counter__primary {
     background: #efbb2e;
     border-radius: 3px;
