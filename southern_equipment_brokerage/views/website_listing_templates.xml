@@ -247,7 +247,6 @@
                                     <span t-if="comp.location"><strong>Location</strong><t t-out="comp.location"/></span>
                                     <span t-if="comp.sale_type"><strong>Type</strong><t t-out="comp.sale_type"/></span>
                                 </div>
-                                <p class="small text-muted mb-0 mt-2" t-if="comp.source"><t t-out="comp.source"/></p>
                             </article>
                         </div>
                     </div>
