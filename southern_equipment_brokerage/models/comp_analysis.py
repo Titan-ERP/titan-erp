@@ -13,8 +13,8 @@ MAX_COMP_AGE_YEARS = 3
 MINIMUM_COMP_COUNT = 3
 GOOD_MAX_MEDIAN_MULTIPLIER = 1.10
 METHOD_VERSION = (
-    "native-v8-exact-model-first-all-qualifying-readiness-reviewed-alias-"
-    "configuration-3-year-freshness-"
+    "native-v9-observed-retained-range-exact-model-first-all-qualifying-"
+    "readiness-reviewed-alias-configuration-3-year-freshness-"
     "spec-peers-required-3-comp-mad-outliers-500-to-1000-hours-"
     "3-model-years-110pct"
 )
@@ -850,9 +850,10 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
             (comp.price, weight)
             for comp, _score, weight, _exact, _cross_brand in rows
         ]
-        low = _weighted_quantile(weighted, 0.25)
+        retained_prices = [price for price, _weight in weighted]
+        low = min(retained_prices)
         median = _weighted_quantile(weighted, 0.50)
-        high = _weighted_quantile(weighted, 0.75)
+        high = max(retained_prices)
         cross_brand = all(row[4] for row in rows)
         expanded_hours = any(
             abs(self.hours - comp.hours) > 500.0

@@ -419,7 +419,12 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
 
         self.assertEqual(listing.comp_count, 4)
         self.assertEqual(listing.comp_match_basis, "exact_model")
-        self.assertIn("native-v8-exact-model-first", listing.comp_method_version)
+        self.assertEqual(listing.comp_low, 40000)
+        self.assertEqual(listing.comp_high, 43000)
+        self.assertIn(
+            "native-v9-observed-retained-range",
+            listing.comp_method_version,
+        )
 
     def test_native_cross_brand_requires_three_documented_specification_peers(self):
         listing_profile = self.SpecProfile.create(
