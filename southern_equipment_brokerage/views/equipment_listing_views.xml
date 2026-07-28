@@ -28,6 +28,12 @@
         <field name="arch" type="xml">
             <list decoration-muted="public_status in ['sold', 'archived', 'unavailable']">
                 <header>
+                    <button name="%(southern_equipment_brokerage.action_southern_equipment_facebook_intake_wizard)d"
+                            string="Paste Facebook Listing"
+                            type="action"
+                            display="always"
+                            class="btn-primary"
+                            groups="southern_equipment_brokerage.group_southern_deal_broker,southern_equipment_brokerage.group_southern_equipment_admin"/>
                     <button name="action_recalculate_all_comp_analysis"
                             string="Recalculate All Comps"
                             type="object"
@@ -193,6 +199,12 @@
                                     <field name="source_url" widget="url"/>
                                     <field name="source_listing_id"/>
                                     <field name="capture_run_id"/>
+                                    <field name="facebook_shared_url" widget="url"/>
+                                    <field name="facebook_intake_status"/>
+                                    <field name="facebook_intake_requested_by"/>
+                                    <field name="facebook_intake_requested_at"/>
+                                    <field name="facebook_intake_error"
+                                           invisible="facebook_intake_status != 'failed'"/>
                                 </group>
                                 <group string="Seller">
                                     <field name="source_seller_id"/>

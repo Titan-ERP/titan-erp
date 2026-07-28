@@ -852,6 +852,7 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         self.assertEqual(listing.seller_exact_location, "Exact City, MS")
         self.assertEqual(listing.raw_capture_text, "original marketplace text")
         self.assertEqual(listing.public_status, "verification_in_progress")
+        self.assertEqual(listing.facebook_intake_status, "resolved")
 
         wizard.action_import()
         duplicates = self.Listing.search(
@@ -861,6 +862,70 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
             ]
         )
         self.assertEqual(len(duplicates), 1)
+
+    def test_broker_can_queue_and_deduplicate_facebook_share_link(self):
+        share_url = "https://www.facebook.com/share/1BpdNk4kak/?tracking=test"
+        wizard = self.env[
+            "southern.equipment.facebook.intake.wizard"
+        ].create({"facebook_url": share_url})
+
+        action = wizard.action_queue_enrichment()
+        listing = self.Listing.browse(action["res_id"])
+
+        self.assertEqual(
+            listing.source_url,
+            "https://www.facebook.com/share/1BpdNk4kak",
+        )
+        self.assertEqual(listing.facebook_shared_url, listing.source_url)
+        self.assertEqual(listing.facebook_intake_status, "pending")
+        self.assertEqual(listing.public_status, "verification_in_progress")
+        self.assertFalse(listing.website_published)
+        self.assertFalse(listing.source_listing_id)
+        self.assertEqual(listing.broker_id, self.env.user)
+
+        duplicate_wizard = self.env[
+            "southern.equipment.facebook.intake.wizard"
+        ].create({"facebook_url": share_url})
+        duplicate_action = duplicate_wizard.action_queue_enrichment()
+        self.assertEqual(duplicate_action["res_id"], listing.id)
+        self.assertEqual(
+            self.Listing.search_count(
+                [
+                    ("source", "=", "facebook_marketplace"),
+                    ("facebook_shared_url", "=", listing.source_url),
+                ]
+            ),
+            1,
+        )
+
+    def test_direct_facebook_item_link_extracts_numeric_identity(self):
+        wizard = self.env[
+            "southern.equipment.facebook.intake.wizard"
+        ].create(
+            {
+                "facebook_url": (
+                    "https://www.facebook.com/marketplace/item/1488670613016588/"
+                    "?rdid=tracking"
+                )
+            }
+        )
+
+        action = wizard.action_queue_enrichment()
+        listing = self.Listing.browse(action["res_id"])
+
+        self.assertEqual(listing.source_listing_id, "1488670613016588")
+        self.assertEqual(
+            listing.source_url,
+            "https://www.facebook.com/marketplace/item/1488670613016588",
+        )
+        self.assertEqual(listing.facebook_intake_status, "pending")
+
+    def test_facebook_intake_rejects_non_listing_url(self):
+        wizard = self.env[
+            "southern.equipment.facebook.intake.wizard"
+        ].create({"facebook_url": "https://example.com/not-facebook"})
+        with self.assertRaises(UserError):
+            wizard.action_queue_enrichment()
 
     def test_terminal_status_automatically_unpublishes(self):
         listing = self.Listing.create(

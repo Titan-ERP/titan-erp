@@ -1,6 +1,6 @@
 {
     "name": "Southern Equipment Brokerage",
-    "version": "19.0.1.15.4",
+    "version": "19.0.1.16.0",
     "author": "Southern Equipment",
     "category": "Sales/CRM",
     "summary": "Broker-assisted sourced equipment listings, inquiries, inspections, and assignments.",
@@ -20,6 +20,7 @@ curated broker-assisted equipment catalog and accepting buyer inquiries.
         "security/ir.model.access.csv",
         "data/southern_brokerage_sequences.xml",
         "data/comp_analysis_cron.xml",
+        "views/equipment_import_views.xml",
         "views/equipment_listing_views.xml",
         "views/buyer_inquiry_views.xml",
         "views/brokered_deal_views.xml",
@@ -29,7 +30,6 @@ curated broker-assisted equipment catalog and accepting buyer inquiries.
         "views/equipment_comp_views.xml",
         "views/equipment_comp_audit_views.xml",
         "views/valuation_analysis_views.xml",
-        "views/equipment_import_views.xml",
         "views/southern_brokerage_menus.xml",
         "views/website_listing_templates.xml",
     ],

@@ -116,6 +116,36 @@ class SouthernEquipmentListing(models.Model):
     source_listing_id = fields.Char(groups=BROKER_GROUPS)
     capture_run_id = fields.Char(groups=BROKER_GROUPS)
     raw_capture_text = fields.Text(groups=BROKER_GROUPS)
+    facebook_shared_url = fields.Char(
+        string="Original Facebook Link",
+        groups=BROKER_GROUPS,
+        help="The share or Marketplace URL pasted by a broker before visible-browser enrichment.",
+    )
+    facebook_intake_status = fields.Selection(
+        [
+            ("pending", "Pending Browser Enrichment"),
+            ("resolved", "Enriched"),
+            ("failed", "Needs Broker Review"),
+        ],
+        string="Facebook Intake",
+        groups=BROKER_GROUPS,
+        tracking=True,
+    )
+    facebook_intake_requested_by = fields.Many2one(
+        "res.users",
+        string="Facebook Intake Requested By",
+        groups=BROKER_GROUPS,
+        readonly=True,
+    )
+    facebook_intake_requested_at = fields.Datetime(
+        string="Facebook Intake Requested At",
+        groups=BROKER_GROUPS,
+        readonly=True,
+    )
+    facebook_intake_error = fields.Char(
+        string="Facebook Intake Issue",
+        groups=BROKER_GROUPS,
+    )
     source_seller_id = fields.Many2one(
         "res.partner",
         string="Source Seller",
@@ -1426,7 +1456,7 @@ class SouthernEquipmentImportWizard(models.TransientModel):
         notes = (row.get("Internal Notes") or "").strip()
         priority = (row.get("Priority") or "").strip()
         serial = (row.get("VIN/Serial") or "").strip()
-        return {
+        vals = {
             "name": equipment_id or _("New"),
             "public_title": title,
             "public_status": self._public_status_key(row.get("Stage")),
@@ -1434,6 +1464,9 @@ class SouthernEquipmentImportWizard(models.TransientModel):
             "source": self._source_key(row.get("Source")),
             "source_url": _canonical_source_url(source_url),
             "source_listing_id": equipment_id,
+            "facebook_shared_url": _canonical_source_url(
+                row.get("Original Facebook Link")
+            ),
             "capture_run_id": self._capture_run_id(row, notes),
             "raw_capture_text": self._raw_capture(notes),
             "seller_name_raw": seller,
@@ -1463,6 +1496,14 @@ class SouthernEquipmentImportWizard(models.TransientModel):
             "grade": "strong" if priority == "3" else "good" if priority == "2" else "verify",
             "verification_note": "Availability and seller information have not yet been verified.",
         }
+        if vals["source"] == "facebook_marketplace" and equipment_id:
+            vals.update(
+                {
+                    "facebook_intake_status": "resolved",
+                    "facebook_intake_error": False,
+                }
+            )
+        return vals
 
     def _find_existing_listing(self, Listing, vals):
         equipment_id = vals.get("source_listing_id")
@@ -1486,6 +1527,14 @@ class SouthernEquipmentImportWizard(models.TransientModel):
                 lambda listing: _canonical_source_url(listing.source_url)
                 == vals["source_url"]
             )[:1]
+        if not existing and vals.get("facebook_shared_url"):
+            existing = Listing.search(
+                [
+                    ("source", "=", source),
+                    ("facebook_shared_url", "=", vals["facebook_shared_url"]),
+                ],
+                limit=1,
+            )
         return existing
 
     def _row_identity(self, vals):
@@ -1630,4 +1679,119 @@ class SouthernEquipmentImportWizard(models.TransientModel):
                 "sticky": False,
                 "next": next_action,
             },
+        }
+
+
+class SouthernEquipmentFacebookIntakeWizard(models.TransientModel):
+    _name = "southern.equipment.facebook.intake.wizard"
+    _description = "Queue a Facebook Marketplace Listing for Browser Enrichment"
+
+    facebook_url = fields.Char(
+        string="Facebook Marketplace or Share Link",
+        required=True,
+        help=(
+            "Paste a visible Facebook Marketplace item link or Facebook share link. "
+            "The signed-in browser agent will resolve and enrich the listing."
+        ),
+    )
+
+    def _validated_url(self):
+        self.ensure_one()
+        value = (self.facebook_url or "").strip()
+        try:
+            parsed = urlsplit(value)
+        except ValueError as exc:
+            raise UserError(_("Enter a valid Facebook URL.")) from exc
+        hostname = (parsed.hostname or "").lower()
+        if (
+            parsed.scheme.lower() not in ("http", "https")
+            or hostname not in {"facebook.com", "www.facebook.com", "m.facebook.com"}
+        ):
+            raise UserError(
+                _("Paste a facebook.com Marketplace item or share link.")
+            )
+        canonical = _canonical_source_url(value)
+        if not re.match(
+            r"^/(?:marketplace/item/\d+|share/(?:[A-Za-z]/)?[A-Za-z0-9_-]+)$",
+            urlsplit(canonical).path,
+        ):
+            raise UserError(
+                _("Use a Facebook Marketplace item URL or Facebook share URL.")
+            )
+        return canonical
+
+    def action_queue_enrichment(self):
+        self.ensure_one()
+        canonical = self._validated_url()
+        item_match = re.search(r"/marketplace/item/(\d+)", canonical)
+        source_listing_id = item_match.group(1) if item_match else False
+        Listing = self.env["southern.equipment.listing"]
+        existing = Listing.browse()
+        if source_listing_id:
+            existing = Listing.search(
+                [
+                    ("source", "=", "facebook_marketplace"),
+                    ("source_listing_id", "=", source_listing_id),
+                ],
+                limit=1,
+            )
+        if not existing:
+            existing = Listing.search(
+                [
+                    ("source", "=", "facebook_marketplace"),
+                    "|",
+                    ("source_url", "=", canonical),
+                    ("facebook_shared_url", "=", canonical),
+                ],
+                limit=1,
+            )
+
+        request_vals = {
+            "facebook_shared_url": canonical,
+            "facebook_intake_requested_by": self.env.user.id,
+            "facebook_intake_requested_at": fields.Datetime.now(),
+            "facebook_intake_error": False,
+        }
+        if existing:
+            if existing.facebook_intake_status != "resolved":
+                request_vals["facebook_intake_status"] = "pending"
+            existing.write(request_vals)
+            listing = existing
+        else:
+            pending_title = (
+                _("Facebook Marketplace listing %(listing_id)s pending enrichment",
+                  listing_id=source_listing_id)
+                if source_listing_id
+                else _("Facebook Marketplace share link pending enrichment")
+            )
+            listing = Listing.create(
+                {
+                    "company_id": self.env.company.id,
+                    "broker_id": self.env.user.id,
+                    "public_title": pending_title,
+                    "public_status": "verification_in_progress",
+                    "website_published": False,
+                    "source": "facebook_marketplace",
+                    "source_url": canonical,
+                    "source_listing_id": source_listing_id,
+                    "equipment_type": "other",
+                    "verification_note": (
+                        "Availability and listing details are pending visible-browser verification."
+                    ),
+                    "internal_notes": Markup(
+                        "<p>Queued from the broker paste-link intake. "
+                        "Do not publish until visible detail-page verification and "
+                        "image-rights review are complete.</p>"
+                    ),
+                    **request_vals,
+                    "facebook_intake_status": "pending",
+                }
+            )
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Facebook Listing Intake"),
+            "res_model": "southern.equipment.listing",
+            "res_id": listing.id,
+            "view_mode": "form",
+            "target": "current",
         }

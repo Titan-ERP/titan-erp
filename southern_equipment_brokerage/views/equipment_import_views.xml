@@ -1,5 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="view_southern_equipment_facebook_intake_wizard_form" model="ir.ui.view">
+        <field name="name">southern.equipment.facebook.intake.wizard.form</field>
+        <field name="model">southern.equipment.facebook.intake.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Paste Facebook Listing">
+                <sheet>
+                    <div class="alert alert-info" role="alert">
+                        Paste one Facebook Marketplace item or share link. Odoo will
+                        deduplicate it and queue the signed-in visible-browser agent to
+                        resolve the item, preserve the source evidence, and enrich the
+                        brokerage pipeline. The listing remains unpublished until all
+                        verification and image-rights gates pass.
+                    </div>
+                    <group>
+                        <field name="facebook_url"
+                               placeholder="https://www.facebook.com/share/.../"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_queue_enrichment"
+                            string="Add to Brokerage Pipeline"
+                            type="object"
+                            class="btn-primary"/>
+                    <button string="Cancel" special="cancel" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+    <record id="action_southern_equipment_facebook_intake_wizard" model="ir.actions.act_window">
+        <field name="name">Paste Facebook Listing</field>
+        <field name="res_model">southern.equipment.facebook.intake.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
     <record id="view_southern_equipment_import_wizard_form" model="ir.ui.view">
         <field name="name">southern.equipment.import.wizard.form</field>
         <field name="model">southern.equipment.import.wizard</field>
