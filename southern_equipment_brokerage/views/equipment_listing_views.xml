@@ -217,6 +217,23 @@
                                     <field name="vin_serial"/>
                                 </group>
                             </group>
+                            <group string="Facebook Photos">
+                                <div class="alert alert-info" role="alert" colspan="2">
+                                    Facebook photos stay internal until a broker records
+                                    reuse permission. Click <strong>Use Approved Facebook
+                                    Photos</strong> only after authorization is documented.
+                                </div>
+                                <field name="facebook_source_photo_ids"
+                                       widget="many2many_binary"/>
+                                <field name="facebook_photo_rights_confirmed"/>
+                                <field name="facebook_photo_rights_note"
+                                       required="facebook_photo_rights_confirmed"/>
+                                <button name="action_use_approved_facebook_photos"
+                                        type="object"
+                                        string="Use Approved Facebook Photos"
+                                        class="btn-primary"
+                                        invisible="not facebook_source_photo_ids"/>
+                            </group>
                             <group>
                                 <field name="raw_capture_text"/>
                                 <field name="internal_notes" widget="html"/>

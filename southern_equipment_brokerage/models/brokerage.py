@@ -262,6 +262,32 @@ class SouthernEquipmentListing(models.Model):
         "attachment_id",
         string="Additional Photos / Media",
     )
+    facebook_source_photo_ids = fields.Many2many(
+        "ir.attachment",
+        "southern_listing_facebook_source_attachment_rel",
+        "listing_id",
+        "attachment_id",
+        string="Facebook Source Photos (Internal)",
+        groups=BROKER_GROUPS,
+        help=(
+            "Restricted evidence copied from the broker-submitted Facebook listing. "
+            "These files are not public until a broker records reuse permission and "
+            "promotes them."
+        ),
+    )
+    facebook_photo_rights_confirmed = fields.Boolean(
+        string="Facebook Photo Reuse Authorized",
+        groups=BROKER_GROUPS,
+        help=(
+            "Confirm the seller or rights holder authorized Southern Equipment to "
+            "publish the Facebook listing photos."
+        ),
+    )
+    facebook_photo_rights_note = fields.Char(
+        string="Facebook Photo Rights Note",
+        groups=BROKER_GROUPS,
+        help="Record who granted permission, how it was granted, and the date.",
+    )
 
     ask_price = fields.Monetary(groups=BROKER_GROUPS)
     expected_resale = fields.Monetary(groups=BROKER_GROUPS)
@@ -487,6 +513,41 @@ class SouthernEquipmentListing(models.Model):
 
     def action_unpublish(self):
         self.write({"website_published": False})
+
+    def action_use_approved_facebook_photos(self):
+        for listing in self:
+            if not listing.facebook_source_photo_ids:
+                raise UserError(
+                    _("Upload the Facebook listing photos as internal source evidence first.")
+                )
+            if (
+                not listing.facebook_photo_rights_confirmed
+                or not listing.facebook_photo_rights_note
+            ):
+                raise UserError(
+                    _(
+                        "Confirm Facebook photo reuse authorization and record who "
+                        "granted permission before using these photos publicly."
+                    )
+                )
+            image_attachments = listing.facebook_source_photo_ids.filtered(
+                lambda attachment: attachment.datas
+                and attachment.mimetype
+                and attachment.mimetype.startswith("image/")
+            )
+            if not image_attachments:
+                raise UserError(_("The Facebook source files do not contain an image."))
+            public_photos = listing.photo_ids | image_attachments
+            listing.write(
+                {
+                    "image_1920": image_attachments[0].datas,
+                    "photo_ids": [(6, 0, public_photos.ids)],
+                    "photo_rights_confirmed": True,
+                    "photo_source_note": listing.facebook_photo_rights_note,
+                    "image_is_representative": False,
+                }
+            )
+        return True
 
     def action_view_inquiries(self):
         self.ensure_one()

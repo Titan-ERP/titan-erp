@@ -789,6 +789,40 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         self.assertTrue(representative.website_published)
         self.assertTrue(representative.image_is_representative)
 
+    def test_facebook_photos_require_documented_reuse_permission(self):
+        listing = self.Listing.create(
+            self._listing_values(image_is_representative=True)
+        )
+        source_photo = self.env["ir.attachment"].create(
+            {
+                "name": "facebook-source-photo.png",
+                "datas": TEST_IMAGE,
+                "mimetype": "image/png",
+            }
+        )
+        listing.facebook_source_photo_ids = [Command.set(source_photo.ids)]
+
+        with self.assertRaises(UserError):
+            listing.action_use_approved_facebook_photos()
+
+        listing.facebook_photo_rights_confirmed = True
+        with self.assertRaises(UserError):
+            listing.action_use_approved_facebook_photos()
+
+        listing.facebook_photo_rights_note = (
+            "Seller authorized website reuse by email on 2026-07-27."
+        )
+        listing.action_use_approved_facebook_photos()
+
+        self.assertIn(source_photo, listing.photo_ids)
+        self.assertTrue(listing.image_1920)
+        self.assertTrue(listing.photo_rights_confirmed)
+        self.assertEqual(
+            listing.photo_source_note,
+            listing.facebook_photo_rights_note,
+        )
+        self.assertFalse(listing.image_is_representative)
+
     def test_public_and_inspector_cannot_read_sensitive_fields(self):
         listing = self.Listing.create(self._listing_values())
         public_user = self.env.ref("base.public_user")
