@@ -853,6 +853,7 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         self.assertEqual(listing.raw_capture_text, "original marketplace text")
         self.assertEqual(listing.public_status, "verification_in_progress")
         self.assertEqual(listing.facebook_intake_status, "resolved")
+        self.assertTrue(listing.comp_last_calculated_at)
 
         wizard.action_import()
         duplicates = self.Listing.search(
