@@ -1,6 +1,6 @@
 import re
 
-from odoo import _, fields, models
+from odoo import _, api, fields, models
 
 
 BROKER_GROUPS = (
@@ -18,6 +18,21 @@ METHOD_VERSION = (
 )
 TERMINAL_STATUSES = ("archived", "sold")
 TARGET_COMPANY_ID = 2
+VALUATION_TRIGGER_FIELDS = frozenset(
+    {
+        "company_id",
+        "equipment_type",
+        "manufacturer",
+        "model",
+        "year",
+        "hours",
+        "seller_ask_price",
+        "ask_price",
+        "spec_profile_id",
+        "valuation_configuration",
+        "condition_grade",
+    }
+)
 
 EQUIPMENT_CLASS_ALIASES = {
     "bulldozer": "dozer",
@@ -479,6 +494,26 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
         index=True,
         groups=BROKER_GROUPS,
     )
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        listings = super().create(vals_list)
+        if not self.env.context.get("skip_native_comp_recalculation"):
+            listings.with_context(
+                skip_native_comp_recalculation=True
+            )._recalculate_comp_analysis()
+        return listings
+
+    def write(self, vals):
+        result = super().write(vals)
+        if (
+            not self.env.context.get("skip_native_comp_recalculation")
+            and VALUATION_TRIGGER_FIELDS.intersection(vals)
+        ):
+            self.with_context(
+                skip_native_comp_recalculation=True
+            )._recalculate_comp_analysis()
+        return result
 
     def _model_alias_map(self):
         aliases = self.env["southern.equipment.model.alias"].search(

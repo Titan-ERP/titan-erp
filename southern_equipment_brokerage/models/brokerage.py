@@ -1660,7 +1660,6 @@ class SouthernEquipmentImportWizard(models.TransientModel):
             raise UserError(
                 _("No listings were imported. %s existing rows were skipped.") % skipped
             )
-        imported._recalculate_comp_analysis()
         next_action = {
             "type": "ir.actions.act_window",
             "name": _("Imported Sourced Listings"),
@@ -1788,8 +1787,6 @@ class SouthernEquipmentFacebookIntakeWizard(models.TransientModel):
                     "facebook_intake_status": "pending",
                 }
             )
-        if listing.facebook_intake_status == "resolved":
-            listing._recalculate_comp_analysis()
         return {
             "type": "ir.actions.act_window",
             "name": _("Facebook Listing Intake"),

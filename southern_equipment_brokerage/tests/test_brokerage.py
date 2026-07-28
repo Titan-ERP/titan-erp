@@ -99,6 +99,28 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         self.assertTrue(listing.comp_last_calculated_at)
         self.assertIn("1000-hours", listing.comp_method_version)
 
+    def test_listing_input_changes_always_recalculate_native_comps(self):
+        self.Comp.create(
+            [
+                self._comp_values(name=f"Automatic Recalc Comp {index}")
+                for index in range(3)
+            ]
+        )
+        listing = self.Listing.create(
+            self._listing_values(seller_ask_price=45000)
+        )
+
+        self.assertEqual(listing.comp_count, 3)
+        self.assertEqual(listing.comp_median, 48000)
+        self.assertEqual(listing.grade, "good")
+
+        listing.seller_ask_price = 60000
+
+        self.assertEqual(listing.comp_count, 3)
+        self.assertEqual(listing.comp_median, 48000)
+        self.assertEqual(listing.grade, "pass")
+        self.assertEqual(listing.valuation_readiness, "ready")
+
     def test_native_missing_hours_suppresses_range_but_keeps_listing_available(self):
         listing = self.Listing.create(
             self._listing_values(hours=0, seller_ask_price=50000)
