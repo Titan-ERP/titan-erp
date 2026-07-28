@@ -9,12 +9,13 @@ BROKER_GROUPS = (
 )
 MAX_COMP_HOURS_DIFFERENCE = 1000.0
 MAX_COMP_YEAR_DIFFERENCE = 3
-MAX_COMP_AGE_DAYS = 1825
+MAX_COMP_AGE_YEARS = 3
 MINIMUM_COMP_COUNT = 3
 GOOD_MAX_MEDIAN_MULTIPLIER = 1.10
 METHOD_VERSION = (
-    "native-v6-readiness-reviewed-alias-configuration-freshness-spec-peers-"
-    "required-3-comp-mad-outliers-500-to-1000-hours-3-years-110pct"
+    "native-v7-readiness-reviewed-alias-configuration-3-year-freshness-"
+    "spec-peers-required-3-comp-mad-outliers-500-to-1000-hours-"
+    "3-model-years-110pct"
 )
 TERMINAL_STATUSES = ("archived", "sold")
 TARGET_COMPANY_ID = 2
@@ -485,8 +486,8 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
         [
             ("current", "Current (≤ 6 months)"),
             ("recent", "Recent (≤ 12 months)"),
-            ("aging", "Aging (≤ 24 months)"),
-            ("stale", "Stale (> 24 months)"),
+            ("aging", "Aging (≤ 36 months)"),
+            ("stale", "Stale (> 36 months)"),
             ("unknown", "Unknown"),
         ],
         default="unknown",
@@ -721,7 +722,9 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
             age_weight = 1.0
             if comp.sale_date:
                 days = max((today - comp.sale_date).days, 0)
-                if days > MAX_COMP_AGE_DAYS:
+                if comp.sale_date < fields.Date.subtract(
+                    today, years=MAX_COMP_AGE_YEARS
+                ):
                     continue
                 age_weight = 0.5 ** (days / 730.0)
             weight = (
@@ -846,20 +849,17 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
         ]
         oldest_sale_date = min(sale_dates) if sale_dates else False
         newest_sale_date = max(sale_dates) if sale_dates else False
-        newest_age_days = (
-            max((fields.Date.context_today(self) - newest_sale_date).days, 0)
-            if newest_sale_date
-            else None
-        )
+        today = fields.Date.context_today(self)
         freshness = (
             "unknown"
-            if newest_age_days is None
+            if not newest_sale_date
             else "current"
-            if newest_age_days <= 183
+            if newest_sale_date >= fields.Date.subtract(today, months=6)
             else "recent"
-            if newest_age_days <= 365
+            if newest_sale_date >= fields.Date.subtract(today, years=1)
             else "aging"
-            if newest_age_days <= 730
+            if newest_sale_date
+            >= fields.Date.subtract(today, years=MAX_COMP_AGE_YEARS)
             else "stale"
         )
         basis = (
@@ -963,11 +963,12 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
             return "Excluded: inoperable or salvage condition"
         if (
             comp.sale_date
-            and (
-                fields.Date.context_today(self) - comp.sale_date
-            ).days > MAX_COMP_AGE_DAYS
+            and comp.sale_date
+            < fields.Date.subtract(
+                fields.Date.context_today(self), years=MAX_COMP_AGE_YEARS
+            )
         ):
-            return "Excluded: sale evidence is more than five years old"
+            return "Excluded: sale evidence is more than three years old"
         if _equipment_class(comp.equipment_type) != _equipment_class(
             self.equipment_type
         ):

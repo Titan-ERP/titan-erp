@@ -299,6 +299,40 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         self.assertIn("within 3 model years and 500 hours", listing.public_deal_summary)
         self.assertIn("current freshness", listing.public_deal_summary)
 
+    def test_comps_are_fresh_through_three_calendar_years(self):
+        listing = self.Listing.create(
+            self._listing_values(seller_ask_price=45000)
+        )
+        today = fields.Date.today()
+        oldest_allowed = fields.Date.subtract(today, years=3)
+        too_old = fields.Date.subtract(oldest_allowed, days=1)
+        self.Comp.create(
+            [
+                self._comp_values(
+                    name=f"Three-Year Comp {index}",
+                    source_url=f"https://example.test/three-year/{index}",
+                    sale_date=oldest_allowed,
+                )
+                for index in range(3)
+            ]
+            + [
+                self._comp_values(
+                    name="Three Years Plus One Day",
+                    source_url="https://example.test/three-year/expired",
+                    sale_date=too_old,
+                    price=999999,
+                )
+            ]
+        )
+
+        listing.action_recalculate_comp_analysis()
+
+        self.assertEqual(listing.comp_count, 3)
+        self.assertEqual(listing.comp_freshness, "aging")
+        self.assertEqual(listing.comp_oldest_sale_date, oldest_allowed)
+        self.assertEqual(listing.comp_newest_sale_date, oldest_allowed)
+        self.assertIn("aging freshness", listing.public_deal_summary)
+
     def test_completed_sale_records_aggregate_backtest_error(self):
         listing = self.Listing.create(
             self._listing_values(
