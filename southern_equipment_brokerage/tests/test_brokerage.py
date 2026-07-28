@@ -378,6 +378,49 @@ class TestSouthernEquipmentBrokerage(TransactionCase):
         self.assertEqual(listing.comp_count, 6)
         self.assertEqual(listing.comp_confidence, "high")
 
+    def test_native_comp_analysis_uses_all_exact_models_before_family_comps(self):
+        listing = self.Listing.create(
+            self._listing_values(
+                manufacturer="Caterpillar",
+                model="305",
+                year=2024,
+                hours=500,
+                seller_ask_price=40000,
+            )
+        )
+        self.Comp.create(
+            [
+                self._comp_values(
+                    name=f"Exact CAT 305 Comp {index}",
+                    manufacturer="Caterpillar",
+                    model="305",
+                    year=2023,
+                    hours=500 + index * 50,
+                    price=40000 + index * 1000,
+                    source_url=f"https://example.test/exact-305/{index}",
+                )
+                for index in range(4)
+            ]
+            + [
+                self._comp_values(
+                    name=f"Family CAT 305 CR Comp {index}",
+                    manufacturer="Caterpillar",
+                    model="305 CR",
+                    year=2023,
+                    hours=500 + index * 50,
+                    price=50000 + index * 1000,
+                    source_url=f"https://example.test/family-305/{index}",
+                )
+                for index in range(3)
+            ]
+        )
+
+        listing.action_recalculate_comp_analysis()
+
+        self.assertEqual(listing.comp_count, 4)
+        self.assertEqual(listing.comp_match_basis, "exact_model")
+        self.assertIn("native-v8-exact-model-first", listing.comp_method_version)
+
     def test_native_cross_brand_requires_three_documented_specification_peers(self):
         listing_profile = self.SpecProfile.create(
             {

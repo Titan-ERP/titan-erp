@@ -13,7 +13,8 @@ MAX_COMP_AGE_YEARS = 3
 MINIMUM_COMP_COUNT = 3
 GOOD_MAX_MEDIAN_MULTIPLIER = 1.10
 METHOD_VERSION = (
-    "native-v7-readiness-reviewed-alias-configuration-3-year-freshness-"
+    "native-v8-exact-model-first-all-qualifying-readiness-reviewed-alias-"
+    "configuration-3-year-freshness-"
     "spec-peers-required-3-comp-mad-outliers-500-to-1000-hours-"
     "3-model-years-110pct"
 )
@@ -628,6 +629,7 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
         listing_profile = self.spec_profile_id or profile_map.get(
             (listing_type, listing_make, listing_model)
         )
+        exact_rows = []
         primary_rows = []
         cross_brand_rows = []
         seen_sources = set()
@@ -739,6 +741,20 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
                     cross_brand_rows.append(row)
                 else:
                     primary_rows.append(row)
+                    if exact:
+                        exact_rows.append(row)
+        close_exact = _filter_price_outliers(
+            [
+                row
+                for row in exact_rows
+                if abs(self.hours - row[0].hours) <= 500.0
+            ]
+        )
+        if len(close_exact) >= MINIMUM_COMP_COUNT:
+            return close_exact
+        exact_rows = _filter_price_outliers(exact_rows)
+        if len(exact_rows) >= MINIMUM_COMP_COUNT:
+            return exact_rows
         close_primary = _filter_price_outliers(
             [
                 row
