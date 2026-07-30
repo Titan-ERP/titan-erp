@@ -56,6 +56,8 @@
             <xpath expr="//list/field[@name='partner_id']" position="after">
                 <field name="southern_quote_type" optional="show"/>
                 <field name="southern_client_equipment_id" optional="hide"/>
+                <field name="southern_technician_id" optional="hide"/>
+                <field name="southern_scheduled_start" optional="show"/>
                 <field name="southern_service_case_id" optional="hide"/>
             </xpath>
         </field>
@@ -68,7 +70,7 @@
         <field name="arch" type="xml">
             <xpath expr="//form/header" position="inside">
                 <button name="action_route_southern_service_work" type="object"
-                        string="Route Work" class="btn-primary"
+                        string="Schedule Work" class="btn-primary"
                         groups="southern_service_operations.group_southern_service_user"
                         invisible="southern_quote_type != 'service' or state == 'cancel' or southern_service_state in ('closed', 'cancelled')"/>
             </xpath>
@@ -117,6 +119,15 @@
                        invisible="southern_quote_type != 'service' or southern_client_equipment_id"
                        required="southern_quote_type == 'service' and not southern_client_equipment_id"
                        readonly="state not in ('draft', 'sent')"/>
+                <field name="southern_technician_id"
+                       invisible="southern_quote_type != 'service'"
+                       readonly="state == 'cancel'"/>
+                <field name="southern_scheduled_start"
+                       invisible="southern_quote_type != 'service'"
+                       readonly="state == 'cancel'"/>
+                <field name="southern_estimated_hours"
+                       invisible="southern_quote_type != 'service'"
+                       readonly="state == 'cancel'"/>
                 <field name="southern_service_case_id" readonly="1"
                        invisible="not southern_service_case_id"/>
             </xpath>
@@ -140,10 +151,11 @@
                         </group>
                     </group>
                     <div class="alert alert-info" role="status">
-                        Use <strong>Route Work</strong> to create or reuse the
-                        Field Service task, Shop Repair, or both. Linked work,
-                        purchases, customer approval, and invoicing remain
-                        accessible from this Sales document.
+                        Quote labor and parts on <strong>Order Lines</strong>.
+                        Use <strong>Schedule Work</strong> to create or update
+                        the assigned technician's Field Service task, Shop
+                        Repair, or both. Linked work, purchases, customer
+                        approval, and invoicing remain accessible here.
                     </div>
                 </page>
             </xpath>

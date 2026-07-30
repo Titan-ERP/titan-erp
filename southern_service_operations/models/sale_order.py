@@ -57,6 +57,21 @@ class SaleOrder(models.Model):
         default="estimate",
         tracking=True,
     )
+    southern_technician_id = fields.Many2one(
+        "res.users",
+        string="Technician",
+        tracking=True,
+        domain=[("share", "=", False), ("active", "=", True)],
+    )
+    southern_scheduled_start = fields.Datetime(
+        string="Scheduled Start",
+        tracking=True,
+    )
+    southern_estimated_hours = fields.Float(
+        string="Estimated Hours",
+        tracking=True,
+        default=1.0,
+    )
     southern_service_case_id = fields.Many2one(
         "southern.service.case",
         string="Service Case",
@@ -172,6 +187,9 @@ class SaleOrder(models.Model):
             "complaint": complaint,
             "advisor_id": self.user_id.id or self.env.user.id,
             "commercial_basis": self.southern_commercial_basis or "estimate",
+            "technician_id": self.southern_technician_id.id,
+            "scheduled_start": self.southern_scheduled_start,
+            "estimated_hours": self.southern_estimated_hours,
             "sale_order_id": self.id,
             "exception_reason": self.southern_equipment_exception_reason,
         }
@@ -238,6 +256,14 @@ class SaleOrder(models.Model):
         if self.southern_quote_type != "service":
             raise ValidationError(_("Route Work is only available for Service."))
         self._validate_southern_service_confirmation()
+        if not self.southern_technician_id or not self.southern_scheduled_start:
+            raise ValidationError(
+                _("Schedule Work requires a Technician and Scheduled Start.")
+            )
+        if self.southern_estimated_hours <= 0:
+            raise ValidationError(
+                _("Schedule Work requires Estimated Hours greater than zero.")
+            )
         self._ensure_southern_service_case().action_route_work()
         return {"type": "ir.actions.client", "tag": "reload"}
 

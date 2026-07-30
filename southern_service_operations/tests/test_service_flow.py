@@ -1,4 +1,4 @@
-from odoo import Command
+from odoo import Command, fields
 from odoo.tests import TransactionCase, tagged
 
 
@@ -95,6 +95,7 @@ class TestSouthernServiceFlow(TransactionCase):
         self.assertEqual(routed_task.sale_line_id, order.order_line)
 
     def test_sales_service_workspace_routes_one_contextual_job(self):
+        scheduled_start = fields.Datetime.to_datetime("2026-08-03 14:00:00")
         order = self.env["sale.order"].create(
             {
                 "partner_id": self.partner.id,
@@ -103,6 +104,9 @@ class TestSouthernServiceFlow(TransactionCase):
                 "southern_client_equipment_id": self.equipment.id,
                 "southern_service_request": "Technician diagnosis and estimate",
                 "southern_commercial_basis": "estimate",
+                "southern_technician_id": self.env.user.id,
+                "southern_scheduled_start": scheduled_start,
+                "southern_estimated_hours": 3.5,
             }
         )
 
@@ -114,12 +118,25 @@ class TestSouthernServiceFlow(TransactionCase):
         self.assertEqual(order.southern_client_equipment_id, self.equipment)
         self.assertEqual(case.sale_order_id, order)
         self.assertEqual(case.complaint, order.southern_service_request)
+        self.assertEqual(case.state, "scheduled")
         self.assertEqual(case.task_count, 1)
         self.assertEqual(case.task_ids.partner_id, self.partner)
+        self.assertEqual(case.task_ids.user_ids, self.env.user)
+        self.assertEqual(case.task_ids.planned_date_begin, scheduled_start)
+        self.assertEqual(case.task_ids.allocated_hours, 3.5)
         self.assertEqual(action, {"type": "ir.actions.client", "tag": "reload"})
 
+        updated_start = fields.Datetime.to_datetime("2026-08-04 15:30:00")
+        order.write(
+            {
+                "southern_scheduled_start": updated_start,
+                "southern_estimated_hours": 4.0,
+            }
+        )
         order.action_route_southern_service_work()
         self.assertEqual(case.task_count, 1)
+        self.assertEqual(case.task_ids.planned_date_begin, updated_start)
+        self.assertEqual(case.task_ids.allocated_hours, 4.0)
 
     def test_internal_service_routes_to_maintenance(self):
         internal_equipment = self.env["maintenance.equipment"].create(
