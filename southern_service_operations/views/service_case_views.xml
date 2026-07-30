@@ -184,6 +184,15 @@
                     <notebook>
                         <page name="request" string="Request">
                             <field name="complaint" placeholder="Describe the requested work, symptoms, and customer concerns."/>
+                            <group>
+                                <group string="Technician Findings">
+                                    <field name="diagnosis"/>
+                                    <field name="work_performed"/>
+                                </group>
+                                <group string="Customer Follow-up">
+                                    <field name="recommendations"/>
+                                </group>
+                            </group>
                         </page>
                         <page name="linked_work" string="Linked Work">
                             <group>

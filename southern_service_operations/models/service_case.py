@@ -63,6 +63,9 @@ class SouthernServiceCase(models.Model):
         tracking=True,
     )
     complaint = fields.Text(string="Request / Complaint", required=True, tracking=True)
+    diagnosis = fields.Text(string="Diagnosis", tracking=True)
+    work_performed = fields.Text(string="Work Performed / Resolution", tracking=True)
+    recommendations = fields.Text(string="Recommendations / Follow-up", tracking=True)
     advisor_id = fields.Many2one(
         "res.users",
         string="Service Coordinator",
@@ -320,6 +323,9 @@ class SouthernServiceCase(models.Model):
             "partner_id": self.partner_id.id,
             "project_id": self._get_fsm_project().id,
             "description": self.complaint,
+            "southern_diagnosis": self.diagnosis,
+            "southern_work_performed": self.work_performed,
+            "southern_recommendations": self.recommendations,
             "user_ids": (
                 [Command.set(self.technician_id.ids)]
                 if self.technician_id
@@ -394,6 +400,9 @@ class SouthernServiceCase(models.Model):
             task_values = {
                 "name": case.service_title or case.name,
                 "description": case.complaint,
+                "southern_diagnosis": case.diagnosis,
+                "southern_work_performed": case.work_performed,
+                "southern_recommendations": case.recommendations,
                 "user_ids": [Command.set(case.technician_id.ids)],
                 "planned_date_begin": case.scheduled_start,
                 "date_deadline": scheduled_end,

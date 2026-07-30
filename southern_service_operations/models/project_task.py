@@ -5,6 +5,12 @@ from odoo.exceptions import ValidationError
 class ProjectTask(models.Model):
     _inherit = "project.task"
 
+    _SOUTHERN_SERVICE_NOTE_MAP = {
+        "southern_diagnosis": "diagnosis",
+        "southern_work_performed": "work_performed",
+        "southern_recommendations": "recommendations",
+    }
+
     southern_service_case_id = fields.Many2one(
         "southern.service.case",
         string="Service Case",
@@ -49,6 +55,15 @@ class ProjectTask(models.Model):
         string="Quote Total",
         readonly=True,
     )
+    southern_diagnosis = fields.Text(string="Diagnosis", tracking=True)
+    southern_work_performed = fields.Text(
+        string="Work Performed / Resolution",
+        tracking=True,
+    )
+    southern_recommendations = fields.Text(
+        string="Recommendations / Follow-up",
+        tracking=True,
+    )
 
     @api.onchange("southern_service_case_id")
     def _onchange_southern_service_case_id(self):
@@ -62,6 +77,9 @@ class ProjectTask(models.Model):
             task.dmc_serial_number = case.serial_number
             task.dmc_equipment_run_hours = case.equipment_run_hours
             task.southern_sale_order_id = case.sale_order_id
+            task.southern_diagnosis = case.diagnosis
+            task.southern_work_performed = case.work_performed
+            task.southern_recommendations = case.recommendations
 
     @api.onchange("southern_client_equipment_id")
     def _onchange_southern_client_equipment_id(self):
@@ -92,6 +110,9 @@ class ProjectTask(models.Model):
             "serial_number": self.dmc_serial_number,
             "equipment_run_hours": self.dmc_equipment_run_hours,
             "complaint": complaint,
+            "diagnosis": self.southern_diagnosis,
+            "work_performed": self.southern_work_performed,
+            "recommendations": self.southern_recommendations,
             "advisor_id": self.env.user.id,
             "technician_id": technician.id,
             "scheduled_start": self.planned_date_begin,
@@ -221,6 +242,8 @@ class ProjectTask(models.Model):
                     "southern_client_equipment_id", case.client_equipment_id.id
                 )
                 vals.setdefault("southern_sale_order_id", case.sale_order_id.id)
+                for task_field, case_field in self._SOUTHERN_SERVICE_NOTE_MAP.items():
+                    vals.setdefault(task_field, case[case_field])
             if equipment:
                 vals.setdefault("dmc_equipment", equipment.name)
                 vals.setdefault(
@@ -228,3 +251,16 @@ class ProjectTask(models.Model):
                     equipment.serial_no or "Unserialized",
                 )
         return super().create(vals_list)
+
+    def write(self, vals):
+        result = super().write(vals)
+        note_fields = self._SOUTHERN_SERVICE_NOTE_MAP.keys() & vals.keys()
+        if note_fields:
+            for task in self.filtered("southern_service_case_id"):
+                task.southern_service_case_id.write(
+                    {
+                        self._SOUTHERN_SERVICE_NOTE_MAP[field_name]: vals[field_name]
+                        for field_name in note_fields
+                    }
+                )
+        return result

@@ -45,6 +45,19 @@
         <field name="model">project.task</field>
         <field name="inherit_id" ref="dmc_fieldservice.view_task_form2_inherit_dmc_fieldservice"/>
         <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="attributes">
+                <attribute name="placeholder">Service Job Title...</attribute>
+            </xpath>
+            <xpath expr="//page[@name='description_page']" position="attributes">
+                <attribute name="string">Work Details</attribute>
+            </xpath>
+            <xpath expr="//page[@name='description_page']/field[@name='description']"
+                   position="attributes">
+                <attribute name="placeholder">Describe the requested work, customer complaint, symptoms, and initial observations...</attribute>
+            </xpath>
+            <xpath expr="//page[@name='sub_tasks_page']" position="attributes">
+                <attribute name="string">Follow-up Work</attribute>
+            </xpath>
             <xpath expr="//button[@name='action_timer_stop']" position="after">
                 <button name="action_southern_create_quotation" type="object"
                         string="Build Quotation" class="btn-primary"
@@ -77,11 +90,28 @@
                 </button>
             </xpath>
             <xpath expr="//field[@name='dmc_equipment']" position="before">
+                <separator string="Equipment &amp; Service Record"
+                           invisible="not is_fsm"/>
                 <field name="southern_service_case_id"
-                       invisible="not is_fsm"/>
+                       invisible="1"/>
                 <field name="southern_client_equipment_id"
                        invisible="not is_fsm"
                        domain="[('client', 'child_of', partner_id)]"/>
+            </xpath>
+            <xpath expr="//page[@name='description_page']/field[@name='description']"
+                   position="after">
+                <group invisible="not is_fsm">
+                    <group string="Technician Findings">
+                        <field name="southern_diagnosis"
+                               placeholder="Record diagnosis, test results, and root cause."/>
+                        <field name="southern_work_performed"
+                               placeholder="Record labor performed, adjustments, and resolution."/>
+                    </group>
+                    <group string="Customer Follow-up">
+                        <field name="southern_recommendations"
+                               placeholder="Record recommended repairs, monitoring, or future service."/>
+                    </group>
+                </group>
             </xpath>
             <xpath expr="//page[@name='description_page']" position="after">
                 <page name="southern_quotation" string="Quotation"
