@@ -257,10 +257,7 @@ class ProjectTask(models.Model):
             if task_order.state not in ("draft", "sent"):
                 continue
 
-            work_items = self.env["southern.service.work.item"].search(
-                [("task_id", "=", task.id)],
-                order="sequence, id",
-            )
+            work_items = task.southern_service_work_item_ids
             labor_items = work_items.filtered(
                 lambda item: item.billable and item.work_type == "labor"
             )
