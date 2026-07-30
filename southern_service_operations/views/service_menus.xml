@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem id="menu_southern_service_root"
+              name="Service"
+              action="action_southern_service_cases"
+              groups="southern_service_operations.group_southern_service_user"
+              sequence="18"/>
+
+    <menuitem id="menu_southern_service_new"
+              name="New Service"
+              parent="menu_southern_service_root"
+              action="action_southern_service_new"
+              sequence="5"/>
+    <menuitem id="menu_southern_service_all"
+              name="All Service"
+              parent="menu_southern_service_root"
+              action="action_southern_service_cases"
+              sequence="10"/>
+
+    <menuitem id="menu_southern_service_work"
+              name="Work"
+              parent="menu_southern_service_root"
+              sequence="20"/>
+    <menuitem id="menu_southern_service_schedule"
+              name="Schedule"
+              parent="menu_southern_service_work"
+              action="action_southern_service_schedule"
+              sequence="5"/>
+    <menuitem id="menu_southern_service_shop"
+              name="Shop Floor"
+              parent="menu_southern_service_work"
+              action="action_southern_service_shop"
+              sequence="10"/>
+    <menuitem id="menu_southern_service_internal"
+              name="Internal Work"
+              parent="menu_southern_service_work"
+              action="action_southern_service_internal_work"
+              sequence="15"/>
+
+    <menuitem id="menu_southern_service_queues"
+              name="Queues"
+              parent="menu_southern_service_root"
+              sequence="30"/>
+    <menuitem id="menu_southern_service_waiting_customer"
+              name="Waiting for Customer"
+              parent="menu_southern_service_queues"
+              action="action_southern_service_waiting_customer"
+              sequence="5"/>
+    <menuitem id="menu_southern_service_waiting_parts"
+              name="Waiting for Parts"
+              parent="menu_southern_service_queues"
+              action="action_southern_service_waiting_parts"
+              sequence="10"/>
+    <menuitem id="menu_southern_service_ready_invoice"
+              name="Ready to Invoice"
+              parent="menu_southern_service_queues"
+              action="action_southern_service_ready_invoice"
+              sequence="15"/>
+
+    <menuitem id="menu_southern_service_equipment"
+              name="Equipment"
+              parent="menu_southern_service_root"
+              sequence="40"/>
+    <menuitem id="menu_southern_service_customer_equipment"
+              name="Customer Equipment"
+              parent="menu_southern_service_equipment"
+              action="action_southern_service_client_equipment"
+              sequence="5"/>
+    <menuitem id="menu_southern_service_internal_equipment"
+              name="Our Equipment"
+              parent="menu_southern_service_equipment"
+              action="action_southern_service_internal_equipment"
+              sequence="10"/>
+
+    <menuitem id="menu_southern_service_purchasing"
+              name="Purchase Tracking"
+              parent="menu_southern_service_root"
+              action="action_southern_service_purchase_tracking"
+              sequence="50"/>
+</odoo>
