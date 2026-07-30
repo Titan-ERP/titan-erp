@@ -86,7 +86,7 @@
                             <field name="name"/>
                             <field name="product_uom_qty"
                                    invisible="display_type"/>
-                            <field name="product_uom"
+                            <field name="product_uom_id"
                                    invisible="display_type"/>
                             <field name="price_unit"
                                    invisible="display_type"/>
