@@ -81,6 +81,18 @@ class SouthernServiceCase(models.Model):
         tracking=True,
     )
     requested_date = fields.Datetime(string="Requested Date", tracking=True)
+    technician_id = fields.Many2one(
+        "res.users",
+        string="Technician",
+        tracking=True,
+        domain=[("share", "=", False), ("active", "=", True)],
+    )
+    scheduled_start = fields.Datetime(string="Scheduled Start", tracking=True)
+    estimated_hours = fields.Float(
+        string="Estimated Hours",
+        tracking=True,
+        default=1.0,
+    )
     commercial_basis = fields.Selection(
         [
             ("estimate", "Estimate Required"),
@@ -290,6 +302,13 @@ class SouthernServiceCase(models.Model):
             "partner_id": self.partner_id.id,
             "project_id": self._get_fsm_project().id,
             "description": self.complaint,
+            "user_ids": (
+                [Command.set(self.technician_id.ids)]
+                if self.technician_id
+                else []
+            ),
+            "planned_date_begin": self.scheduled_start,
+            "allocated_hours": self.estimated_hours,
             "southern_service_case_id": self.id,
             "southern_client_equipment_id": equipment.id,
             "dmc_equipment": equipment_name,
@@ -311,7 +330,7 @@ class SouthernServiceCase(models.Model):
             "product_id": equipment.product_id.id,
             "internal_notes": self.complaint,
             "under_warranty": self.commercial_basis == "warranty",
-            "user_id": self.advisor_id.id,
+            "user_id": (self.technician_id or self.advisor_id).id,
             "southern_service_case_id": self.id,
             "southern_client_equipment_id": equipment.id,
             "sale_order_id": self.sale_order_id.id,
@@ -346,7 +365,26 @@ class SouthernServiceCase(models.Model):
                 and not case.repair_order_ids
             ):
                 self.env["repair.order"].create(case._prepare_repair_values())
-            case.state = "ready"
+            task_values = {
+                "description": case.complaint,
+                "user_ids": [Command.set(case.technician_id.ids)],
+                "planned_date_begin": case.scheduled_start,
+                "allocated_hours": case.estimated_hours,
+            }
+            if case.task_ids:
+                case.task_ids.write(task_values)
+            if case.repair_order_ids:
+                case.repair_order_ids.write(
+                    {
+                        "internal_notes": case.complaint,
+                        "user_id": (case.technician_id or case.advisor_id).id,
+                    }
+                )
+            case.state = (
+                "scheduled"
+                if case.technician_id and case.scheduled_start
+                else "ready"
+            )
         return True
 
     def action_create_quotation(self):
@@ -365,6 +403,9 @@ class SouthernServiceCase(models.Model):
                 "southern_equipment_exception_reason": self.exception_reason,
                 "southern_service_request": self.complaint,
                 "southern_commercial_basis": self.commercial_basis,
+                "southern_technician_id": self.technician_id.id,
+                "southern_scheduled_start": self.scheduled_start,
+                "southern_estimated_hours": self.estimated_hours,
                 "southern_service_case_id": self.id,
                 "order_line": [
                     Command.create(

@@ -159,6 +159,9 @@
                         </group>
                         <group>
                             <field name="advisor_id" widget="many2one_avatar_user"/>
+                            <field name="technician_id" widget="many2one_avatar_user"/>
+                            <field name="scheduled_start"/>
+                            <field name="estimated_hours"/>
                             <field name="requested_date"/>
                             <field name="sale_order_id" readonly="1"
                                    invisible="service_domain != 'customer'"/>

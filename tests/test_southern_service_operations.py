@@ -126,6 +126,12 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         self.assertIn("def action_view_southern_service_tasks(self):", source)
         self.assertIn("def action_view_southern_service_repairs(self):", source)
         self.assertIn("def action_view_southern_service_purchases(self):", source)
+        for field_name in (
+            "southern_technician_id",
+            "southern_scheduled_start",
+            "southern_estimated_hours",
+        ):
+            self.assertIn(field_name, source)
 
         document = etree.parse(str(MODULE / "views" / "sale_order_views.xml"))
         self.assertEqual(
@@ -136,10 +142,23 @@ class SouthernServiceOperationsTests(unittest.TestCase):
             ),
             1,
         )
+        schedule_button = document.xpath(
+            "//button[@name='action_route_southern_service_work']"
+        )[0]
+        self.assertEqual(schedule_button.get("string"), "Schedule Work")
         self.assertEqual(
             len(document.xpath("//page[@name='southern_service_work']")),
             1,
         )
+
+    def test_sales_schedule_maps_to_native_field_service_fields(self):
+        source = (MODULE / "models" / "service_case.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('"user_ids":', source)
+        self.assertIn('"planned_date_begin":', source)
+        self.assertIn('"allocated_hours":', source)
+        self.assertIn("case.task_ids.write(task_values)", source)
 
     def test_routing_is_idempotent_for_each_execution_model(self):
         source = (MODULE / "models" / "service_case.py").read_text(
