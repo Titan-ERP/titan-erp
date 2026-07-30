@@ -39,9 +39,9 @@ class ProductTemplate(models.Model):
     )
     southern_source_url = fields.Char(string="Source URL", index=True)
     southern_source_name = fields.Char(string="Source Name", index=True)
-    southern_partner_price = fields.Monetary(
+    southern_partner_price = fields.Float(
         string="Partner Cost",
-        currency_field="currency_id",
+        digits="Product Price",
         company_dependent=True,
         help=(
             "Price charged to approved partner accounts such as diesel shops, "

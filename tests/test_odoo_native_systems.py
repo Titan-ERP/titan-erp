@@ -68,6 +68,7 @@ class OdooNativeSystemsTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("minimum_free_gb = fields.Float(", source)
         self.assertIn("default=2.0", source)
+        self.assertIn('_name = "southern.parts.catalog.sync"', source)
 
     def test_stored_compute_dependencies_do_not_require_studio_fields(self):
         source = (
@@ -80,6 +81,16 @@ class OdooNativeSystemsTests(unittest.TestCase):
         for block in dependency_blocks:
             declaration = block.split(")", 1)[0]
             self.assertNotIn("x_studio_", declaration)
+
+    def test_company_dependent_partner_price_uses_supported_odoo_type(self):
+        source = (
+            ROOT
+            / "southern_parts_intelligence"
+            / "models"
+            / "product_template.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("southern_partner_price = fields.Float(", source)
+        self.assertNotIn("southern_partner_price = fields.Monetary(", source)
 
     def test_shop_boss_is_not_an_operations_control_dependency(self):
         manifest = ast.literal_eval(

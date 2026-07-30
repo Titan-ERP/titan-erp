@@ -3,6 +3,7 @@ from odoo.exceptions import UserError
 
 
 class SouthernPartsCatalogSync(models.Model):
+    _name = "southern.parts.catalog.sync"
     _inherit = ["southern.parts.catalog.sync", "mail.thread"]
 
     company_id = fields.Many2one(
