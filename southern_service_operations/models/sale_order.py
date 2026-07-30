@@ -207,3 +207,24 @@ class SaleOrderLine(models.Model):
         store=True,
         index=True,
     )
+
+    def _timesheet_create_task(self, project):
+        self.ensure_one()
+        case = self.order_id.southern_service_case_id
+        if self.order_id.southern_quote_type == "service" and case:
+            existing_task = case.task_ids.filtered(
+                lambda task: not task.sale_line_id
+            )[:1]
+            if existing_task:
+                existing_task.write(
+                    {
+                        "sale_line_id": self.id,
+                        "sale_order_id": self.order_id.id,
+                        "allocated_hours": self._convert_qty_company_hours(
+                            existing_task.company_id or self.company_id
+                        ),
+                    }
+                )
+                self.task_id = existing_task
+                return existing_task
+        return super()._timesheet_create_task(project)
