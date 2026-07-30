@@ -257,7 +257,10 @@ class ProjectTask(models.Model):
             if task_order.state not in ("draft", "sent"):
                 continue
 
-            work_items = task.southern_service_work_item_ids
+            work_items = self.env["southern.service.work.item"].search(
+                [("task_id", "=", task.id)],
+                order="sequence, id",
+            )
             labor_items = work_items.filtered(
                 lambda item: item.billable and item.work_type == "labor"
             )
@@ -278,11 +281,7 @@ class ProjectTask(models.Model):
                     )
                 total_hours = sum(labor_items.mapped("allocated_hours"))
                 scope = "\n".join(
-                    _("- %(task)s (%(hours).2f hours)")
-                    % {
-                        "task": item.name,
-                        "hours": item.allocated_hours,
-                    }
+                    f"- {item.name} ({item.allocated_hours:.2f} hours)"
                     for item in labor_items
                 )
                 labor_values = {
