@@ -2,6 +2,8 @@
 <odoo>
     <template id="southern_cart_cost_review_notice" inherit_id="website_sale.cart_lines" name="Southern Cart Cost Review Notice">
         <xpath expr="//div[@id='cart_products']" position="before">
+            <t t-if="website_sale_order" t-set="_southern_member_discount" t-value="website_sale_order._southern_sync_membership_discount()"/>
+            <t t-if="website_sale_order" t-set="_southern_card_fee" t-value="website_sale_order._southern_sync_website_card_fee()"/>
             <t t-if="website_sale_order" t-set="_southern_cost_check" t-value="website_sale_order._southern_sync_website_cost_check()"/>
             <div t-if="website_sale_order and website_sale_order._southern_customer_cost_review_message()" class="alert border js_cart_lines" role="alert" style="background:#f6f4ed;border-left:4px solid #f2b632!important;color:#141719;">
                 <strong>Parts desk verification:</strong>
@@ -10,8 +12,18 @@
         </xpath>
     </template>
 
+    <template id="southern_checkout_card_fee_sync" inherit_id="website_sale.checkout" name="Southern Checkout Card Fee Sync">
+        <xpath expr="//div[@id='shop_checkout']" position="before">
+            <t t-if="order" t-set="_southern_member_discount" t-value="order._southern_sync_membership_discount()"/>
+            <t t-if="order" t-set="_southern_card_fee" t-value="order._southern_sync_website_card_fee()"/>
+            <t t-if="order" t-set="_southern_cost_check" t-value="order._southern_sync_website_cost_check()"/>
+        </xpath>
+    </template>
+
     <template id="southern_payment_cost_review_notice" inherit_id="website_sale.payment" name="Southern Payment Cost Review Notice">
         <xpath expr="//div[@name='website_sale_non_free_cart']" position="before">
+            <t t-if="website_sale_order" t-set="_southern_member_discount" t-value="website_sale_order._southern_sync_membership_discount()"/>
+            <t t-if="website_sale_order" t-set="_southern_card_fee" t-value="website_sale_order._southern_sync_website_card_fee()"/>
             <t t-if="website_sale_order" t-set="_southern_cost_check" t-value="website_sale_order._southern_sync_website_cost_check()"/>
             <t t-if="website_sale_order and website_sale_order.southern_cost_verification_status == 'loss_risk'" t-set="hide_payment_button" t-value="True"/>
             <div t-if="website_sale_order and website_sale_order._southern_customer_cost_review_message()" class="alert border" role="alert" style="background:#f6f4ed;border-left:4px solid #f2b632!important;color:#141719;">
