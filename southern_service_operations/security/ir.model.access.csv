@@ -1,3 +1,5 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_southern_service_case_user,southern.service.case user,model_southern_service_case,southern_service_operations.group_southern_service_user,1,1,1,0
 access_southern_service_case_manager,southern.service.case manager,model_southern_service_case,southern_service_operations.group_southern_service_manager,1,1,1,1
+access_southern_service_work_item_user,southern.service.work.item user,model_southern_service_work_item,southern_service_operations.group_southern_service_user,1,1,1,1
+access_southern_service_work_item_manager,southern.service.work.item manager,model_southern_service_work_item,southern_service_operations.group_southern_service_manager,1,1,1,1

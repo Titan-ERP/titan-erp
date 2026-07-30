@@ -34,10 +34,49 @@ class ProjectTask(models.Model):
         index=True,
         ondelete="set null",
     )
+    southern_quote_workflow = fields.Boolean(
+        string="Unified Service Quote",
+        default=False,
+        copy=False,
+    )
     southern_quote_line_ids = fields.One2many(
         related="southern_sale_order_id.order_line",
         string="Quotation Lines",
         readonly=False,
+    )
+    southern_service_work_item_ids = fields.One2many(
+        "southern.service.work.item",
+        "task_id",
+        string="Service Tasks",
+        copy=True,
+    )
+    southern_service_task_hours = fields.Float(
+        string="Planned Task Hours",
+        compute="_compute_southern_service_task_hours",
+    )
+    southern_labor_product_id = fields.Many2one(
+        "product.product",
+        string="Labor Quote Product",
+        domain=[
+            ("sale_ok", "=", True),
+            ("type", "=", "service"),
+        ],
+    )
+    southern_labor_rate = fields.Monetary(
+        string="Labor Rate",
+        currency_field="southern_work_currency_id",
+    )
+    southern_work_currency_id = fields.Many2one(
+        "res.currency",
+        string="Work Currency",
+        compute="_compute_southern_work_currency_id",
+    )
+    southern_labor_sale_line_id = fields.Many2one(
+        "sale.order.line",
+        string="Labor Quotation Line",
+        readonly=True,
+        copy=False,
+        ondelete="set null",
     )
     southern_sale_state = fields.Selection(
         related="southern_sale_order_id.state",
@@ -64,6 +103,24 @@ class ProjectTask(models.Model):
         string="Recommendations / Follow-up",
         tracking=True,
     )
+
+    @api.depends("southern_service_work_item_ids.allocated_hours")
+    def _compute_southern_service_task_hours(self):
+        for task in self:
+            task.southern_service_task_hours = sum(
+                task.southern_service_work_item_ids.mapped("allocated_hours")
+            )
+
+    @api.depends(
+        "southern_sale_order_id.currency_id",
+        "company_id.currency_id",
+    )
+    def _compute_southern_work_currency_id(self):
+        for task in self:
+            task.southern_work_currency_id = (
+                task.southern_sale_order_id.currency_id
+                or task.company_id.currency_id
+            )
 
     @api.onchange("southern_service_case_id")
     def _onchange_southern_service_case_id(self):
@@ -131,7 +188,9 @@ class ProjectTask(models.Model):
         )
         if order:
             if not self.southern_sale_order_id:
-                self.southern_sale_order_id = order
+                self.with_context(southern_skip_auto_quote=True).write(
+                    {"southern_sale_order_id": order.id}
+                )
             return order
         if not self.partner_id:
             raise ValidationError(
@@ -151,7 +210,9 @@ class ProjectTask(models.Model):
             case = self.env["southern.service.case"].create(
                 self._southern_prepare_case_from_task()
             )
-            self.southern_service_case_id = case
+            self.with_context(southern_skip_auto_quote=True).write(
+                {"southern_service_case_id": case.id}
+            )
         order = self.env["sale.order"].create(
             {
                 "partner_id": self.partner_id.id,
@@ -174,11 +235,122 @@ class ProjectTask(models.Model):
             }
         )
         case.sale_order_id = order
-        self.southern_sale_order_id = order
+        self.with_context(southern_skip_auto_quote=True).write(
+            {"southern_sale_order_id": order.id}
+        )
         return order
 
+    def _southern_is_quote_ready(self):
+        self.ensure_one()
+        return bool(
+            self.southern_quote_workflow
+            and self.partner_id
+            and self.dmc_equipment
+            and self.dmc_serial_number
+        )
+
+    def _southern_sync_tasks_to_quotation(self, order=None):
+        for task in self:
+            task_order = order or task.southern_sale_order_id
+            if not task_order:
+                continue
+            if task_order.state not in ("draft", "sent"):
+                continue
+
+            work_items = task.southern_service_work_item_ids
+            labor_items = work_items.filtered(
+                lambda item: item.billable and item.work_type == "labor"
+            )
+            labor_line = task.southern_labor_sale_line_id
+            if labor_items and not labor_line:
+                labor_line = (
+                    task.sale_line_id
+                    if task.sale_line_id.order_id == task_order
+                    else self.env["sale.order.line"]
+                )
+            if labor_items:
+                if not task.southern_labor_product_id:
+                    raise ValidationError(
+                        _(
+                            "Select a Labor Quote Product before saving "
+                            "billable labor tasks."
+                        )
+                    )
+                total_hours = sum(labor_items.mapped("allocated_hours"))
+                scope = "\n".join(
+                    _("- %(task)s (%(hours).2f hours)")
+                    % {
+                        "task": item.name,
+                        "hours": item.allocated_hours,
+                    }
+                    for item in labor_items
+                )
+                labor_values = {
+                    "order_id": task_order.id,
+                    "product_id": task.southern_labor_product_id.id,
+                    "name": _("Service Labor\n%(scope)s") % {"scope": scope},
+                    "product_uom_qty": total_hours,
+                    "product_uom_id": task.southern_labor_product_id.uom_id.id,
+                    "price_unit": task.southern_labor_rate,
+                }
+                if labor_line:
+                    labor_values.pop("order_id")
+                    labor_line.write(labor_values)
+                else:
+                    labor_line = self.env["sale.order.line"].create(labor_values)
+                task.with_context(southern_skip_auto_quote=True).write(
+                    {
+                        "southern_labor_sale_line_id": labor_line.id,
+                        "sale_line_id": labor_line.id,
+                    }
+                )
+                labor_items.with_context(southern_skip_quote_sync=True).write(
+                    {"sale_line_id": labor_line.id}
+                )
+            elif labor_line:
+                task.with_context(southern_skip_auto_quote=True).write(
+                    {
+                        "southern_labor_sale_line_id": False,
+                        "sale_line_id": False,
+                    }
+                )
+                labor_line.unlink()
+
+            work_items.filtered(
+                lambda item: (
+                    item.work_type == "labor"
+                    and not item.billable
+                    and item.sale_line_id
+                )
+            ).with_context(southern_skip_quote_sync=True).write(
+                {"sale_line_id": False}
+            )
+            if labor_line:
+                work_items.filtered(
+                    lambda item: (
+                        item.work_type != "labor"
+                        and item.sale_line_id == labor_line
+                    )
+                ).with_context(southern_skip_quote_sync=True).write(
+                    {"sale_line_id": False}
+                )
+            work_items.filtered(
+                lambda item: item.work_type != "labor"
+            )._sync_individual_to_quotation(task_order)
+        return True
+
+    def _southern_auto_prepare_quote(self):
+        for task in self:
+            if not task._southern_is_quote_ready():
+                continue
+            order = task._southern_get_or_create_sale_order()
+            task._southern_sync_tasks_to_quotation(order)
+        return True
+
     def action_southern_create_quotation(self):
-        self._southern_get_or_create_sale_order()
+        for task in self:
+            order = task._southern_get_or_create_sale_order()
+            task._southern_sync_tasks_to_quotation(order)
         return {"type": "ir.actions.client", "tag": "reload"}
 
     def action_southern_open_sale_order(self):
@@ -194,11 +366,15 @@ class ProjectTask(models.Model):
 
     def action_southern_send_quotation(self):
         self.ensure_one()
-        return self._southern_get_or_create_sale_order().action_quotation_send()
+        order = self._southern_get_or_create_sale_order()
+        self._southern_sync_tasks_to_quotation(order)
+        return order.action_quotation_send()
 
     def action_southern_confirm_sale_order(self):
         self.ensure_one()
-        self._southern_get_or_create_sale_order().action_confirm()
+        order = self._southern_get_or_create_sale_order()
+        self._southern_sync_tasks_to_quotation(order)
+        order.action_confirm()
         return {"type": "ir.actions.client", "tag": "reload"}
 
     @api.model_create_multi
@@ -250,7 +426,10 @@ class ProjectTask(models.Model):
                     "dmc_serial_number",
                     equipment.serial_no or "Unserialized",
                 )
-        return super().create(vals_list)
+        tasks = super().create(vals_list)
+        if not self.env.context.get("southern_skip_auto_quote"):
+            tasks._southern_auto_prepare_quote()
+        return tasks
 
     def write(self, vals):
         result = super().write(vals)
@@ -263,4 +442,15 @@ class ProjectTask(models.Model):
                         for field_name in note_fields
                     }
                 )
+        if not self.env.context.get("southern_skip_auto_quote"):
+            quote_fields = {
+                "partner_id",
+                "dmc_equipment",
+                "dmc_serial_number",
+                "southern_quote_workflow",
+                "southern_labor_product_id",
+                "southern_labor_rate",
+            }
+            if quote_fields.intersection(vals):
+                self._southern_auto_prepare_quote()
         return result

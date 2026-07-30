@@ -3,6 +3,14 @@
     <record id="industry_fsm.project_task_action_fsm"
             model="ir.actions.act_window">
         <field name="name">Service Jobs</field>
+        <field name="context">{
+            'fsm_mode': True,
+            'search_default_my_tasks': True,
+            'search_default_planned_future': True,
+            'search_default_planned_today': True,
+            'default_scale': 'day',
+            'default_southern_quote_workflow': True
+        }</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 No Service Jobs found. Create the first one.
@@ -17,6 +25,14 @@
     <record id="industry_fsm.project_task_action_fsm2"
             model="ir.actions.act_window">
         <field name="name">Service Jobs</field>
+        <field name="context">{
+            'fsm_mode': True,
+            'search_default_my_tasks': True,
+            'search_default_planned_future': True,
+            'search_default_planned_today': True,
+            'default_scale': 'day',
+            'default_southern_quote_workflow': True
+        }</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 No Service Jobs found. Create the first one.
@@ -59,10 +75,6 @@
                 <attribute name="string">Follow-up Work</attribute>
             </xpath>
             <xpath expr="//button[@name='action_timer_stop']" position="after">
-                <button name="action_southern_create_quotation" type="object"
-                        string="Build Quotation" class="btn-primary"
-                        groups="sales_team.group_sale_salesman"
-                        invisible="not is_fsm or southern_sale_order_id"/>
                 <button name="action_southern_send_quotation" type="object"
                         string="Send Quote" class="btn-secondary"
                         groups="sales_team.group_sale_salesman"
@@ -94,6 +106,7 @@
                            invisible="not is_fsm"/>
                 <field name="southern_service_case_id"
                        invisible="1"/>
+                <field name="southern_quote_workflow" invisible="1"/>
                 <field name="southern_client_equipment_id"
                        invisible="not is_fsm"
                        domain="[('client', 'child_of', partner_id)]"/>
@@ -114,7 +127,7 @@
                 </group>
             </xpath>
             <xpath expr="//page[@name='description_page']" position="after">
-                <page name="southern_quotation" string="Quotation"
+                <page name="southern_quotation" string="Tasks &amp; Sales Quote"
                       invisible="not is_fsm"
                       groups="sales_team.group_sale_salesman">
                     <group>
@@ -133,39 +146,56 @@
                     </group>
                     <div class="alert alert-info" role="status"
                          invisible="southern_sale_order_id">
-                        Save the Service Job, then use
-                        <strong>Build Quotation</strong>. Add labor, parts,
-                        sections, and notes here without leaving the job.
+                        Plan the Service Tasks below. Allocated Hours become
+                        one combined Labor quote line. Units become quote
+                        quantity for Parts, Travel, Subcontract, and Other
+                        work. Saving this page creates and updates the Sales
+                        quotation automatically.
                     </div>
-                    <field name="southern_quote_line_ids"
-                           invisible="not southern_sale_order_id"
-                           readonly="southern_sale_state not in ('draft', 'sent')"
-                           context="{'default_order_id': southern_sale_order_id}">
+                    <group>
+                        <group string="Labor Quotation">
+                            <field name="southern_labor_product_id"/>
+                            <field name="southern_labor_rate"/>
+                        </group>
+                        <group string="Live Quote">
+                            <field name="southern_service_task_hours" readonly="1"/>
+                            <field name="southern_labor_sale_line_id"
+                                   readonly="1"
+                                   invisible="not southern_labor_sale_line_id"/>
+                        </group>
+                    </group>
+                    <field name="southern_service_work_item_ids"
+                           readonly="southern_sale_state not in (False, 'draft', 'sent')"
+                           context="{'default_task_id': id}">
                         <list editable="bottom">
                             <control>
-                                <create string="Add a product"/>
-                                <create string="Add a section"
-                                        context="{'default_display_type': 'line_section'}"/>
-                                <create string="Add a note"
-                                        context="{'default_display_type': 'line_note'}"/>
+                                <create string="Add Labor Task"
+                                        context="{'default_work_type': 'labor'}"/>
+                                <create string="Add Part"
+                                        context="{'default_work_type': 'part', 'default_allocated_hours': 0.0}"/>
+                                <create string="Add Other Work"
+                                        context="{'default_work_type': 'other'}"/>
                             </control>
                             <field name="sequence" widget="handle"/>
-                            <field name="display_type" column_invisible="True"/>
-                            <field name="product_id"
-                                   required="not display_type"/>
                             <field name="name"/>
-                            <field name="product_uom_qty"
-                                   invisible="display_type"/>
+                            <field name="work_type"/>
+                            <field name="assigned_user_id"
+                                   widget="many2one_avatar_user"/>
+                            <field name="allocated_hours"/>
+                            <field name="quantity"/>
+                            <field name="quote_quantity" readonly="1"/>
+                            <field name="product_id"
+                                   required="billable and work_type != 'labor'"
+                                   invisible="work_type == 'labor'"/>
                             <field name="product_uom_id"
-                                   invisible="display_type"/>
-                            <field name="price_unit"
-                                   invisible="display_type"/>
-                            <field name="tax_ids"
-                                   widget="many2many_tags"
-                                   invisible="display_type"/>
-                            <field name="price_subtotal"
-                                   sum="Subtotal"
-                                   invisible="display_type"/>
+                                   readonly="1"
+                                   invisible="work_type == 'labor'"/>
+                            <field name="unit_price"
+                                   invisible="work_type == 'labor'"/>
+                            <field name="billable"/>
+                            <field name="subtotal" readonly="1" sum="Quote Total"/>
+                            <field name="state"/>
+                            <field name="sale_line_id" optional="hide" readonly="1"/>
                         </list>
                     </field>
                 </page>
@@ -190,6 +220,9 @@
         <field name="res_model">project.task</field>
         <field name="view_mode">kanban,list,form,calendar</field>
         <field name="domain">[('is_fsm', '=', True), ('southern_service_case_id', '!=', False)]</field>
-        <field name="context">{'default_is_fsm': True}</field>
+        <field name="context">{
+            'default_is_fsm': True,
+            'default_southern_quote_workflow': True
+        }</field>
     </record>
 </odoo>
