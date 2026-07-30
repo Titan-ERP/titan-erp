@@ -1,5 +1,45 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="industry_fsm.project_task_action_fsm"
+            model="ir.actions.act_window">
+        <field name="name">Service Jobs</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No Service Jobs found. Create the first one.
+            </p>
+            <p>
+                Quote, schedule, perform, and document upcoming Service Jobs
+                from this workspace.
+            </p>
+        </field>
+    </record>
+
+    <record id="industry_fsm.project_task_action_fsm2"
+            model="ir.actions.act_window">
+        <field name="name">Service Jobs</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No Service Jobs found. Create the first one.
+            </p>
+            <p>
+                Quote, schedule, perform, and document upcoming Service Jobs
+                from this workspace.
+            </p>
+        </field>
+    </record>
+
+    <record id="view_task_search_southern_service_jobs" model="ir.ui.view">
+        <field name="name">project.task.search.southern.service.jobs</field>
+        <field name="model">project.task</field>
+        <field name="inherit_id"
+               ref="industry_fsm.project_task_view_search_fsm"/>
+        <field name="arch" type="xml">
+            <xpath expr="//filter[@name='my_tasks']" position="attributes">
+                <attribute name="string">My Service Jobs</attribute>
+            </xpath>
+        </field>
+    </record>
+
     <record id="view_task_form_southern_service" model="ir.ui.view">
         <field name="name">project.task.form.southern.service</field>
         <field name="model">project.task</field>
@@ -116,7 +156,7 @@
     </record>
 
     <record id="action_southern_service_schedule" model="ir.actions.act_window">
-        <field name="name">Schedule</field>
+        <field name="name">Service Jobs</field>
         <field name="res_model">project.task</field>
         <field name="view_mode">kanban,list,form,calendar</field>
         <field name="domain">[('is_fsm', '=', True), ('southern_service_case_id', '!=', False)]</field>

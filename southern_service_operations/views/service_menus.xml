@@ -8,7 +8,7 @@
               sequence="15"/>
 
     <menuitem id="menu_southern_service_new"
-              name="New Service"
+              name="Service Jobs"
               parent="menu_southern_service_root"
               action="industry_fsm.project_task_action_fsm"
               sequence="5"/>
@@ -28,7 +28,7 @@
               parent="menu_southern_service_root"
               sequence="20"/>
     <menuitem id="menu_southern_service_schedule"
-              name="Schedule"
+              name="Service Jobs"
               parent="menu_southern_service_work"
               action="action_southern_service_schedule"
               sequence="5"/>

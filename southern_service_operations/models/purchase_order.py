@@ -23,7 +23,7 @@ class PurchaseOrderLine(models.Model):
     )
     southern_task_id = fields.Many2one(
         "project.task",
-        string="Scheduled Work",
+        string="Service Job",
         ondelete="set null",
     )
     southern_repair_order_id = fields.Many2one(

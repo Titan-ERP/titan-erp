@@ -15,7 +15,7 @@
                         class="oe_stat_button" icon="fa-calendar"
                         invisible="not southern_task_count">
                     <field name="southern_task_count" widget="statinfo"
-                           string="Scheduled"/>
+                           string="Service Jobs"/>
                 </button>
                 <button name="action_view_southern_repairs" type="object"
                         class="oe_stat_button" icon="fa-cogs"

@@ -21,7 +21,7 @@ class RepairOrder(models.Model):
     )
     southern_field_task_id = fields.Many2one(
         "project.task",
-        string="Related Scheduled Work",
+        string="Related Service Job",
         tracking=True,
         copy=False,
         ondelete="set null",
