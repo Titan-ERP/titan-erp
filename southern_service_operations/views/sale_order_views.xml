@@ -11,12 +11,19 @@
     <record id="action_new_service_quotation" model="ir.actions.act_window">
         <field name="name">Service</field>
         <field name="res_model">project.task</field>
-        <field name="view_mode">kanban,list,form,map,calendar,gantt,activity</field>
+        <field name="view_mode">kanban,list,form,gantt,calendar,map,activity,pivot,graph</field>
         <field name="target">current</field>
-        <field name="domain">[('is_fsm', '=', True)]</field>
+        <field name="domain">[
+            ('is_fsm', '=', True),
+            ('project_id', '!=', False)
+        ]</field>
         <field name="context">{
+            'fsm_mode': True,
             'default_is_fsm': True,
-            'search_default_my_tasks': True
+            'search_default_my_tasks': True,
+            'search_default_planned_future': True,
+            'search_default_planned_today': True,
+            'default_scale': 'day'
         }</field>
     </record>
 
