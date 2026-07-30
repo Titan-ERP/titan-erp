@@ -1,6 +1,7 @@
 import json
 
 from odoo import api, fields, models
+from odoo.exceptions import ValidationError
 
 
 class ProductTemplate(models.Model):
@@ -38,6 +39,16 @@ class ProductTemplate(models.Model):
     )
     southern_source_url = fields.Char(string="Source URL", index=True)
     southern_source_name = fields.Char(string="Source Name", index=True)
+    southern_partner_price = fields.Monetary(
+        string="Partner Cost",
+        currency_field="currency_id",
+        company_dependent=True,
+        help=(
+            "Price charged to approved partner accounts such as diesel shops, "
+            "parts stores, fleets, and volume buyers. This is separate from "
+            "internal cost and public retail sales price."
+        ),
+    )
     southern_enrichment_status = fields.Selection(
         [
             ("none", "Not Enriched"),
@@ -160,6 +171,66 @@ class ProductTemplate(models.Model):
             "match": True,
         }
         return detail
+
+    @api.constrains("southern_partner_price")
+    def _check_southern_partner_price(self):
+        for product in self:
+            if product.southern_partner_price < 0:
+                raise ValidationError("Partner Cost cannot be negative.")
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        products = super().create(vals_list)
+        products.filtered(lambda product: product.southern_partner_price > 0)._southern_sync_partner_pricing()
+        return products
+
+    def write(self, vals):
+        result = super().write(vals)
+        if "southern_partner_price" in vals:
+            self._southern_sync_partner_pricing()
+        return result
+
+    def _southern_partner_pricelist(self):
+        pricelist = self.env.ref(
+            "southern_parts_intelligence.southern_partner_pricelist",
+            raise_if_not_found=False,
+        )
+        if pricelist:
+            return pricelist
+        return self.env["product.pricelist"].sudo().search(
+            [("name", "=", "Southern Partner Pricing")],
+            limit=1,
+        )
+
+    def _southern_sync_partner_pricing(self):
+        pricelist = self._southern_partner_pricelist()
+        if not pricelist:
+            return
+
+        PricelistItem = self.env["product.pricelist.item"].sudo()
+        for product in self.sudo():
+            item = PricelistItem.search(
+                [
+                    ("pricelist_id", "=", pricelist.id),
+                    ("applied_on", "=", "1_product"),
+                    ("product_tmpl_id", "=", product.id),
+                ],
+                limit=1,
+            )
+            if product.southern_partner_price > 0:
+                vals = {
+                    "pricelist_id": pricelist.id,
+                    "applied_on": "1_product",
+                    "product_tmpl_id": product.id,
+                    "compute_price": "fixed",
+                    "fixed_price": product.southern_partner_price,
+                }
+                if item:
+                    item.write(vals)
+                else:
+                    PricelistItem.create(vals)
+            elif item:
+                item.unlink()
 
     @api.depends(
         "default_code",

@@ -5,6 +5,9 @@
         <field name="model">product.template</field>
         <field name="inherit_id" ref="product.product_template_only_form_view"/>
         <field name="arch" type="xml">
+            <xpath expr="//field[@name='list_price']" position="after">
+                <field name="southern_partner_price"/>
+            </xpath>
             <xpath expr="//notebook" position="inside">
                 <page string="Parts Intelligence" name="southern_parts_intelligence">
                     <group>
