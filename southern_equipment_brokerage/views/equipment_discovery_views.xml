@@ -116,11 +116,10 @@
                         domain="[('state', '=', 'needs_review')]"/>
                 <filter name="ready" string="Verification Ready"
                         domain="[('verification_ready', '=', True)]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
-                    <filter name="group_source" string="Source" context="{'group_by': 'source'}"/>
-                    <filter name="group_class" string="Equipment Type" context="{'group_by': 'equipment_type'}"/>
-                </group>
+                <separator/>
+                <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
+                <filter name="group_source" string="Source" context="{'group_by': 'source'}"/>
+                <filter name="group_class" string="Equipment Type" context="{'group_by': 'equipment_type'}"/>
             </search>
         </field>
     </record>

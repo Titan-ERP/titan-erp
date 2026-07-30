@@ -96,10 +96,9 @@
                 <field name="company_id"/>
                 <filter name="open" string="Open" domain="[('state', '=', 'open')]"/>
                 <filter name="exceptions" string="Exceptions" domain="[('state', '=', 'exception')]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_company" string="Company" context="{'group_by': 'company_id'}"/>
-                    <filter name="group_month" string="Month" context="{'group_by': 'control_date:month'}"/>
-                </group>
+                <separator/>
+                <filter name="group_company" string="Company" context="{'group_by': 'company_id'}"/>
+                <filter name="group_month" string="Month" context="{'group_by': 'control_date:month'}"/>
             </search>
         </field>
     </record>

@@ -69,11 +69,10 @@
                 <filter name="open" string="Open" domain="[('state', 'in', ['open', 'in_progress', 'blocked'])]"/>
                 <filter name="blockers" string="Blockers" domain="[('severity', '=', '4_blocker')]"/>
                 <filter name="published" string="Published" domain="[('product_published', '=', True)]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_issue" string="Issue" context="{'group_by': 'issue_type'}"/>
-                    <filter name="group_assignee" string="Assignee" context="{'group_by': 'assigned_to_id'}"/>
-                    <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
-                </group>
+                <separator/>
+                <filter name="group_issue" string="Issue" context="{'group_by': 'issue_type'}"/>
+                <filter name="group_assignee" string="Assignee" context="{'group_by': 'assigned_to_id'}"/>
+                <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
             </search>
         </field>
     </record>

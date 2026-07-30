@@ -38,6 +38,13 @@ class OdooNativeSystemsTests(unittest.TestCase):
         for path in files:
             ET.parse(path)
 
+    def test_odoo_19_search_views_do_not_use_legacy_expand_groups(self):
+        for path in ROOT.glob("southern_*/**/*.xml"):
+            root = ET.parse(path).getroot()
+            for search in root.findall(".//search"):
+                legacy_groups = search.findall("./group[@expand]")
+                self.assertFalse(legacy_groups, path)
+
     def test_access_files_have_complete_permissions(self):
         for path in ROOT.glob("southern_*/security/ir.model.access.csv"):
             with path.open(encoding="utf-8-sig", newline="") as handle:
