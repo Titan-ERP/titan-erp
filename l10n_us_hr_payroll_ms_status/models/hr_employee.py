@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from odoo import fields, models
+from odoo import api, fields, models
 
 from .mississippi_withholding import MS_PAY_PERIODS, calculate_ms_withholding, with_ms_filing_statuses
 
@@ -8,6 +8,7 @@ from .mississippi_withholding import MS_PAY_PERIODS, calculate_ms_withholding, w
 class HrEmployee(models.Model):
     _inherit = "hr.employee"
 
+    @api.model
     def fields_get(self, allfields=None, attributes=None):
         result = super().fields_get(allfields=allfields, attributes=attributes)
         field = result.get("l10n_us_state_filing_status")
