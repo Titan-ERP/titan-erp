@@ -117,21 +117,17 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         new_service = menus.xpath(
             "//menuitem[@id='menu_southern_service_new']"
         )[0]
-        self.assertEqual(new_service.get("action"), "action_new_service_quotation")
-
-        sales_views = etree.parse(
-            str(MODULE / "views" / "sale_order_views.xml")
+        self.assertEqual(
+            new_service.get("action"),
+            "industry_fsm.project_task_action_fsm",
         )
-        service_action = sales_views.xpath(
-            "//record[@id='action_new_service_quotation']"
+        sales_views = etree.parse(str(MODULE / "views" / "sale_order_views.xml"))
+        service_button = sales_views.xpath(
+            "//button[@string='Service' and @type='action']"
         )[0]
         self.assertEqual(
-            service_action.xpath("./field[@name='res_model']")[0].text,
-            "project.task",
-        )
-        self.assertIn(
-            "kanban",
-            service_action.xpath("./field[@name='view_mode']")[0].text,
+            service_button.get("name"),
+            "%(industry_fsm.project_task_action_fsm)d",
         )
 
     def test_sales_form_is_the_service_workspace(self):
