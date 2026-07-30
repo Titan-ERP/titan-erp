@@ -55,6 +55,14 @@ class SouthernServiceOperationsTests(unittest.TestCase):
             ["Parts", "Service", "Equipment Sale", "Rental"],
         )
 
+    def test_odoo_19_search_views_do_not_use_group_container(self):
+        for path in (MODULE / "views").glob("*.xml"):
+            document = etree.parse(str(path))
+            self.assertFalse(
+                document.xpath("//search/group"),
+                f"{path.name} uses a removed Odoo 19 search/group container",
+            )
+
     def test_sales_confirmation_creates_case_before_native_tasks(self):
         source = (MODULE / "models" / "sale_order.py").read_text(encoding="utf-8")
         method = source[source.index("    def action_confirm(self):") :]
