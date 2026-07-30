@@ -148,13 +148,10 @@ class SouthernServiceCase(models.Model):
     purchase_count = fields.Integer(compute="_compute_counts")
     invoice_count = fields.Integer(related="sale_order_id.invoice_count")
 
-    _sql_constraints = [
-        (
-            "name_unique",
-            "unique(name)",
-            "The Service Case number must be unique.",
-        ),
-    ]
+    _name_unique = models.Constraint(
+        "unique(name)",
+        "The Service Case number must be unique.",
+    )
 
     @api.model_create_multi
     def create(self, vals_list):
