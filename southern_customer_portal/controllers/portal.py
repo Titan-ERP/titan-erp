@@ -1,9 +1,14 @@
+from urllib.parse import urlencode
+
 from odoo import http
 from odoo.addons.portal.controllers.portal import CustomerPortal, pager as portal_pager
 from odoo.http import request
 
 
 class SouthernCustomerPortal(CustomerPortal):
+    def _is_public_user(self):
+        return request.env.user._is_public()
+
     def _partner_domain(self):
         partner = request.env.user.partner_id.commercial_partner_id
         return [("partner_id", "child_of", partner.id)]
@@ -29,8 +34,36 @@ class SouthernCustomerPortal(CustomerPortal):
             limit=1,
         )
 
+    def _has_active_membership(self):
+        application = self._get_membership_application()
+        return bool(application and application.state == "active")
+
+    def _login_redirect_url(self, target):
+        return "/web/login?%s" % urlencode({"redirect": target})
+
+    def _membership_product_url(self):
+        product = request.env["product.template"].sudo().search(
+            [("default_code", "=", "SEC-MEMBERSHIP-STANDARD")],
+            limit=1,
+        )
+        return product.website_url if product and product.website_url else "/membership"
+
+    def _add_customer_access_values(self, values):
+        if not self._is_public_user():
+            application = self._get_membership_application()
+            values.update(
+                {
+                    "southern_membership_application": application,
+                    "southern_is_premium_customer": bool(
+                        application and application.state == "active"
+                    ),
+                }
+            )
+        return values
+
     def _prepare_home_portal_values(self, counters):
         values = super()._prepare_home_portal_values(counters)
+        self._add_customer_access_values(values)
         if "membership_application_count" in counters:
             values["membership_application_count"] = request.env[
                 "southern.membership.application"
@@ -45,6 +78,37 @@ class SouthernCustomerPortal(CustomerPortal):
             )
         return values
 
+    @http.route("/account-access", type="http", auth="public", website=True)
+    def southern_account_access(self, **kw):
+        if not self._is_public_user():
+            return request.redirect("/my/home")
+        return request.render(
+            "southern_customer_portal.southern_account_access",
+            {
+                "customer_login_url": self._login_redirect_url("/my/home"),
+                "membership_login_url": self._login_redirect_url("/my/home?premium=1"),
+                "membership_signup_url": "/membership-sign-up",
+            },
+        )
+
+    @http.route("/customer-login", type="http", auth="public", website=True)
+    def southern_customer_login(self, **kw):
+        if not self._is_public_user():
+            return request.redirect("/my/home")
+        return request.redirect(self._login_redirect_url("/my/home"))
+
+    @http.route("/membership-login", type="http", auth="public", website=True)
+    def southern_membership_login(self, **kw):
+        if self._is_public_user():
+            return request.redirect(self._login_redirect_url("/my/home?premium=1"))
+        if self._has_active_membership():
+            return request.redirect("/my/home")
+        return request.redirect("/my/membership")
+
+    @http.route("/membership-sign-up", type="http", auth="public", website=True)
+    def southern_membership_sign_up(self, **kw):
+        return request.redirect(self._membership_product_url())
+
     @http.route("/my/membership", type="http", auth="user", website=True)
     def portal_my_membership(self, error=None, **kw):
         values = self._prepare_portal_layout_values()
@@ -56,6 +120,7 @@ class SouthernCustomerPortal(CustomerPortal):
                 "submitted": kw.get("submitted"),
             }
         )
+        self._add_customer_access_values(values)
         return request.render("southern_customer_portal.portal_my_membership", values)
 
     @http.route("/my/membership/submit", type="http", auth="user", website=True, methods=["POST"])
@@ -116,6 +181,7 @@ class SouthernCustomerPortal(CustomerPortal):
     def portal_my_repair_orders(self, page=1, sortby="date", **kw):
         RepairOrder = request.env["repair.order"].sudo()
         values = self._prepare_portal_layout_values()
+        self._add_customer_access_values(values)
 
         searchbar_sortings = {
             "date": {"label": "Newest", "order": "schedule_date desc, id desc"},
@@ -160,6 +226,7 @@ class SouthernCustomerPortal(CustomerPortal):
         if not repair_order:
             return request.not_found()
         values = self._prepare_portal_layout_values()
+        self._add_customer_access_values(values)
         values.update(
             {
                 "repair_order": repair_order,
@@ -177,6 +244,7 @@ class SouthernCustomerPortal(CustomerPortal):
     def portal_my_outstanding_invoices(self, page=1, sortby="due", **kw):
         Invoice = request.env["account.move"].sudo()
         values = self._prepare_portal_layout_values()
+        self._add_customer_access_values(values)
 
         searchbar_sortings = {
             "due": {"label": "Due Date", "order": "invoice_date_due asc, invoice_date desc, id desc"},
