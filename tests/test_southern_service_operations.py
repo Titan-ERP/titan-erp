@@ -239,13 +239,14 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         self.assertIn('"dmc_equipment_run_hours":', source)
         self.assertIn("case.task_ids.write(task_values)", source)
 
-    def test_field_service_form_embeds_native_sales_quotation(self):
+    def test_service_tasks_feed_native_sales_quotation(self):
         source = (MODULE / "models" / "project_task.py").read_text(
             encoding="utf-8"
         )
         for marker in (
             "southern_sale_order_id",
             "southern_quote_line_ids",
+            "southern_service_work_item_ids",
             "def action_southern_create_quotation(self):",
             "def action_southern_send_quotation(self):",
             "def action_southern_confirm_sale_order(self):",
@@ -262,12 +263,30 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         self.assertEqual(
             len(
                 document.xpath(
-                    "//field[@name='southern_quote_line_ids']"
+                    "//field[@name='southern_service_work_item_ids']"
                     "/list[@editable='bottom']"
                 )
             ),
             1,
         )
+        work_item_source = (
+            MODULE / "models" / "service_work_item.py"
+        ).read_text(encoding="utf-8")
+        for marker in (
+            "allocated_hours",
+            "quote_quantity",
+            "sale_line_id",
+            "def _sync_individual_to_quotation",
+            '"product_uom_qty": self.quote_quantity',
+        ):
+            self.assertIn(marker, work_item_source)
+        for marker in (
+            "southern_labor_product_id",
+            "southern_labor_sale_line_id",
+            "def _southern_sync_tasks_to_quotation",
+            "total_hours = sum(labor_items.mapped(\"allocated_hours\"))",
+        ):
+            self.assertIn(marker, source)
 
     def test_routing_is_idempotent_for_each_execution_model(self):
         source = (MODULE / "models" / "service_case.py").read_text(

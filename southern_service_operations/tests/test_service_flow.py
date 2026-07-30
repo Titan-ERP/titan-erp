@@ -208,6 +208,61 @@ class TestSouthernServiceFlow(TransactionCase):
         task.action_southern_create_quotation()
         self.assertEqual(task.southern_sale_order_id, order)
 
+    def test_service_tasks_feed_quote_and_allocated_time(self):
+        case = self._create_customer_case()
+        case.action_route_work()
+        task = case.task_ids
+        task.write(
+            {
+                "southern_quote_workflow": True,
+                "southern_labor_product_id": self.service_product.id,
+                "southern_labor_rate": 125.0,
+            }
+        )
+        labor = self.env["southern.service.work.item"].create(
+            {
+                "task_id": task.id,
+                "name": "Diagnose hydraulic system",
+                "work_type": "labor",
+                "assigned_user_id": self.env.user.id,
+                "allocated_hours": 3.0,
+            }
+        )
+        second_labor = self.env["southern.service.work.item"].create(
+            {
+                "task_id": task.id,
+                "name": "Test hydraulic pressure",
+                "work_type": "labor",
+                "assigned_user_id": self.env.user.id,
+                "allocated_hours": 1.5,
+            }
+        )
+        nonbillable = self.env["southern.service.work.item"].create(
+            {
+                "task_id": task.id,
+                "name": "Internal safety review",
+                "work_type": "labor",
+                "allocated_hours": 0.5,
+                "billable": False,
+            }
+        )
+
+        task.action_southern_create_quotation()
+        order = task.southern_sale_order_id
+        self.assertEqual(task.southern_service_task_hours, 5.0)
+        self.assertTrue(labor.sale_line_id)
+        self.assertEqual(labor.sale_line_id, second_labor.sale_line_id)
+        self.assertEqual(labor.sale_line_id, task.southern_labor_sale_line_id)
+        self.assertEqual(labor.sale_line_id.order_id, order)
+        self.assertEqual(labor.sale_line_id.product_uom_qty, 4.5)
+        self.assertEqual(labor.sale_line_id.price_unit, 125.0)
+        self.assertFalse(nonbillable.sale_line_id)
+
+        labor.allocated_hours = 4.25
+        self.assertEqual(labor.quote_quantity, 4.25)
+        self.assertEqual(labor.sale_line_id.product_uom_qty, 5.75)
+        self.assertEqual(task.southern_service_task_hours, 6.25)
+
     def test_internal_service_routes_to_maintenance(self):
         internal_equipment = self.env["maintenance.equipment"].create(
             {"name": "Southern Internal Test Equipment"}
