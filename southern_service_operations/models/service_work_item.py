@@ -184,9 +184,7 @@ class SouthernServiceWorkItem(models.Model):
                                 "from its Service Task."
                             )
                         )
-                    item.with_context(southern_skip_quote_sync=True).write(
-                        {"sale_line_id": False}
-                    )
+                    item.write({"sale_line_id": False})
                     line.unlink()
                 continue
             if order.state not in ("draft", "sent"):
@@ -201,9 +199,7 @@ class SouthernServiceWorkItem(models.Model):
                 if line and line.order_id.state in ("draft", "sent"):
                     line.unlink()
                 line = self.env["sale.order.line"].create(values)
-                item.with_context(southern_skip_quote_sync=True).write(
-                    {"sale_line_id": line.id}
-                )
+                item.write({"sale_line_id": line.id})
         return True
 
     @api.model_create_multi
