@@ -63,7 +63,8 @@ class SouthernCustomerPortal(CustomerPortal):
 
     def _prepare_home_portal_values(self, counters):
         values = super()._prepare_home_portal_values(counters)
-        self._add_customer_access_values(values)
+        if request.httprequest.path != "/my/counters":
+            self._add_customer_access_values(values)
         return values
 
     @http.route("/account-access", type="http", auth="public", website=True)
