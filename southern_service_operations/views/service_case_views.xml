@@ -209,12 +209,11 @@
                         domain="[('service_domain', '=', 'customer')]"/>
                 <filter name="internal" string="Our Equipment"
                         domain="[('service_domain', '=', 'internal')]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
-                    <filter name="group_domain" string="Service For" context="{'group_by': 'service_domain'}"/>
-                    <filter name="group_advisor" string="Coordinator" context="{'group_by': 'advisor_id'}"/>
-                    <filter name="group_customer" string="Customer" context="{'group_by': 'partner_id'}"/>
-                </group>
+                <separator/>
+                <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
+                <filter name="group_domain" string="Service For" context="{'group_by': 'service_domain'}"/>
+                <filter name="group_advisor" string="Coordinator" context="{'group_by': 'advisor_id'}"/>
+                <filter name="group_customer" string="Customer" context="{'group_by': 'partner_id'}"/>
             </search>
         </field>
     </record>
