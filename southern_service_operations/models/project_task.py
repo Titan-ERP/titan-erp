@@ -303,9 +303,7 @@ class ProjectTask(models.Model):
                         "sale_line_id": labor_line.id,
                     }
                 )
-                labor_items.with_context(southern_skip_quote_sync=True).write(
-                    {"sale_line_id": labor_line.id}
-                )
+                labor_items.write({"sale_line_id": labor_line.id})
             elif labor_line:
                 task.with_context(southern_skip_auto_quote=True).write(
                     {
@@ -321,18 +319,14 @@ class ProjectTask(models.Model):
                     and not item.billable
                     and item.sale_line_id
                 )
-            ).with_context(southern_skip_quote_sync=True).write(
-                {"sale_line_id": False}
-            )
+            ).write({"sale_line_id": False})
             if labor_line:
                 work_items.filtered(
                     lambda item: (
                         item.work_type != "labor"
                         and item.sale_line_id == labor_line
                     )
-                ).with_context(southern_skip_quote_sync=True).write(
-                    {"sale_line_id": False}
-                )
+                ).write({"sale_line_id": False})
             work_items.filtered(
                 lambda item: item.work_type != "labor"
             )._sync_individual_to_quotation(task_order)
