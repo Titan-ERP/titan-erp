@@ -21,7 +21,7 @@ class ClientEquipment(models.Model):
     )
     southern_site_contact_id = fields.Many2one(
         "res.partner",
-        string="Site Contact",
+        string="Service Site Contact",
         tracking=True,
     )
     southern_service_case_ids = fields.One2many(

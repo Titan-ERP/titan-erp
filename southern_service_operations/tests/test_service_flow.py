@@ -2,7 +2,7 @@ from odoo import Command
 from odoo.tests import TransactionCase, tagged
 
 
-@tagged("post_install", "-at_install")
+@tagged("at_install", "-post_install")
 class TestSouthernServiceFlow(TransactionCase):
     @classmethod
     def setUpClass(cls):
