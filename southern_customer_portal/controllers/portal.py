@@ -64,18 +64,6 @@ class SouthernCustomerPortal(CustomerPortal):
     def _prepare_home_portal_values(self, counters):
         values = super()._prepare_home_portal_values(counters)
         self._add_customer_access_values(values)
-        if "membership_application_count" in counters:
-            values["membership_application_count"] = request.env[
-                "southern.membership.application"
-            ].sudo().search_count(self._membership_domain())
-        if "repair_order_count" in counters:
-            values["repair_order_count"] = request.env["repair.order"].sudo().search_count(
-                self._repair_order_domain()
-            )
-        if "outstanding_invoice_count" in counters:
-            values["outstanding_invoice_count"] = request.env["account.move"].sudo().search_count(
-                self._outstanding_invoice_domain()
-            )
         return values
 
     @http.route("/account-access", type="http", auth="public", website=True)

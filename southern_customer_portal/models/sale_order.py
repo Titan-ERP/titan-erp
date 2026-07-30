@@ -657,7 +657,7 @@ class SaleOrder(models.Model):
             return application
 
         email = partner.email or self.partner_id.email
-        phone = partner.phone or partner.mobile or self.partner_id.phone or self.partner_id.mobile
+        phone = partner.phone or self.partner_id.phone
         vals.update(
             {
                 "partner_id": partner.id,
