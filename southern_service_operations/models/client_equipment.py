@@ -32,7 +32,7 @@ class ClientEquipment(models.Model):
     southern_task_ids = fields.One2many(
         "project.task",
         "southern_client_equipment_id",
-        string="Scheduled Work",
+        string="Service Jobs",
     )
     southern_repair_order_ids = fields.One2many(
         "repair.order",
@@ -88,7 +88,7 @@ class ClientEquipment(models.Model):
         self.ensure_one()
         return {
             "type": "ir.actions.act_window",
-            "name": "Scheduled Work",
+            "name": "Service Jobs",
             "res_model": "project.task",
             "view_mode": "kanban,list,form",
             "domain": [("southern_client_equipment_id", "=", self.id)],

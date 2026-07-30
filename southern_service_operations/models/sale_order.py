@@ -101,7 +101,7 @@ class SaleOrder(models.Model):
     )
     southern_service_task_count = fields.Integer(
         related="southern_service_case_id.task_count",
-        string="Field Work",
+        string="Service Jobs",
         readonly=True,
     )
     southern_service_repair_count = fields.Integer(
@@ -280,15 +280,23 @@ class SaleOrder(models.Model):
     def action_route_southern_service_work(self):
         self.ensure_one()
         if self.southern_quote_type != "service":
-            raise ValidationError(_("Route Work is only available for Service."))
+            raise ValidationError(
+                _("Service Jobs can only be created for Service quotations.")
+            )
         self._validate_southern_service_confirmation()
         if not self.southern_technician_id or not self.southern_scheduled_start:
             raise ValidationError(
-                _("Schedule Work requires a Technician and Scheduled Start.")
+                _(
+                    "Creating a Service Job requires a Technician and "
+                    "Scheduled Start."
+                )
             )
         if self.southern_estimated_hours <= 0:
             raise ValidationError(
-                _("Schedule Work requires Estimated Hours greater than zero.")
+                _(
+                    "Creating a Service Job requires Estimated Hours greater "
+                    "than zero."
+                )
             )
         self._ensure_southern_service_case().action_route_work()
         return {"type": "ir.actions.client", "tag": "reload"}

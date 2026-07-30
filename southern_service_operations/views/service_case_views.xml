@@ -116,7 +116,8 @@
                         <button name="action_view_tasks" type="object"
                                 class="oe_stat_button" icon="fa-calendar"
                                 invisible="not task_count">
-                            <field name="task_count" widget="statinfo" string="Scheduled"/>
+                            <field name="task_count" widget="statinfo"
+                                   string="Service Jobs"/>
                         </button>
                         <button name="action_view_repairs" type="object"
                                 class="oe_stat_button" icon="fa-wrench"

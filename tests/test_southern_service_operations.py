@@ -162,11 +162,39 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         schedule_button = document.xpath(
             "//button[@name='action_route_southern_service_work']"
         )[0]
-        self.assertEqual(schedule_button.get("string"), "Schedule Work")
+        self.assertEqual(
+            schedule_button.get("string"), "Create / Update Service Job"
+        )
         self.assertEqual(
             len(document.xpath("//page[@name='southern_service_work']")),
             1,
         )
+
+    def test_native_field_service_is_presented_as_service_jobs(self):
+        document = etree.parse(
+            str(MODULE / "views" / "project_task_views.xml")
+        )
+        for action_id in (
+            "industry_fsm.project_task_action_fsm",
+            "industry_fsm.project_task_action_fsm2",
+        ):
+            name = document.xpath(
+                f"//record[@id='{action_id}']/field[@name='name']/text()"
+            )
+            self.assertEqual(name, ["Service Jobs"])
+
+        search_label = document.xpath(
+            "//record[@id='view_task_search_southern_service_jobs']"
+            "/field[@name='arch']/xpath"
+            "/attribute[@name='string']/text()"
+        )
+        self.assertEqual(search_label, ["My Service Jobs"])
+
+        sales_views = (MODULE / "views" / "sale_order_views.xml").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("Field Service task", sales_views)
+        self.assertNotIn('string="Field Work"', sales_views)
 
     def test_sales_schedule_maps_to_native_field_service_fields(self):
         source = (MODULE / "models" / "service_case.py").read_text(
