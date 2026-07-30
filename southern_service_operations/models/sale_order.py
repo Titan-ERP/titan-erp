@@ -41,6 +41,22 @@ class SaleOrder(models.Model):
         string="Equipment Exception",
         tracking=True,
     )
+    southern_service_request = fields.Text(
+        string="Requested Work / Complaint",
+        tracking=True,
+    )
+    southern_commercial_basis = fields.Selection(
+        [
+            ("estimate", "Estimate Required"),
+            ("preauthorized", "Pre-authorized"),
+            ("warranty", "Warranty"),
+            ("contract", "Contract"),
+            ("no_charge", "No Charge"),
+        ],
+        string="Authorization",
+        default="estimate",
+        tracking=True,
+    )
     southern_service_case_id = fields.Many2one(
         "southern.service.case",
         string="Service Case",
@@ -48,6 +64,26 @@ class SaleOrder(models.Model):
         copy=False,
         index=True,
         ondelete="set null",
+    )
+    southern_service_state = fields.Selection(
+        related="southern_service_case_id.state",
+        string="Service Status",
+        readonly=True,
+    )
+    southern_service_task_count = fields.Integer(
+        related="southern_service_case_id.task_count",
+        string="Field Work",
+        readonly=True,
+    )
+    southern_service_repair_count = fields.Integer(
+        related="southern_service_case_id.repair_count",
+        string="Shop Work",
+        readonly=True,
+    )
+    southern_service_purchase_count = fields.Integer(
+        related="southern_service_case_id.purchase_count",
+        string="Purchases",
+        readonly=True,
     )
 
     @api.onchange("southern_client_equipment_id")
@@ -107,6 +143,10 @@ class SaleOrder(models.Model):
         ):
             if not order.southern_service_location:
                 raise ValidationError(_("Service requires a Work Location."))
+            if not order.southern_service_request:
+                raise ValidationError(
+                    _("Service requires a Requested Work / Complaint description.")
+                )
             if (
                 not order.southern_client_equipment_id
                 and not order.southern_equipment_exception_reason
@@ -121,7 +161,7 @@ class SaleOrder(models.Model):
 
     def _prepare_southern_service_case_values(self):
         self.ensure_one()
-        complaint = "\n".join(
+        complaint = self.southern_service_request or "\n".join(
             line.name for line in self.order_line if line.name
         ) or _("Service requested from %s") % self.name
         return {
@@ -131,7 +171,7 @@ class SaleOrder(models.Model):
             "service_location": self.southern_service_location,
             "complaint": complaint,
             "advisor_id": self.user_id.id or self.env.user.id,
-            "commercial_basis": "estimate",
+            "commercial_basis": self.southern_commercial_basis or "estimate",
             "sale_order_id": self.id,
             "exception_reason": self.southern_equipment_exception_reason,
         }
@@ -144,8 +184,12 @@ class SaleOrder(models.Model):
                 self._prepare_southern_service_case_values()
             )
             self.southern_service_case_id = case
-        elif not case.sale_order_id:
-            case.sale_order_id = self
+        else:
+            values = self._prepare_southern_service_case_values()
+            values.pop("sale_order_id", None)
+            case.write(values)
+            if not case.sale_order_id:
+                case.sale_order_id = self
         return case
 
     def action_confirm(self):
@@ -188,6 +232,26 @@ class SaleOrder(models.Model):
             "view_mode": "form",
             "res_id": case.id,
         }
+
+    def action_route_southern_service_work(self):
+        self.ensure_one()
+        if self.southern_quote_type != "service":
+            raise ValidationError(_("Route Work is only available for Service."))
+        self._validate_southern_service_confirmation()
+        self._ensure_southern_service_case().action_route_work()
+        return {"type": "ir.actions.client", "tag": "reload"}
+
+    def action_view_southern_service_tasks(self):
+        self.ensure_one()
+        return self._ensure_southern_service_case().action_view_tasks()
+
+    def action_view_southern_service_repairs(self):
+        self.ensure_one()
+        return self._ensure_southern_service_case().action_view_repairs()
+
+    def action_view_southern_service_purchases(self):
+        self.ensure_one()
+        return self._ensure_southern_service_case().action_view_purchases()
 
 
 class SaleOrderLine(models.Model):

@@ -233,6 +233,18 @@
         <field name="target">current</field>
     </record>
 
+    <record id="action_southern_service_new_internal" model="ir.actions.act_window">
+        <field name="name">New Internal Maintenance</field>
+        <field name="res_model">southern.service.case</field>
+        <field name="view_mode">form</field>
+        <field name="target">current</field>
+        <field name="context">{
+            'default_service_domain': 'internal',
+            'default_service_location': 'internal',
+            'default_commercial_basis': 'internal'
+        }</field>
+    </record>
+
     <record id="action_southern_service_waiting_customer" model="ir.actions.act_window">
         <field name="name">Waiting for Customer</field>
         <field name="res_model">southern.service.case</field>

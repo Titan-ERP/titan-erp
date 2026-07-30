@@ -2,17 +2,23 @@
 <odoo>
     <menuitem id="menu_southern_service_root"
               name="Service"
+              parent="sale.sale_menu_root"
               action="action_southern_service_cases"
               groups="southern_service_operations.group_southern_service_user"
-              sequence="18"/>
+              sequence="15"/>
 
     <menuitem id="menu_southern_service_new"
               name="New Service"
               parent="menu_southern_service_root"
-              action="action_southern_service_new"
+              action="action_new_service_quotation"
               sequence="5"/>
+    <menuitem id="menu_southern_service_new_internal"
+              name="New Internal Maintenance"
+              parent="menu_southern_service_root"
+              action="action_southern_service_new_internal"
+              sequence="6"/>
     <menuitem id="menu_southern_service_all"
-              name="All Service"
+              name="Service Cases"
               parent="menu_southern_service_root"
               action="action_southern_service_cases"
               sequence="10"/>
