@@ -8,25 +8,6 @@
         <field name="context">{'default_southern_quote_type': 'parts'}</field>
     </record>
 
-    <record id="action_new_service_quotation" model="ir.actions.act_window">
-        <field name="name">Service</field>
-        <field name="res_model">project.task</field>
-        <field name="view_mode">kanban,list,form,gantt,calendar,map,activity,pivot,graph</field>
-        <field name="target">current</field>
-        <field name="domain">[
-            ('is_fsm', '=', True),
-            ('project_id', '!=', False)
-        ]</field>
-        <field name="context">{
-            'fsm_mode': True,
-            'default_is_fsm': True,
-            'search_default_my_tasks': True,
-            'search_default_planned_future': True,
-            'search_default_planned_today': True,
-            'default_scale': 'day'
-        }</field>
-    </record>
-
     <record id="action_new_equipment_quotation" model="ir.actions.act_window">
         <field name="name">New Equipment Quotation</field>
         <field name="res_model">sale.order</field>
@@ -54,7 +35,7 @@
             <xpath expr="//list/header" position="inside">
                 <button name="%(action_new_parts_quotation)d" type="action"
                         string="Parts" display="always" class="btn-secondary"/>
-                <button name="%(action_new_service_quotation)d" type="action"
+                <button name="%(industry_fsm.project_task_action_fsm)d" type="action"
                         string="Service" display="always" class="btn-primary"/>
                 <button name="%(action_new_equipment_quotation)d" type="action"
                         string="Equipment Sale" display="always" class="btn-secondary"/>
