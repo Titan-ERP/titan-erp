@@ -60,10 +60,17 @@ class SouthernPartnerApplication(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        Partner = self.env["res.partner"].sudo()
+        for vals in vals_list:
+            if not vals.get("partner_id") and vals.get("email"):
+                partner = Partner.search([("email", "=ilike", vals["email"])], limit=1)
+                if partner:
+                    vals["partner_id"] = partner.commercial_partner_id.id
         applications = super().create(vals_list)
         for application in applications:
             if application.name == "New":
                 application.name = f"SEC Partner - {application.business_name}"
+            application._sync_partner_status()
         return applications
 
     def action_approve(self):
@@ -71,18 +78,28 @@ class SouthernPartnerApplication(models.Model):
             partner = application._ensure_partner()
             application.write({"state": "approved", "partner_id": partner.id})
             application._assign_partner_pricelist(partner)
+            application._sync_partner_status()
 
     def action_activate(self):
         for application in self:
             partner = application._ensure_partner()
             application.write({"state": "active", "partner_id": partner.id})
             application._assign_partner_pricelist(partner)
+            application._sync_partner_status()
 
     def action_suspend(self):
         self.write({"state": "suspended"})
+        self._sync_partner_status()
 
     def action_reject(self):
         self.write({"state": "rejected"})
+        self._sync_partner_status()
+
+    def write(self, vals):
+        result = super().write(vals)
+        if {"state", "partner_id"} & set(vals):
+            self._sync_partner_status()
+        return result
 
     def _ensure_partner(self):
         self.ensure_one()
@@ -120,3 +137,21 @@ class SouthernPartnerApplication(models.Model):
             )
         if pricelist and "property_product_pricelist" in partner._fields:
             partner.sudo().property_product_pricelist = pricelist
+
+    def _sync_partner_status(self):
+        for application in self:
+            partner = application.partner_id.commercial_partner_id
+            if not partner:
+                continue
+            vals = {
+                "southern_partner_status": application.state,
+                "southern_partner_application_id": application.id,
+            }
+            if application.state in ("approved", "active"):
+                vals["southern_account_type"] = "partner"
+            elif (
+                application.state in ("suspended", "rejected")
+                and partner.southern_account_type == "partner"
+            ):
+                vals["southern_account_type"] = "standard"
+            partner.sudo().write(vals)

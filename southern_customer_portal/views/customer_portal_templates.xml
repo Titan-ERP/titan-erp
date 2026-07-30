@@ -11,14 +11,14 @@
                 <t t-set="title">Premium Membership</t>
                 <t t-set="url" t-value="'/my/membership'"/>
                 <t t-set="text">Review membership benefits, status, and signup details</t>
-                <t t-set="placeholder_count" t-value="'membership_application_count'"/>
+                <t t-set="config_card" t-value="True"/>
             </t>
             <t t-call="portal.portal_docs_entry">
                 <t t-set="icon" t-value="'/repair/static/description/icon.png'"/>
                 <t t-set="title">Outstanding ROs</t>
                 <t t-set="url" t-value="'/my/repair-orders'"/>
                 <t t-set="text">Track open repair orders with our service team</t>
-                <t t-set="placeholder_count" t-value="'repair_order_count'"/>
+                <t t-set="config_card" t-value="True"/>
             </t>
         </xpath>
         <xpath expr="//div[@id='portal_client_category']" position="inside">
@@ -27,7 +27,7 @@
                 <t t-set="title">Outstanding Invoices</t>
                 <t t-set="url" t-value="'/my/outstanding-invoices'"/>
                 <t t-set="text">Review open balances and payment status</t>
-                <t t-set="placeholder_count" t-value="'outstanding_invoice_count'"/>
+                <t t-set="config_card" t-value="True"/>
             </t>
         </xpath>
     </template>

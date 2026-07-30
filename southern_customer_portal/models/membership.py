@@ -80,13 +80,41 @@ class SouthernMembershipApplication(models.Model):
         for application in applications:
             if application.name == "New":
                 application.name = f"SEC Membership - {application.partner_id.display_name}"
+            application._sync_partner_membership_status()
         return applications
 
     def action_activate(self):
         self.write({"state": "active"})
+        self._sync_partner_membership_status()
 
     def action_suspend(self):
         self.write({"state": "suspended"})
+        self._sync_partner_membership_status()
 
     def action_cancel(self):
         self.write({"state": "cancelled"})
+        self._sync_partner_membership_status()
+
+    def write(self, vals):
+        result = super().write(vals)
+        if {"state", "partner_id"} & set(vals):
+            self._sync_partner_membership_status()
+        return result
+
+    def _sync_partner_membership_status(self):
+        for application in self:
+            partner = application.partner_id.commercial_partner_id
+            if not partner:
+                continue
+            vals = {
+                "southern_membership_status": application.state,
+                "southern_membership_application_id": application.id,
+            }
+            if application.state == "active":
+                vals["southern_account_type"] = "member"
+            elif (
+                application.state in ("suspended", "cancelled")
+                and partner.southern_account_type == "member"
+            ):
+                vals["southern_account_type"] = "standard"
+            partner.sudo().write(vals)
