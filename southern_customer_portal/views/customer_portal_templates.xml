@@ -37,9 +37,14 @@
                 .o_portal_docs a[href^="/my/tasks"],
                 .o_portal_docs a[href^="/my/timesheets"],
                 .o_portal_docs a[href^="/my/documents"],
+                .o_portal_docs a[href^="/odoo/documents_portal"],
+                .o_portal_docs a[href^="/my/signatures"],
+                .o_portal_docs a[href^="/my/subscriptions"],
+                .o_portal_docs a[href^="/my/productions"],
                 .o_portal_docs a[href^="/my/purchase"],
                 .o_portal_docs a[href^="/my/vendor"],
-                .o_portal_docs a[href^="/my/rfq"] {
+                .o_portal_docs a[href^="/my/rfq"],
+                .o_portal_docs a[href^="/my/invoices?filterby=bills"] {
                     display: none !important;
                 }
             </style>
