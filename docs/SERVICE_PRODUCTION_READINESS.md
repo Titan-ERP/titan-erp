@@ -4,10 +4,10 @@
 
 - Add-on: `southern_service_operations`
 - User-facing application: **Sales**
-- Candidate code commit: `a47a086`
+- Candidate code commit: `f258caf`
 - Odoo.sh development branch: `codex/service-development-test`
-- Odoo.sh development commit: `e183c6d`
-- Odoo.sh build: `35710787`
+- Odoo.sh development commit: `c2641f1`
+- Odoo.sh build: `35711649`
 - Odoo version: 19.0 Enterprise
 - Production deployment: **not performed**
 
@@ -32,9 +32,9 @@ replacing Odoo's native transaction models:
 
 | Check | Result | Evidence |
 |---|---|---|
-| Odoo.sh module install/upgrade | Pass | Build `35710787` loaded the module, security, Sales/Service views, menus, and all dependencies |
+| Odoo.sh module install/upgrade | Pass | Build `35711649` loaded the module, security, Sales/Service views, menus, and all dependencies |
 | Odoo 19 transaction tests | Pass | 7 Service transaction test methods started; `0 failed, 0 error(s)`; unified Service-job quotation creation, Sales scheduling, on-site idempotency, internal Maintenance routing, and Sales task reuse included |
-| Standalone repository tests | Pass | 15 tests |
+| Standalone repository tests | Pass | 16 tests |
 | Python compilation | Pass | `compileall` on `southern_service_operations` |
 | XML parse and manifest file validation | Pass | Included in standalone suite |
 | Odoo 19 search-view compatibility | Pass | Static regression plus live build load |
@@ -43,6 +43,8 @@ replacing Odoo's native transaction models:
 | Sales entry actions | Pass | Parts, Equipment Sale, and Rental open native Sales quotations; Service opens Odoo's native Field Service workspace inside Sales |
 | Unified Service Job and quotation | Pass | Live UI shows equipment, serial number, run hours, scheduling, and an embedded Quotation tab with editable labor/parts lines plus Build Quotation, Send Quote, and Confirm Sales Order controls |
 | Personnel-facing terminology | Pass | Live UI title is **Service Jobs**, the default filter is **My Service Jobs**, and Sales, equipment, repair, purchase, and Service Case links use Service Job terminology |
+| Refined technician workspace | Pass | Live new-job form uses **Service Job Title**, **Work Details**, **Follow-up Work**, and an **Equipment & Service Record** section; the technical Service Case selector is hidden |
+| Structured service record | Pass | Diagnosis, work performed/resolution, and recommendations are available on the Service Job and synchronized to its Service Case |
 | Technician Service quotation | Pass | Live UI created Sales quotation `S00031`, Service Case `SVC26-00001`, and one linked Field Work record |
 | Customer equipment relationship | Pass | Equipment owner drives customer and mismatched commercial entities are blocked |
 | On-site Service routing | Pass | One Field Service task; second routing action creates no duplicate |
@@ -161,7 +163,7 @@ These are operational approvals, not missing code:
    Maintenance, Purchase, and their declared dependencies.
 4. Install or upgrade `southern_service_operations` in staging.
 5. Run:
-   - the 15 standalone repository checks;
+   - the 16 standalone repository checks;
    - the Odoo transaction suite (currently 7 tests reported by Odoo);
    - the role-based UAT scenarios in this dossier;
    - a dry-run equipment/readiness audit.
