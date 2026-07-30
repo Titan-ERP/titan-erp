@@ -4,9 +4,10 @@
 
 - Add-on: `southern_service_operations`
 - User-facing application: **Sales**
-- Candidate commit: pending final development validation
+- Candidate code commit: `2a10970`
 - Odoo.sh development branch: `codex/service-development-test`
-- Odoo.sh build: pending
+- Odoo.sh development commit: `ea7752d`
+- Odoo.sh build: `35696342`
 - Odoo version: 19.0 Enterprise
 - Production deployment: **not performed**
 
@@ -31,18 +32,19 @@ replacing Odoo's native transaction models:
 
 | Check | Result | Evidence |
 |---|---|---|
-| Odoo.sh module install/upgrade | Pending | Current Sales-workspace candidate has not yet been deployed |
-| Odoo 19 transaction tests | Pending | Current Sales-workspace candidate has not yet been run in Odoo.sh |
+| Odoo.sh module install/upgrade | Pass | Build `35696342` loaded the module, security, Sales/Service views, menus, and all dependencies |
+| Odoo 19 transaction tests | Pass | `0 failed, 0 error(s) of 6 tests`; Sales-workspace routing, on-site idempotency, internal Maintenance routing, and Sales task reuse included |
 | Standalone repository tests | Pass | 12 tests |
 | Python compilation | Pass | `compileall` on `southern_service_operations` |
 | XML parse and manifest file validation | Pass | Included in standalone suite |
 | Odoo 19 search-view compatibility | Pass | Static regression plus live build load |
 | Odoo 19 SQL constraint API | Pass | Native `models.Constraint`; legacy `_sql_constraints` warning removed |
-| Sales-hosted Service menus | Pending | Service no longer has a separate app root; all queues and operational links are under Sales |
+| Sales-hosted Service menus | Pass | Live UI shows Service inside Sales with New Service, Internal Maintenance, cases, work queues, equipment, and purchasing |
 | Sales quote-type actions | Pass | Parts, Service, Equipment Sale, and Rental open native Sales quotations with defaults |
-| Technician Service quotation | Pending | Service intake, request, authorization, routing, and linked work are exposed on the Sales quotation |
+| Technician Service quotation | Pass | Live UI created Sales quotation `S00031`, Service Case `SVC26-00001`, and one linked Field Work record |
 | Customer equipment relationship | Pass | Equipment owner drives customer and mismatched commercial entities are blocked |
 | On-site Service routing | Pass | One Field Service task; second routing action creates no duplicate |
+| Sales smart-button navigation | Pass | Live `S00031` opened its linked Field Work while remaining in the Sales application |
 | Sales confirmation after routing | Pass | Transaction test confirms the routed task is reused and receives Sales order/line links |
 | Internal Service routing | Pass | Manual UI created one native Maintenance Request; repeated routing remained at one |
 | Shop Service prerequisite | Pass | Missing equipment-to-product mapping is blocked with a clear validation message |
@@ -151,7 +153,7 @@ These are operational approvals, not missing code:
 4. Install or upgrade `southern_service_operations` in staging.
 5. Run:
    - the 12 standalone repository checks;
-   - the 4 Odoo transaction tests;
+   - the Odoo transaction suite (currently 6 tests reported by Odoo);
    - the role-based UAT scenarios in this dossier;
    - a dry-run equipment/readiness audit.
 6. Resolve equipment exceptions and approve the user-role mapping.
