@@ -121,9 +121,6 @@ class ProductTemplate(models.Model):
     @api.depends(
         "default_code",
         "barcode",
-        "x_studio_manufacturer",
-        "x_studio_oem_part_number",
-        "x_studio_sub_reference",
         "southern_specification_ids.name",
         "southern_specification_ids.value",
         "southern_fitment_ids.make_id.name",
@@ -243,9 +240,6 @@ class ProductTemplate(models.Model):
     @api.depends(
         "default_code",
         "barcode",
-        "x_studio_manufacturer",
-        "x_studio_oem_part_number",
-        "x_studio_sub_reference",
         "southern_specification_ids.sequence",
         "southern_specification_ids.group_name",
         "southern_specification_ids.name",

@@ -69,6 +69,18 @@ class OdooNativeSystemsTests(unittest.TestCase):
         self.assertIn("minimum_free_gb = fields.Float(", source)
         self.assertIn("default=2.0", source)
 
+    def test_stored_compute_dependencies_do_not_require_studio_fields(self):
+        source = (
+            ROOT
+            / "southern_parts_intelligence"
+            / "models"
+            / "product_template.py"
+        ).read_text(encoding="utf-8")
+        dependency_blocks = source.split("@api.depends(")[1:]
+        for block in dependency_blocks:
+            declaration = block.split(")", 1)[0]
+            self.assertNotIn("x_studio_", declaration)
+
     def test_shop_boss_is_not_an_operations_control_dependency(self):
         manifest = ast.literal_eval(
             (ROOT / "southern_operations_control" / "__manifest__.py").read_text(
