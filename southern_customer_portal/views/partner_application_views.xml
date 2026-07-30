@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_southern_partner_application_list" model="ir.ui.view">
+        <field name="name">southern.partner.application.list</field>
+        <field name="model">southern.partner.application</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="business_name"/>
+                <field name="contact_name"/>
+                <field name="email"/>
+                <field name="phone"/>
+                <field name="business_type"/>
+                <field name="expected_monthly_spend"/>
+                <field name="requested_terms"/>
+                <field name="state"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_southern_partner_application_form" model="ir.ui.view">
+        <field name="name">southern.partner.application.form</field>
+        <field name="model">southern.partner.application</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_approve" string="Approve" type="object" class="btn-primary" invisible="state not in ['submitted', 'rejected']"/>
+                    <button name="action_activate" string="Activate" type="object" class="btn-primary" invisible="state not in ['approved', 'suspended']"/>
+                    <button name="action_suspend" string="Suspend" type="object" invisible="state not in ['approved', 'active']"/>
+                    <button name="action_reject" string="Reject" type="object" invisible="state == 'rejected'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="submitted,approved,active,suspended,rejected"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group string="Partner">
+                            <field name="partner_id"/>
+                            <field name="business_name"/>
+                            <field name="contact_name"/>
+                            <field name="business_type"/>
+                            <field name="website"/>
+                        </group>
+                        <group string="Contact">
+                            <field name="email"/>
+                            <field name="phone"/>
+                            <field name="portal_ip"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Requested Access">
+                            <field name="requested_catalog_access"/>
+                            <field name="requested_partner_pricing"/>
+                            <field name="requested_terms"/>
+                            <field name="tax_exempt"/>
+                        </group>
+                        <group string="Volume">
+                            <field name="expected_monthly_spend"/>
+                            <field name="currency_id" groups="base.group_multi_currency"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Notes">
+                            <field name="notes"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_southern_partner_applications" model="ir.actions.act_window">
+        <field name="name">Partner Applications</field>
+        <field name="res_model">southern.partner.application</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="menu_southern_partner_root" name="Southern Partners" sequence="66"/>
+    <menuitem
+        id="menu_southern_partner_applications"
+        name="Applications"
+        parent="menu_southern_partner_root"
+        action="action_southern_partner_applications"
+        sequence="10"
+    />
+</odoo>

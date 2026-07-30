@@ -118,8 +118,68 @@ class SouthernCustomerPortal(CustomerPortal):
         return request.redirect(self._membership_product_url())
 
     @http.route("/partner-application", type="http", auth="public", website=True)
-    def southern_partner_application(self, **kw):
-        return request.redirect("/request?request=partner")
+    def southern_partner_application(self, error=None, submitted=None, **kw):
+        return request.render(
+            "southern_customer_portal.southern_partner_application",
+            {
+                "error": error,
+                "submitted": submitted,
+                "business_types": request.env[
+                    "southern.partner.application"
+                ]._fields["business_type"].selection,
+            },
+        )
+
+    @http.route(
+        "/partner-application/submit",
+        type="http",
+        auth="public",
+        website=True,
+        methods=["POST"],
+    )
+    def southern_partner_application_submit(self, **post):
+        required_fields = ["business_name", "contact_name", "email", "phone", "business_type"]
+        if any(not (post.get(field) or "").strip() for field in required_fields):
+            return self.southern_partner_application(error="missing")
+
+        Application = request.env["southern.partner.application"].sudo()
+        existing = Application.search(
+            [
+                ("email", "=ilike", post.get("email").strip()),
+                ("state", "in", ["submitted", "approved", "active", "suspended"]),
+            ],
+            limit=1,
+        )
+        if existing:
+            return self.southern_partner_application(submitted="existing")
+
+        expected_monthly_spend = 0.0
+        if post.get("expected_monthly_spend"):
+            try:
+                expected_monthly_spend = float(
+                    post.get("expected_monthly_spend").replace(",", "")
+                )
+            except ValueError:
+                return self.southern_partner_application(error="spend")
+
+        Application.create(
+            {
+                "business_name": post.get("business_name").strip(),
+                "contact_name": post.get("contact_name").strip(),
+                "email": post.get("email").strip(),
+                "phone": post.get("phone").strip(),
+                "website": post.get("website", "").strip(),
+                "business_type": post.get("business_type"),
+                "expected_monthly_spend": expected_monthly_spend,
+                "requested_terms": bool(post.get("requested_terms")),
+                "tax_exempt": bool(post.get("tax_exempt")),
+                "requested_catalog_access": True,
+                "requested_partner_pricing": True,
+                "portal_ip": request.httprequest.remote_addr,
+                "notes": post.get("notes", "").strip(),
+            }
+        )
+        return request.redirect("/partner-application?submitted=1")
 
     @http.route("/my/membership", type="http", auth="user", website=True)
     def portal_my_membership(self, error=None, **kw):

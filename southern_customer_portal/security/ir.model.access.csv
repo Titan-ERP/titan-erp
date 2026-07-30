@@ -1,2 +1,3 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_southern_membership_application_user,southern.membership.application user,model_southern_membership_application,base.group_user,1,1,1,0
+access_southern_partner_application_user,southern.partner.application user,model_southern_partner_application,base.group_user,1,1,1,0

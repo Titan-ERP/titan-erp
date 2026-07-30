@@ -121,6 +121,92 @@
         </t>
     </template>
 
+    <template id="southern_partner_application" name="Southern Partner Application">
+        <t t-call="website.layout">
+            <section class="py-5" style="background:#f6f4ed;">
+                <div class="container">
+                    <div class="row justify-content-center">
+                        <div class="col-lg-9">
+                            <p class="mb-2 text-uppercase" style="color:#b88912;font-weight:800;letter-spacing:.12em;font-size:.8rem;">Partner Access</p>
+                            <h1 class="display-5 fw-bold mb-3">Apply for partner pricing.</h1>
+                            <p class="lead text-muted mb-4">
+                                For diesel shops, parts stores, fleets, and volume buyers who need catalog access and approved partner pricing.
+                            </p>
+
+                            <div t-if="submitted" class="alert alert-success">
+                                Your partner application was submitted. Southern Equipment will review it and follow up.
+                            </div>
+                            <div t-if="submitted == 'existing'" class="alert alert-info">
+                                We already have an active partner application for this email.
+                            </div>
+                            <div t-if="error == 'missing'" class="alert alert-danger">
+                                Please complete all required fields.
+                            </div>
+                            <div t-if="error == 'spend'" class="alert alert-danger">
+                                Please enter a valid expected monthly spend.
+                            </div>
+
+                            <form action="/partner-application/submit" method="post" class="bg-white border rounded p-4">
+                                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="business_name">Business Name *</label>
+                                        <input id="business_name" name="business_name" class="form-control" required="required"/>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="contact_name">Contact Name *</label>
+                                        <input id="contact_name" name="contact_name" class="form-control" required="required"/>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="email">Email *</label>
+                                        <input id="email" name="email" type="email" class="form-control" required="required"/>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="phone">Phone *</label>
+                                        <input id="phone" name="phone" class="form-control" required="required"/>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="business_type">Business Type *</label>
+                                        <select id="business_type" name="business_type" class="form-select" required="required">
+                                            <option t-foreach="business_types" t-as="business_type" t-att-value="business_type[0]">
+                                                <t t-out="business_type[1]"/>
+                                            </option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="expected_monthly_spend">Expected Monthly Parts Spend</label>
+                                        <input id="expected_monthly_spend" name="expected_monthly_spend" class="form-control" placeholder="2500"/>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label" for="website">Website</label>
+                                        <input id="website" name="website" class="form-control" placeholder="https://"/>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check">
+                                            <input id="requested_terms" name="requested_terms" class="form-check-input" type="checkbox" value="1"/>
+                                            <label class="form-check-label" for="requested_terms">Interested in account terms</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check">
+                                            <input id="tax_exempt" name="tax_exempt" class="form-check-input" type="checkbox" value="1"/>
+                                            <label class="form-check-label" for="tax_exempt">Tax-exempt account</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label" for="notes">What should we know?</label>
+                                        <textarea id="notes" name="notes" class="form-control" rows="4"></textarea>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn mt-4" style="background:#f2b632;color:#111;font-weight:700;">Submit Partner Application</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </t>
+    </template>
+
     <template id="portal_my_membership" name="My Southern Equipment Membership">
         <t t-call="portal.portal_layout">
             <t t-set="breadcrumbs_searchbar" t-value="True"/>
