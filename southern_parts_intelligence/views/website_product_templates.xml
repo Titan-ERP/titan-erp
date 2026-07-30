@@ -30,8 +30,8 @@
                                 <p class="se-shop-counter__copy mb-3">Search by part number, OEM reference, product name, or category. If you do not see what you need, send the machine model, OEM number, or a photo and our parts desk will verify it.</p>
                                 <div class="se-shop-counter__fulfillment">
                                     <span>Free pickup at Southern Equipment</span>
-                                    <span>$24.99 flat-rate shipping after Southern receives and verifies standard parts</span>
-                                    <span>Heavy or oversized parts may require a freight quote</span>
+                                    <span>Shipping and handling reviewed after order confirmation</span>
+                                    <span>Some supplier shipments qualify for free freight based on order size</span>
                                 </div>
                             </div>
                             <div class="col-lg-4">
@@ -52,7 +52,7 @@
         <xpath expr="//div[hasclass('o_wsale_product_details_content_section_price')]" position="after">
             <div t-if="product.type != 'service' and product.default_code != 'SEC-MEMBERSHIP-STANDARD'" class="se-product-fulfillment-note">
                 <strong>Parts fulfillment:</strong>
-                <span>Free pickup at Southern Equipment, or $24.99 flat-rate shipping after Southern receives and verifies standard parts. Heavy or oversized items may require a freight quote.</span>
+                <span>Shipping and handling may vary by order size, weight, destination, and supplier freight. Southern Equipment reviews each parts order and confirms pickup or shipping details before fulfillment.</span>
             </div>
         </xpath>
     </template>

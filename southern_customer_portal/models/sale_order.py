@@ -10,7 +10,8 @@ class SaleOrder(models.Model):
     SOUTHERN_CARD_FEE_RATE = 0.035
     SOUTHERN_CARD_FEE_FIXED = 0.30
     SOUTHERN_PICKUP_CARRIER = "Pickup at Southern Equipment"
-    SOUTHERN_SHIP_CARRIER = "Flat-rate shipping from Southern Equipment"
+    SOUTHERN_SHIP_CARRIER = "Shipping reviewed after order confirmation"
+    SOUTHERN_LEGACY_SHIP_CARRIERS = ("Flat-rate shipping from Southern Equipment",)
     SOUTHERN_PARTS_PORTAL_TAG = "Website Parts Order"
     SOUTHERN_MIN_PARTS_MARGIN_RATE = 0.15
 
@@ -185,7 +186,10 @@ class SaleOrder(models.Model):
                 continue
 
             is_pickup = order.carrier_id.name == self.SOUTHERN_PICKUP_CARRIER
-            is_ship = order.carrier_id.name == self.SOUTHERN_SHIP_CARRIER
+            is_ship = order.carrier_id.name in (
+                self.SOUTHERN_SHIP_CARRIER,
+                *self.SOUTHERN_LEGACY_SHIP_CARRIERS,
+            )
             if not is_pickup and not is_ship:
                 continue
 
