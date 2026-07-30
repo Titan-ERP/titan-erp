@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="rule_southern_parts_catalog_sync_company" model="ir.rule">
+        <field name="name">Catalog sync allowed companies</field>
+        <field name="model_id" ref="model_southern_parts_catalog_sync"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="global" eval="True"/>
+    </record>
+    <record id="rule_southern_parts_automation_run_company" model="ir.rule">
+        <field name="name">Parts automation runs allowed companies</field>
+        <field name="model_id" ref="model_southern_parts_automation_run"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="global" eval="True"/>
+    </record>
+    <record id="rule_southern_product_quality_issue_company" model="ir.rule">
+        <field name="name">Product quality issues allowed companies</field>
+        <field name="model_id" ref="model_southern_product_quality_issue"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="global" eval="True"/>
+    </record>
+</odoo>

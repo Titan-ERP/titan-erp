@@ -1,6 +1,6 @@
 {
     "name": "Southern Parts Intelligence",
-    "version": "19.0.1.0.15",
+    "version": "19.0.1.1.0",
     "category": "Inventory/Inventory",
     "summary": "Adds OEM cross references, fitment, specifications, catalog pages, and source tracking to parts.",
     "author": "Southern Equipment Company",
@@ -9,16 +9,20 @@
         "stock",
         "purchase",
         "website_sale",
+        "mail",
     ],
     "data": [
         "security/ir.model.access.csv",
+        "security/record_rules.xml",
         "data/catalog_sync_cron.xml",
         "data/evidence_queue_cron.xml",
         "data/partner_pricelist.xml",
+        "data/quality_cron.xml",
         "views/product_template_views.xml",
         "views/parts_intelligence_views.xml",
         "views/catalog_sync_views.xml",
         "views/evidence_queue_views.xml",
+        "views/product_quality_views.xml",
         "views/website_product_templates.xml",
     ],
     "assets": {

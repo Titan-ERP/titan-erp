@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_southern_contact_import_batch_list" model="ir.ui.view">
+        <field name="name">southern.contact.import.batch.list</field>
+        <field name="model">southern.contact.import.batch</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="source_system"/>
+                <field name="source_filename"/>
+                <field name="state"/>
+                <field name="line_count"/>
+                <field name="exact_match_count"/>
+                <field name="review_count"/>
+                <field name="new_count"/>
+                <field name="prepared_at"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_southern_contact_import_batch_form" model="ir.ui.view">
+        <field name="name">southern.contact.import.batch.form</field>
+        <field name="model">southern.contact.import.batch</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_prepare_matches" type="object" string="Prepare Matches"
+                            class="btn-primary" invisible="state not in ['draft', 'matched']"/>
+                    <button name="action_mark_reviewed" type="object" string="Mark Reviewed"
+                            invisible="state != 'matched'"/>
+                    <button name="action_complete" type="object" string="Complete"
+                            invisible="state != 'reviewed'"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,matched,reviewed,complete"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group>
+                            <field name="company_id"/>
+                            <field name="source_system"/>
+                            <field name="source_file" filename="source_filename"/>
+                            <field name="source_filename"/>
+                        </group>
+                        <group string="CSV Columns">
+                            <field name="name_column"/>
+                            <field name="email_column"/>
+                            <field name="phone_column"/>
+                            <field name="prepared_at"/>
+                        </group>
+                    </group>
+                    <group string="Results">
+                        <field name="line_count"/>
+                        <field name="exact_match_count"/>
+                        <field name="review_count"/>
+                        <field name="new_count"/>
+                    </group>
+                    <field name="line_ids">
+                        <list editable="bottom"
+                              decoration-warning="decision == 'review'"
+                              decoration-success="decision == 'exact_match'">
+                            <field name="source_row"/>
+                            <field name="source_name"/>
+                            <field name="source_email"/>
+                            <field name="source_phone"/>
+                            <field name="decision"/>
+                            <field name="partner_id"/>
+                            <field name="match_reason"/>
+                            <field name="reviewer_note"/>
+                        </list>
+                    </field>
+                    <field name="review_note"/>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_southern_contact_import_batches" model="ir.actions.act_window">
+        <field name="name">Contact Import Review</field>
+        <field name="res_model">southern.contact.import.batch</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>

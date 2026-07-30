@@ -9,3 +9,6 @@ access_southern_parts_related_product_user,southern.parts.related_product user,m
 access_southern_parts_alternate_barcode_user,southern.parts.alternate_barcode user,model_southern_parts_alternate_barcode,base.group_user,1,1,1,1
 access_southern_parts_catalog_sync_user,southern.parts.catalog.sync user,model_southern_parts_catalog_sync,base.group_system,1,1,1,1
 access_southern_parts_evidence_queue_user,southern.parts.evidence.queue user,model_southern_parts_evidence_queue,base.group_user,1,1,1,1
+access_southern_parts_automation_run_user,southern.parts.automation.run user,model_southern_parts_automation_run,base.group_system,1,1,1,0
+access_southern_product_quality_issue_user,southern.product.quality.issue user,model_southern_product_quality_issue,base.group_user,1,1,1,0
+access_southern_product_quality_issue_manager,southern.product.quality.issue manager,model_southern_product_quality_issue,stock.group_stock_manager,1,1,1,1

@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_southern_operations_daily_control_list" model="ir.ui.view">
+        <field name="name">southern.operations.daily.control.list</field>
+        <field name="model">southern.operations.daily.control</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'reviewed'"
+                  decoration-warning="state == 'open'"
+                  decoration-danger="state == 'exception'">
+                <field name="control_date"/>
+                <field name="company_id"/>
+                <field name="state"/>
+                <field name="unreconciled_bank_count"/>
+                <field name="sale_to_invoice_count"/>
+                <field name="stale_crm_count"/>
+                <field name="product_blocker_count"/>
+                <field name="product_automation_failure_count"/>
+                <field name="equipment_review_count"/>
+                <field name="last_refreshed_at"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_southern_operations_daily_control_form" model="ir.ui.view">
+        <field name="name">southern.operations.daily.control.form</field>
+        <field name="model">southern.operations.daily.control</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_refresh_counts" type="object" string="Refresh" class="btn-primary"/>
+                    <button name="action_mark_reviewed" type="object" string="Mark Reviewed"
+                            invisible="state == 'reviewed'"/>
+                    <button name="action_mark_exception" type="object" string="Exception"
+                            invisible="state == 'exception'"/>
+                    <button name="action_reopen" type="object" string="Reopen"
+                            invisible="state == 'open'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="open,reviewed,exception"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group>
+                            <field name="control_date"/>
+                            <field name="company_id"/>
+                        </group>
+                        <group>
+                            <field name="last_refreshed_at"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Accounting &amp; Sales">
+                            <group>
+                                <group>
+                                    <field name="unreconciled_bank_count"/>
+                                    <field name="pending_bank_candidate_count"/>
+                                    <field name="draft_invoice_count"/>
+                                </group>
+                                <group>
+                                    <field name="sale_to_invoice_count"/>
+                                    <field name="open_quotation_count"/>
+                                    <field name="open_service_task_count"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="CRM &amp; Contacts">
+                            <group>
+                                <field name="actual_open_crm_count"/>
+                                <field name="stale_crm_count"/>
+                                <field name="imported_reference_count"/>
+                                <field name="overdue_activity_count"/>
+                                <field name="contact_match_review_count"/>
+                            </group>
+                        </page>
+                        <page string="Products &amp; Automation">
+                            <group>
+                                <field name="open_product_issue_count"/>
+                                <field name="product_blocker_count"/>
+                                <field name="product_automation_failure_count"/>
+                                <field name="equipment_review_count"/>
+                            </group>
+                        </page>
+                    </notebook>
+                    <field name="review_note"/>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_southern_operations_daily_control_search" model="ir.ui.view">
+        <field name="name">southern.operations.daily.control.search</field>
+        <field name="model">southern.operations.daily.control</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="control_date"/>
+                <field name="company_id"/>
+                <filter name="open" string="Open" domain="[('state', '=', 'open')]"/>
+                <filter name="exceptions" string="Exceptions" domain="[('state', '=', 'exception')]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_company" string="Company" context="{'group_by': 'company_id'}"/>
+                    <filter name="group_month" string="Month" context="{'group_by': 'control_date:month'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_southern_operations_daily_controls" model="ir.actions.act_window">
+        <field name="name">Daily Operations Control</field>
+        <field name="res_model">southern.operations.daily.control</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_southern_operations_daily_control_search"/>
+        <field name="context">{'search_default_open': 1}</field>
+    </record>
+</odoo>
