@@ -12,24 +12,161 @@ class SaleOrder(models.Model):
     SOUTHERN_PICKUP_CARRIER = "Pickup at Southern Equipment"
     SOUTHERN_SHIP_CARRIER = "Flat-rate shipping from Southern Equipment"
     SOUTHERN_PARTS_PORTAL_TAG = "Website Parts Order"
+    SOUTHERN_MIN_PARTS_MARGIN_RATE = 0.15
+
+    southern_cost_verification_status = fields.Selection(
+        [
+            ("not_checked", "Not Checked"),
+            ("ok", "Verified"),
+            ("review", "Needs Review"),
+            ("loss_risk", "Loss Risk"),
+        ],
+        default="not_checked",
+        copy=False,
+    )
+    southern_estimated_parts_cost = fields.Monetary(copy=False)
+    southern_estimated_parts_revenue = fields.Monetary(copy=False)
+    southern_estimated_parts_margin = fields.Monetary(copy=False)
+    southern_estimated_parts_margin_rate = fields.Float(copy=False)
+    southern_cost_verification_note = fields.Text(copy=False)
+    southern_cost_verified_at = fields.Datetime(copy=False)
 
     def _cart_add(self, *args, **kwargs):
         result = super()._cart_add(*args, **kwargs)
         self._southern_sync_website_card_fee()
+        self._southern_sync_website_cost_check()
         return result
 
     def _cart_update_line_quantity(self, *args, **kwargs):
         result = super()._cart_update_line_quantity(*args, **kwargs)
         self._southern_sync_website_card_fee()
+        self._southern_sync_website_cost_check()
         return result
 
     def action_confirm(self):
         self._southern_sync_website_card_fee()
+        self._southern_sync_website_cost_check()
         self._southern_apply_website_fulfillment_routes()
         result = super().action_confirm()
         self._southern_note_website_purchase_orders()
         self._southern_activate_paid_memberships()
         return result
+
+    def _southern_parts_order_lines_for_cost_check(self):
+        self.ensure_one()
+        return self.order_line.filtered(
+            lambda line: not line.display_type
+            and not line.is_delivery
+            and line.product_id.type != "service"
+            and line.product_id.default_code
+            not in (self.SOUTHERN_MEMBERSHIP_CODE, self.SOUTHERN_CARD_FEE_CODE)
+        )
+
+    def _southern_vendor_unit_cost(self, line):
+        product = line.product_id
+        seller = product.seller_ids[:1]
+        if seller:
+            supplier_currency = seller.currency_id or line.currency_id
+            return supplier_currency._convert(
+                seller.price,
+                line.currency_id,
+                line.company_id,
+                fields.Date.context_today(line),
+            )
+
+        if product.standard_price:
+            return product.currency_id._convert(
+                product.standard_price,
+                line.currency_id,
+                line.company_id,
+                fields.Date.context_today(line),
+            )
+        return 0.0
+
+    def _southern_sync_website_cost_check(self):
+        for order in self:
+            if not order.website_id or order.state not in ("draft", "sent"):
+                continue
+
+            revenue = 0.0
+            estimated_cost = 0.0
+            missing_cost_lines = []
+            loss_lines = []
+            thin_margin_lines = []
+
+            for line in order._southern_parts_order_lines_for_cost_check():
+                line_revenue = line.price_subtotal
+                unit_cost = order._southern_vendor_unit_cost(line)
+                line_cost = order.currency_id.round(unit_cost * line.product_uom_qty)
+                line_margin = line_revenue - line_cost
+
+                revenue += line_revenue
+                estimated_cost += line_cost
+
+                product_label = line.product_id.default_code or line.product_id.display_name
+                if not unit_cost:
+                    missing_cost_lines.append(product_label)
+                    continue
+                if line_margin < 0:
+                    loss_lines.append(product_label)
+                    continue
+                if line_revenue and (line_margin / line_revenue) < self.SOUTHERN_MIN_PARTS_MARGIN_RATE:
+                    thin_margin_lines.append(product_label)
+
+            margin = revenue - estimated_cost
+            margin_rate = margin / revenue if revenue else 0.0
+            status = "ok"
+            note_lines = []
+
+            if not revenue:
+                status = "not_checked"
+                note_lines.append("No parts lines are currently in the website cart.")
+            if missing_cost_lines:
+                status = "review"
+                note_lines.append(
+                    "Missing vendor/standard cost: %s." % ", ".join(missing_cost_lines)
+                )
+            if thin_margin_lines:
+                status = "review"
+                note_lines.append(
+                    "Below target margin: %s." % ", ".join(thin_margin_lines)
+                )
+            if loss_lines or margin < 0:
+                status = "loss_risk"
+                if loss_lines:
+                    note_lines.append(
+                        "Known cost exceeds sale price: %s." % ", ".join(loss_lines)
+                    )
+                if margin < 0:
+                    note_lines.append("Cart total estimated parts margin is negative.")
+            if status == "ok":
+                note_lines.append("Website parts cost check passed using available vendor/standard cost.")
+
+            order.sudo().write(
+                {
+                    "southern_cost_verification_status": status,
+                    "southern_estimated_parts_cost": order.currency_id.round(estimated_cost),
+                    "southern_estimated_parts_revenue": order.currency_id.round(revenue),
+                    "southern_estimated_parts_margin": order.currency_id.round(margin),
+                    "southern_estimated_parts_margin_rate": margin_rate,
+                    "southern_cost_verification_note": "\n".join(note_lines),
+                    "southern_cost_verified_at": fields.Datetime.now(),
+                }
+            )
+
+    def _southern_customer_cost_review_message(self):
+        self.ensure_one()
+        if self.southern_cost_verification_status == "loss_risk":
+            return (
+                "This parts cart needs Southern Equipment review before online payment. "
+                "Our parts desk will confirm cost, availability, and fulfillment before collecting payment."
+            )
+        if self.southern_cost_verification_status == "review":
+            return (
+                "Southern Equipment is verifying supplier cost and availability for this cart. "
+                "You can continue building the cart; final fulfillment is confirmed by our parts desk."
+            )
+        return False
 
     def _southern_apply_website_fulfillment_routes(self):
         Route = self.env["stock.route"].sudo()
