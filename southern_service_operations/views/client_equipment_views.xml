@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_client_equipment_form_southern_service" model="ir.ui.view">
+        <field name="name">equipment.details.form.southern.service</field>
+        <field name="model">equipment.details</field>
+        <field name="inherit_id" ref="cs_client_equipment.view_equipment_details_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_southern_service_cases" type="object"
+                        class="oe_stat_button" icon="fa-wrench">
+                    <field name="southern_service_case_count" widget="statinfo"
+                           string="Service"/>
+                </button>
+                <button name="action_view_southern_tasks" type="object"
+                        class="oe_stat_button" icon="fa-calendar"
+                        invisible="not southern_task_count">
+                    <field name="southern_task_count" widget="statinfo"
+                           string="Scheduled"/>
+                </button>
+                <button name="action_view_southern_repairs" type="object"
+                        class="oe_stat_button" icon="fa-cogs"
+                        invisible="not southern_repair_count">
+                    <field name="southern_repair_count" widget="statinfo"
+                           string="Shop"/>
+                </button>
+            </xpath>
+            <xpath expr="//field[@name='client']" position="after">
+                <field name="southern_active"/>
+                <field name="southern_retirement_reason"
+                       invisible="southern_active"/>
+            </xpath>
+            <xpath expr="//field[@name='site_contact']" position="after">
+                <field name="southern_site_contact_id"
+                       domain="[('id', 'child_of', client)]"/>
+            </xpath>
+            <xpath expr="//field[@name='serial_no']" position="after">
+                <field name="southern_unserialized"/>
+            </xpath>
+            <xpath expr="//page[@name='history']" position="inside">
+                <group string="Southern Service">
+                    <field name="southern_service_case_ids" readonly="1"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_southern_service_client_equipment" model="ir.actions.act_window">
+        <field name="name">Customer Equipment</field>
+        <field name="res_model">equipment.details</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('southern_active', '=', True)]</field>
+        <field name="context">{'default_southern_active': True}</field>
+    </record>
+</odoo>

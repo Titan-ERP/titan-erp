@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_task_form_southern_service" model="ir.ui.view">
+        <field name="name">project.task.form.southern.service</field>
+        <field name="model">project.task</field>
+        <field name="inherit_id" ref="dmc_fieldservice.view_task_form2_inherit_dmc_fieldservice"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='dmc_equipment']" position="before">
+                <field name="southern_service_case_id"
+                       invisible="not is_fsm"/>
+                <field name="southern_client_equipment_id"
+                       invisible="not is_fsm"
+                       domain="[('client', 'child_of', partner_id)]"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_task_list_southern_service" model="ir.ui.view">
+        <field name="name">project.task.list.southern.service</field>
+        <field name="model">project.task</field>
+        <field name="inherit_id" ref="industry_fsm.project_task_view_list_fsm"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="southern_service_case_id" optional="show"/>
+                <field name="southern_client_equipment_id" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_southern_service_schedule" model="ir.actions.act_window">
+        <field name="name">Schedule</field>
+        <field name="res_model">project.task</field>
+        <field name="view_mode">kanban,list,form,calendar</field>
+        <field name="domain">[('is_fsm', '=', True), ('southern_service_case_id', '!=', False)]</field>
+        <field name="context">{'default_is_fsm': True}</field>
+    </record>
+</odoo>
