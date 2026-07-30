@@ -39,9 +39,9 @@ class ProductTemplate(models.Model):
     )
     southern_source_url = fields.Char(string="Source URL", index=True)
     southern_source_name = fields.Char(string="Source Name", index=True)
-    southern_partner_price = fields.Monetary(
+    southern_partner_price = fields.Float(
         string="Partner Cost",
-        currency_field="currency_id",
+        digits="Product Price",
         company_dependent=True,
         help=(
             "Price charged to approved partner accounts such as diesel shops, "
@@ -121,9 +121,6 @@ class ProductTemplate(models.Model):
     @api.depends(
         "default_code",
         "barcode",
-        "x_studio_manufacturer",
-        "x_studio_oem_part_number",
-        "x_studio_sub_reference",
         "southern_specification_ids.name",
         "southern_specification_ids.value",
         "southern_fitment_ids.make_id.name",
@@ -243,9 +240,6 @@ class ProductTemplate(models.Model):
     @api.depends(
         "default_code",
         "barcode",
-        "x_studio_manufacturer",
-        "x_studio_oem_part_number",
-        "x_studio_sub_reference",
         "southern_specification_ids.sequence",
         "southern_specification_ids.group_name",
         "southern_specification_ids.name",

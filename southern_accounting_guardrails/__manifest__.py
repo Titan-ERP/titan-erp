@@ -1,8 +1,8 @@
 {
     "name": "Southern Accounting Guardrails",
-    "version": "19.0.1.4.3",
+    "version": "19.0.1.5.0",
     "category": "Accounting/Accounting",
-    "summary": "Review fields and queues for Shop Boss-backed accounting cleanup.",
+    "summary": "Odoo-native accounting controls, bank coding approvals, and historical migration audit.",
     "author": "Southern Equipment Company",
     "depends": [
         "account",
@@ -13,10 +13,12 @@
     ],
     "data": [
         "security/ir.model.access.csv",
+        "security/record_rules.xml",
         "data/revenue_rules.xml",
         "data/ir_cron.xml",
         "views/accounting_policy_views.xml",
         "views/revenue_rule_views.xml",
+        "views/bank_coding_views.xml",
         "views/daily_control_views.xml",
         "views/account_move_line_views.xml",
         "views/shop_boss_document_views.xml",
