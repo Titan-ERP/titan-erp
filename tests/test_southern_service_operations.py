@@ -18,6 +18,7 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         manifest = _manifest()
         self.assertIs(manifest["application"], True)
         self.assertEqual(manifest["name"], "Southern Service")
+        self.assertEqual(manifest["author"], "Titan Equipment")
         self.assertTrue(
             {
                 "sale_management",
@@ -62,6 +63,13 @@ class SouthernServiceOperationsTests(unittest.TestCase):
                 document.xpath("//search/group"),
                 f"{path.name} uses a removed Odoo 19 search/group container",
             )
+
+    def test_odoo_19_model_constraints_use_constraint_descriptors(self):
+        source = (MODULE / "models" / "service_case.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("_sql_constraints", source)
+        self.assertIn("models.Constraint(", source)
 
     def test_sales_confirmation_creates_case_before_native_tasks(self):
         source = (MODULE / "models" / "sale_order.py").read_text(encoding="utf-8")
