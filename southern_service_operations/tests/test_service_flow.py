@@ -46,6 +46,10 @@ class TestSouthernServiceFlow(TransactionCase):
                 "partner_id": self.partner.id,
                 "client_equipment_id": self.equipment.id,
                 "service_location": "onsite",
+                "service_title": "Diagnose test equipment",
+                "equipment_description": self.equipment.name,
+                "serial_number": self.equipment.serial_no,
+                "equipment_run_hours": 2450,
                 "complaint": "Development workflow test",
             }
         )
@@ -59,6 +63,7 @@ class TestSouthernServiceFlow(TransactionCase):
         self.assertEqual(task.southern_client_equipment_id, self.equipment)
         self.assertEqual(task.dmc_equipment, self.equipment.name)
         self.assertEqual(task.dmc_serial_number, self.equipment.serial_no)
+        self.assertEqual(task.dmc_equipment_run_hours, 2450)
 
         case.action_route_work()
         self.assertEqual(case.task_ids, task)
@@ -73,6 +78,10 @@ class TestSouthernServiceFlow(TransactionCase):
                 "southern_quote_type": "service",
                 "southern_service_location": "onsite",
                 "southern_client_equipment_id": self.equipment.id,
+                "southern_service_title": "Diagnose test equipment",
+                "southern_equipment_description": self.equipment.name,
+                "southern_serial_number": self.equipment.serial_no,
+                "southern_equipment_run_hours": 2450,
                 "southern_service_request": "Development workflow test",
                 "southern_service_case_id": case.id,
                 "order_line": [
@@ -102,6 +111,10 @@ class TestSouthernServiceFlow(TransactionCase):
                 "southern_quote_type": "service",
                 "southern_service_location": "onsite",
                 "southern_client_equipment_id": self.equipment.id,
+                "southern_service_title": "Technician diagnosis",
+                "southern_equipment_description": self.equipment.name,
+                "southern_serial_number": self.equipment.serial_no,
+                "southern_equipment_run_hours": 3512,
                 "southern_service_request": "Technician diagnosis and estimate",
                 "southern_commercial_basis": "estimate",
                 "southern_technician_id": self.env.user.id,
@@ -124,6 +137,9 @@ class TestSouthernServiceFlow(TransactionCase):
         self.assertEqual(case.task_ids.user_ids, self.env.user)
         self.assertEqual(case.task_ids.planned_date_begin, scheduled_start)
         self.assertEqual(case.task_ids.allocated_hours, 3.5)
+        self.assertEqual(case.task_ids.dmc_equipment, self.equipment.name)
+        self.assertEqual(case.task_ids.dmc_serial_number, self.equipment.serial_no)
+        self.assertEqual(case.task_ids.dmc_equipment_run_hours, 3512)
         self.assertEqual(action, {"type": "ir.actions.client", "tag": "reload"})
 
         updated_start = fields.Datetime.to_datetime("2026-08-04 15:30:00")
