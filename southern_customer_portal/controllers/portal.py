@@ -87,7 +87,9 @@ class SouthernCustomerPortal(CustomerPortal):
             {
                 "customer_login_url": self._login_redirect_url("/my/home"),
                 "membership_login_url": self._login_redirect_url("/my/home?premium=1"),
+                "partner_login_url": self._login_redirect_url("/my/home?partner=1"),
                 "membership_signup_url": "/membership-sign-up",
+                "partner_application_url": "/partner-application",
             },
         )
 
@@ -105,9 +107,19 @@ class SouthernCustomerPortal(CustomerPortal):
             return request.redirect("/my/home")
         return request.redirect("/my/membership")
 
+    @http.route("/partner-login", type="http", auth="public", website=True)
+    def southern_partner_login(self, **kw):
+        if not self._is_public_user():
+            return request.redirect("/my/home")
+        return request.redirect(self._login_redirect_url("/my/home?partner=1"))
+
     @http.route("/membership-sign-up", type="http", auth="public", website=True)
     def southern_membership_sign_up(self, **kw):
         return request.redirect(self._membership_product_url())
+
+    @http.route("/partner-application", type="http", auth="public", website=True)
+    def southern_partner_application(self, **kw):
+        return request.redirect("/request?request=partner")
 
     @http.route("/my/membership", type="http", auth="user", website=True)
     def portal_my_membership(self, error=None, **kw):
