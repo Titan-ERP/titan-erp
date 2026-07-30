@@ -86,14 +86,17 @@ class SouthernMembershipApplication(models.Model):
     def action_activate(self):
         self.write({"state": "active"})
         self._sync_partner_membership_status()
+        return True
 
     def action_suspend(self):
         self.write({"state": "suspended"})
         self._sync_partner_membership_status()
+        return True
 
     def action_cancel(self):
         self.write({"state": "cancelled"})
         self._sync_partner_membership_status()
+        return True
 
     def write(self, vals):
         result = super().write(vals)

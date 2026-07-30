@@ -79,6 +79,7 @@ class SouthernPartnerApplication(models.Model):
             application.write({"state": "approved", "partner_id": partner.id})
             application._assign_partner_pricelist(partner)
             application._sync_partner_status()
+        return True
 
     def action_activate(self):
         for application in self:
@@ -86,14 +87,17 @@ class SouthernPartnerApplication(models.Model):
             application.write({"state": "active", "partner_id": partner.id})
             application._assign_partner_pricelist(partner)
             application._sync_partner_status()
+        return True
 
     def action_suspend(self):
         self.write({"state": "suspended"})
         self._sync_partner_status()
+        return True
 
     def action_reject(self):
         self.write({"state": "rejected"})
         self._sync_partner_status()
+        return True
 
     def write(self, vals):
         result = super().write(vals)
