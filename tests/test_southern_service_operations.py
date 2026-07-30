@@ -196,6 +196,38 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         self.assertNotIn("Field Service task", sales_views)
         self.assertNotIn('string="Field Work"', sales_views)
 
+    def test_service_job_form_uses_service_language_and_structured_notes(self):
+        document = etree.parse(
+            str(MODULE / "views" / "project_task_views.xml")
+        )
+        title = document.xpath(
+            "//xpath[@expr=\"//field[@name='name']\"]"
+            "/attribute[@name='placeholder']/text()"
+        )
+        self.assertEqual(title, ["Service Job Title..."])
+        work_details = document.xpath(
+            "//xpath[@expr=\"//page[@name='description_page']\"]"
+            "/attribute[@name='string']/text()"
+        )
+        self.assertEqual(work_details, ["Work Details"])
+        follow_up = document.xpath(
+            "//xpath[@expr=\"//page[@name='sub_tasks_page']\"]"
+            "/attribute[@name='string']/text()"
+        )
+        self.assertEqual(follow_up, ["Follow-up Work"])
+        for field_name in (
+            "southern_diagnosis",
+            "southern_work_performed",
+            "southern_recommendations",
+        ):
+            self.assertTrue(document.xpath(f"//field[@name='{field_name}']"))
+
+        source = (MODULE / "models" / "project_task.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("_SOUTHERN_SERVICE_NOTE_MAP", source)
+        self.assertIn("def write(self, vals):", source)
+
     def test_sales_schedule_maps_to_native_field_service_fields(self):
         source = (MODULE / "models" / "service_case.py").read_text(
             encoding="utf-8"

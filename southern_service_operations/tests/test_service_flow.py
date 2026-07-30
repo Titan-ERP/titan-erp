@@ -51,6 +51,9 @@ class TestSouthernServiceFlow(TransactionCase):
                 "serial_number": self.equipment.serial_no,
                 "equipment_run_hours": 2450,
                 "complaint": "Development workflow test",
+                "diagnosis": "Hydraulic pressure below specification",
+                "work_performed": "Inspected pump and adjusted relief valve",
+                "recommendations": "Recheck pressure after 50 operating hours",
             }
         )
 
@@ -64,6 +67,26 @@ class TestSouthernServiceFlow(TransactionCase):
         self.assertEqual(task.dmc_equipment, self.equipment.name)
         self.assertEqual(task.dmc_serial_number, self.equipment.serial_no)
         self.assertEqual(task.dmc_equipment_run_hours, 2450)
+        self.assertEqual(task.southern_diagnosis, case.diagnosis)
+        self.assertEqual(task.southern_work_performed, case.work_performed)
+        self.assertEqual(task.southern_recommendations, case.recommendations)
+
+        task.write(
+            {
+                "southern_diagnosis": "Relief valve out of adjustment",
+                "southern_work_performed": "Reset valve and verified pressure",
+                "southern_recommendations": "No immediate follow-up required",
+            }
+        )
+        self.assertEqual(case.diagnosis, "Relief valve out of adjustment")
+        self.assertEqual(
+            case.work_performed,
+            "Reset valve and verified pressure",
+        )
+        self.assertEqual(
+            case.recommendations,
+            "No immediate follow-up required",
+        )
 
         case.action_route_work()
         self.assertEqual(case.task_ids, task)
