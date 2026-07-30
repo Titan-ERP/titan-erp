@@ -18,6 +18,7 @@ class TestSouthernServiceFlow(TransactionCase):
                 "name": "Southern Service Test Project",
                 "is_fsm": True,
                 "partner_id": cls.partner.id,
+                "company_id": cls.env.company.id,
             }
         )
         cls.service_product = cls.env["product.product"].create(
