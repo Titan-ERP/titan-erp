@@ -180,8 +180,16 @@ class ProductTemplate(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        partner_prices = []
+        for vals in vals_list:
+            partner_prices.append(vals.pop("southern_partner_price", False))
         products = super().create(vals_list)
-        products.filtered(lambda product: product.southern_partner_price > 0)._southern_sync_partner_pricing()
+        for product, partner_price in zip(products, partner_prices):
+            if partner_price:
+                product.southern_partner_price = partner_price
+        products.filtered(
+            lambda product: product.southern_partner_price > 0
+        )._southern_sync_partner_pricing()
         return products
 
     def write(self, vals):
