@@ -28,6 +28,9 @@ class ProjectTask(models.Model):
                 continue
             task.partner_id = case.partner_id
             task.southern_client_equipment_id = case.client_equipment_id
+            task.dmc_equipment = case.equipment_description
+            task.dmc_serial_number = case.serial_number
+            task.dmc_equipment_run_hours = case.equipment_run_hours
 
     @api.onchange("southern_client_equipment_id")
     def _onchange_southern_client_equipment_id(self):

@@ -37,8 +37,22 @@ class SaleOrder(models.Model):
         index=True,
         ondelete="restrict",
     )
-    southern_equipment_exception_reason = fields.Text(
-        string="Equipment Exception",
+    southern_service_title = fields.Char(
+        string="Service Job",
+        tracking=True,
+    )
+    southern_equipment_description = fields.Char(
+        string="Equipment Description",
+        help="Equipment make/model or other clear description captured at intake.",
+        tracking=True,
+    )
+    southern_serial_number = fields.Char(
+        string="Serial Number",
+        tracking=True,
+    )
+    southern_equipment_run_hours = fields.Integer(
+        string="Equipment Run Hours",
+        default=0,
         tracking=True,
     )
     southern_service_request = fields.Text(
@@ -105,8 +119,13 @@ class SaleOrder(models.Model):
     def _onchange_southern_client_equipment_id(self):
         for order in self:
             equipment = order.southern_client_equipment_id
-            if equipment and equipment.client:
-                order.partner_id = equipment.client
+            if equipment:
+                order.southern_equipment_description = equipment.name
+                order.southern_serial_number = (
+                    equipment.serial_no or _("Unserialized")
+                )
+                if equipment.client:
+                    order.partner_id = equipment.client
 
     @api.onchange("southern_quote_type")
     def _onchange_southern_quote_type(self):
@@ -162,16 +181,20 @@ class SaleOrder(models.Model):
                 raise ValidationError(
                     _("Service requires a Requested Work / Complaint description.")
                 )
-            if (
-                not order.southern_client_equipment_id
-                and not order.southern_equipment_exception_reason
-            ):
+            if not order.southern_service_title:
                 raise ValidationError(
-                    _(
-                        "Service requires Equipment or a documented Equipment "
-                        "Exception before confirmation."
-                    )
+                    _("Service requires a Service Job title before confirmation.")
                 )
+            if not order.southern_equipment_description:
+                raise ValidationError(
+                    _("Service requires an Equipment Description before confirmation.")
+                )
+            if not order.southern_serial_number:
+                raise ValidationError(
+                    _("Service requires a Serial Number before confirmation.")
+                )
+            if order.southern_equipment_run_hours < 0:
+                raise ValidationError(_("Equipment Run Hours cannot be negative."))
             order._check_southern_service_equipment_customer()
 
     def _prepare_southern_service_case_values(self):
@@ -184,14 +207,17 @@ class SaleOrder(models.Model):
             "client_equipment_id": self.southern_client_equipment_id.id,
             "service_domain": "customer",
             "service_location": self.southern_service_location,
+            "service_title": self.southern_service_title,
             "complaint": complaint,
             "advisor_id": self.user_id.id or self.env.user.id,
             "commercial_basis": self.southern_commercial_basis or "estimate",
             "technician_id": self.southern_technician_id.id,
             "scheduled_start": self.southern_scheduled_start,
             "estimated_hours": self.southern_estimated_hours,
+            "equipment_description": self.southern_equipment_description,
+            "serial_number": self.southern_serial_number,
+            "equipment_run_hours": self.southern_equipment_run_hours,
             "sale_order_id": self.id,
-            "exception_reason": self.southern_equipment_exception_reason,
         }
 
     def _ensure_southern_service_case(self):

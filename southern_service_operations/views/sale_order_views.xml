@@ -9,13 +9,14 @@
     </record>
 
     <record id="action_new_service_quotation" model="ir.actions.act_window">
-        <field name="name">New Service Quotation</field>
-        <field name="res_model">sale.order</field>
-        <field name="view_mode">form</field>
+        <field name="name">Service</field>
+        <field name="res_model">project.task</field>
+        <field name="view_mode">kanban,list,form,map,calendar,gantt,activity</field>
         <field name="target">current</field>
+        <field name="domain">[('is_fsm', '=', True)]</field>
         <field name="context">{
-            'default_southern_quote_type': 'service',
-            'default_southern_service_location': 'onsite'
+            'default_is_fsm': True,
+            'search_default_my_tasks': True
         }</field>
     </record>
 
@@ -115,9 +116,24 @@
                        invisible="southern_quote_type != 'service'"
                        domain="[('client', 'child_of', partner_id)]"
                        readonly="state not in ('draft', 'sent')"/>
-                <field name="southern_equipment_exception_reason"
-                       invisible="southern_quote_type != 'service' or southern_client_equipment_id"
-                       required="southern_quote_type == 'service' and not southern_client_equipment_id"
+                <field name="southern_service_title"
+                       invisible="southern_quote_type != 'service'"
+                       required="southern_quote_type == 'service'"
+                       placeholder="Example: Diagnose hydraulic leak"
+                       readonly="state not in ('draft', 'sent')"/>
+                <field name="southern_equipment_description"
+                       invisible="southern_quote_type != 'service'"
+                       required="southern_quote_type == 'service'"
+                       placeholder="Make, model, and equipment type"
+                       readonly="state not in ('draft', 'sent')"/>
+                <field name="southern_serial_number"
+                       invisible="southern_quote_type != 'service'"
+                       required="southern_quote_type == 'service'"
+                       placeholder="Enter the serial number or Unserialized"
+                       readonly="state not in ('draft', 'sent')"/>
+                <field name="southern_equipment_run_hours"
+                       invisible="southern_quote_type != 'service'"
+                       required="southern_quote_type == 'service'"
                        readonly="state not in ('draft', 'sent')"/>
                 <field name="southern_technician_id"
                        invisible="southern_quote_type != 'service'"

@@ -151,6 +151,18 @@
                                    invisible="service_domain != 'customer'"
                                    domain="[('client', 'child_of', partner_id)]"
                                    options="{'no_create': False}"/>
+                            <field name="service_title"
+                                   invisible="service_domain != 'customer'"
+                                   required="service_domain == 'customer'"/>
+                            <field name="equipment_description"
+                                   invisible="service_domain != 'customer'"
+                                   required="service_domain == 'customer'"/>
+                            <field name="serial_number"
+                                   invisible="service_domain != 'customer'"
+                                   required="service_domain == 'customer'"/>
+                            <field name="equipment_run_hours"
+                                   invisible="service_domain != 'customer'"
+                                   required="service_domain == 'customer'"/>
                             <field name="maintenance_equipment_id"
                                    invisible="service_domain != 'internal'"
                                    required="service_domain == 'internal'"/>
@@ -171,10 +183,6 @@
                     <notebook>
                         <page name="request" string="Request">
                             <field name="complaint" placeholder="Describe the requested work, symptoms, and customer concerns."/>
-                        </page>
-                        <page name="exception" string="Exceptions"
-                              invisible="not exception_reason">
-                            <field name="exception_reason"/>
                         </page>
                         <page name="linked_work" string="Linked Work">
                             <group>

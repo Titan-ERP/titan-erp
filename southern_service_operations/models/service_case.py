@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from odoo import Command, _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
@@ -81,6 +83,17 @@ class SouthernServiceCase(models.Model):
         tracking=True,
     )
     requested_date = fields.Datetime(string="Requested Date", tracking=True)
+    service_title = fields.Char(string="Service Job", tracking=True)
+    equipment_description = fields.Char(
+        string="Equipment Description",
+        tracking=True,
+    )
+    serial_number = fields.Char(string="Serial Number", tracking=True)
+    equipment_run_hours = fields.Integer(
+        string="Equipment Run Hours",
+        default=0,
+        tracking=True,
+    )
     technician_id = fields.Many2one(
         "res.users",
         string="Technician",
@@ -105,10 +118,6 @@ class SouthernServiceCase(models.Model):
         string="Authorization",
         required=True,
         default="estimate",
-        tracking=True,
-    )
-    exception_reason = fields.Text(
-        string="Equipment / Authorization Exception",
         tracking=True,
     )
     state = fields.Selection(
@@ -202,8 +211,11 @@ class SouthernServiceCase(models.Model):
     def _onchange_client_equipment_id(self):
         for case in self:
             equipment = case.client_equipment_id
-            if equipment and equipment.client:
-                case.partner_id = equipment.client
+            if equipment:
+                case.equipment_description = equipment.name
+                case.serial_number = equipment.serial_no or _("Unserialized")
+                if equipment.client:
+                    case.partner_id = equipment.client
 
     @api.constrains(
         "service_domain",
@@ -212,6 +224,9 @@ class SouthernServiceCase(models.Model):
         "maintenance_equipment_id",
         "service_location",
         "commercial_basis",
+        "equipment_description",
+        "serial_number",
+        "equipment_run_hours",
     )
     def _check_service_identity(self):
         for case in self:
@@ -232,13 +247,16 @@ class SouthernServiceCase(models.Model):
 
             if not case.partner_id:
                 raise ValidationError(_("Customer Service requires a customer."))
-            if not case.client_equipment_id and not case.exception_reason:
+            if not case.service_title:
+                raise ValidationError(_("Customer Service requires a Service Job title."))
+            if not case.equipment_description:
                 raise ValidationError(
-                    _(
-                        "Customer Service requires Equipment or a documented "
-                        "equipment exception."
-                    )
+                    _("Customer Service requires an Equipment Description.")
                 )
+            if not case.serial_number:
+                raise ValidationError(_("Customer Service requires a Serial Number."))
+            if case.equipment_run_hours < 0:
+                raise ValidationError(_("Equipment Run Hours cannot be negative."))
             case._validate_equipment_customer()
             if case.service_location == "internal":
                 raise ValidationError(
@@ -292,13 +310,13 @@ class SouthernServiceCase(models.Model):
     def _prepare_task_values(self):
         self.ensure_one()
         equipment = self.client_equipment_id
-        equipment_name = (
-            equipment.name
-            or _("Equipment exception: %s") % self.exception_reason
+        scheduled_end = (
+            self.scheduled_start + timedelta(hours=self.estimated_hours)
+            if self.scheduled_start
+            else False
         )
-        serial_display = equipment.serial_no or _("Unserialized")
         return {
-            "name": self.name,
+            "name": self.service_title or self.name,
             "partner_id": self.partner_id.id,
             "project_id": self._get_fsm_project().id,
             "description": self.complaint,
@@ -308,11 +326,14 @@ class SouthernServiceCase(models.Model):
                 else []
             ),
             "planned_date_begin": self.scheduled_start,
+            "date_deadline": scheduled_end,
             "allocated_hours": self.estimated_hours,
+            "under_warranty": self.commercial_basis == "warranty",
             "southern_service_case_id": self.id,
             "southern_client_equipment_id": equipment.id,
-            "dmc_equipment": equipment_name,
-            "dmc_serial_number": serial_display,
+            "dmc_equipment": self.equipment_description,
+            "dmc_serial_number": self.serial_number,
+            "dmc_equipment_run_hours": self.equipment_run_hours,
         }
 
     def _prepare_repair_values(self):
@@ -365,11 +386,22 @@ class SouthernServiceCase(models.Model):
                 and not case.repair_order_ids
             ):
                 self.env["repair.order"].create(case._prepare_repair_values())
+            scheduled_end = (
+                case.scheduled_start + timedelta(hours=case.estimated_hours)
+                if case.scheduled_start
+                else False
+            )
             task_values = {
+                "name": case.service_title or case.name,
                 "description": case.complaint,
                 "user_ids": [Command.set(case.technician_id.ids)],
                 "planned_date_begin": case.scheduled_start,
+                "date_deadline": scheduled_end,
                 "allocated_hours": case.estimated_hours,
+                "under_warranty": case.commercial_basis == "warranty",
+                "dmc_equipment": case.equipment_description,
+                "dmc_serial_number": case.serial_number,
+                "dmc_equipment_run_hours": case.equipment_run_hours,
             }
             if case.task_ids:
                 case.task_ids.write(task_values)
@@ -400,7 +432,10 @@ class SouthernServiceCase(models.Model):
                 "southern_quote_type": "service",
                 "southern_service_location": self.service_location,
                 "southern_client_equipment_id": self.client_equipment_id.id,
-                "southern_equipment_exception_reason": self.exception_reason,
+                "southern_service_title": self.service_title,
+                "southern_equipment_description": self.equipment_description,
+                "southern_serial_number": self.serial_number,
+                "southern_equipment_run_hours": self.equipment_run_hours,
                 "southern_service_request": self.complaint,
                 "southern_commercial_basis": self.commercial_basis,
                 "southern_technician_id": self.technician_id.id,
@@ -414,11 +449,7 @@ class SouthernServiceCase(models.Model):
                             "name": _("%(case)s — %(equipment)s")
                             % {
                                 "case": self.name,
-                                "equipment": (
-                                    self.client_equipment_id.display_name
-                                    if self.client_equipment_id
-                                    else _("Equipment exception")
-                                ),
+                                "equipment": self.equipment_description,
                             },
                         }
                     ),

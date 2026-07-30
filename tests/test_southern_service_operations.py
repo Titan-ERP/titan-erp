@@ -89,6 +89,7 @@ class SouthernServiceOperationsTests(unittest.TestCase):
             '"southern_client_equipment_id"',
             '"dmc_equipment"',
             '"dmc_serial_number"',
+            "dmc_equipment_run_hours",
             '"Unserialized"',
         ):
             self.assertIn(marker, source)
@@ -118,6 +119,21 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         )[0]
         self.assertEqual(new_service.get("action"), "action_new_service_quotation")
 
+        sales_views = etree.parse(
+            str(MODULE / "views" / "sale_order_views.xml")
+        )
+        service_action = sales_views.xpath(
+            "//record[@id='action_new_service_quotation']"
+        )[0]
+        self.assertEqual(
+            service_action.xpath("./field[@name='res_model']")[0].text,
+            "project.task",
+        )
+        self.assertIn(
+            "kanban",
+            service_action.xpath("./field[@name='view_mode']")[0].text,
+        )
+
     def test_sales_form_is_the_service_workspace(self):
         source = (MODULE / "models" / "sale_order.py").read_text(
             encoding="utf-8"
@@ -130,8 +146,13 @@ class SouthernServiceOperationsTests(unittest.TestCase):
             "southern_technician_id",
             "southern_scheduled_start",
             "southern_estimated_hours",
+            "southern_service_title",
+            "southern_equipment_description",
+            "southern_serial_number",
+            "southern_equipment_run_hours",
         ):
             self.assertIn(field_name, source)
+        self.assertNotIn("southern_equipment_exception_reason", source)
 
         document = etree.parse(str(MODULE / "views" / "sale_order_views.xml"))
         self.assertEqual(
@@ -157,7 +178,9 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         )
         self.assertIn('"user_ids":', source)
         self.assertIn('"planned_date_begin":', source)
+        self.assertIn('"date_deadline":', source)
         self.assertIn('"allocated_hours":', source)
+        self.assertIn('"dmc_equipment_run_hours":', source)
         self.assertIn("case.task_ids.write(task_values)", source)
 
     def test_routing_is_idempotent_for_each_execution_model(self):
