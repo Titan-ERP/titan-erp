@@ -248,6 +248,11 @@ class TestSouthernServiceFlow(TransactionCase):
         )
 
         task.action_southern_create_quotation()
+        # A normal web-client save starts a new RPC and reads these links back
+        # from the database. Mirror that boundary here so this assertion checks
+        # persisted quote synchronization rather than a pre-sync record cache.
+        self.env.flush_all()
+        second_labor.invalidate_recordset(["sale_line_id"])
         order = task.southern_sale_order_id
         self.assertEqual(task.southern_service_task_hours, 5.0)
         self.assertTrue(labor.sale_line_id)
