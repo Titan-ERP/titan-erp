@@ -1,0 +1,11 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_southern_parts_specification_user,southern.parts.specification user,model_southern_parts_specification,base.group_user,1,1,1,1
+access_southern_parts_make_user,southern.parts.make user,model_southern_parts_make,base.group_user,1,1,1,1
+access_southern_parts_model_user,southern.parts.model user,model_southern_parts_model,base.group_user,1,1,1,1
+access_southern_parts_fitment_user,southern.parts.fitment user,model_southern_parts_fitment,base.group_user,1,1,1,1
+access_southern_parts_oem_reference_user,southern.parts.oem_reference user,model_southern_parts_oem_reference,base.group_user,1,1,1,1
+access_southern_parts_catalog_page_user,southern.parts.catalog_page user,model_southern_parts_catalog_page,base.group_user,1,1,1,1
+access_southern_parts_related_product_user,southern.parts.related_product user,model_southern_parts_related_product,base.group_user,1,1,1,1
+access_southern_parts_alternate_barcode_user,southern.parts.alternate_barcode user,model_southern_parts_alternate_barcode,base.group_user,1,1,1,1
+access_southern_parts_catalog_sync_user,southern.parts.catalog.sync user,model_southern_parts_catalog_sync,base.group_system,1,1,1,1
+access_southern_parts_order_refresh_queue_user,southern.parts.order.refresh.queue user,model_southern_parts_order_refresh_queue,base.group_system,1,1,1,1

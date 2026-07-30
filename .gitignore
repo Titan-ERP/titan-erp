@@ -6,6 +6,9 @@ __pycache__/
 
 # Environment
 .env
+*.env
+!*.env.example
+odoo_connection.env
 .venv/
 env/
 
@@ -18,3 +21,21 @@ Thumbs.db
 
 # Node
 node_modules/
+
+# Local Odoo automation data and generated evidence
+/inputs/
+/odoo_imports/
+/outputs/
+/tmp/
+/SEC - Overview - Sheet9.csv
+/cloud/aws/.env
+
+# Local agent state
+/.agents/
+
+# Public-repository boundary: keep live AWS topology and one-off commands local
+/cloud/aws/*
+!/cloud/aws/env.example
+!/cloud/aws/ec2-trust-policy.json
+!/cloud/aws/products_resume_probe.py
+!/cloud/aws/runtime_connectivity_check.py

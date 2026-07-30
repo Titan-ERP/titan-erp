@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="southern_parts_res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">southern.parts.res.config.settings.view.form</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app data-string="Southern Parts" string="Southern Parts" name="southern_parts_intelligence">
+                    <block title="Sparex Dealer Website" name="southern_parts_sparex_dealer">
+                        <setting string="Dealer Login URL" help="Sparex dealer account login page used by backend sync workers.">
+                            <field name="sparex_dealer_login_url"/>
+                        </setting>
+                        <setting string="Dealer Products URL" help="Sparex product catalog source used by backend sync workers.">
+                            <field name="sparex_dealer_products_url"/>
+                        </setting>
+                        <setting string="Dealer Username" help="Sparex dealer account username.">
+                            <field name="sparex_dealer_username"/>
+                        </setting>
+                        <setting string="Dealer Password" help="Stored as an Odoo system parameter. Do not expose in reports or logs.">
+                            <field name="sparex_dealer_password" password="True"/>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+</odoo>

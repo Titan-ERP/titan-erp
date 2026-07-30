@@ -1,0 +1,38 @@
+name: Validate Odoo automation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "agent/**"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Compile Python
+        run: python -m compileall -q scripts southern_* custom_addons
+      - name: Run standalone regression tests
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: Parse Odoo XML
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          paths = []
+          for pattern in ("southern_*", "custom_addons/*"):
+              for root in Path(".").glob(pattern):
+                  paths.extend(root.rglob("*.xml"))
+          for path in paths:
+              ET.parse(path)
+          print(f"Parsed {len(paths)} XML files")
+          PY

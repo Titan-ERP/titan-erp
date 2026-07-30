@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="southern_parts_catalog_sync_list" model="ir.ui.view">
+        <field name="name">southern.parts.catalog.sync.list</field>
+        <field name="model">southern.parts.catalog.sync</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="active"/>
+                <field name="state"/>
+                <field name="mode"/>
+                <field name="batch_size"/>
+                <field name="last_product_id"/>
+                <field name="last_run_at"/>
+                <field name="processed_count"/>
+                <field name="error_count"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="southern_parts_catalog_sync_form" model="ir.ui.view">
+        <field name="name">southern.parts.catalog.sync.form</field>
+        <field name="model">southern.parts.catalog.sync</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_run_now" string="Run Now" type="object" class="btn-primary"/>
+                    <button name="action_pause" string="Pause" type="object" invisible="state == 'paused'"/>
+                    <button name="action_resume" string="Resume" type="object" invisible="state != 'paused'"/>
+                    <button name="action_reset_cursor" string="Reset Cursor" type="object"/>
+                    <button name="action_check_sparex_dealer_config" string="Check Sparex Config" type="object"/>
+                    <field name="state" widget="statusbar" statusbar_visible="idle,running,paused,error"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="sequence"/>
+                            <field name="active"/>
+                            <field name="mode"/>
+                            <field name="batch_size"/>
+                        </group>
+                        <group>
+                            <field name="last_product_id"/>
+                            <field name="last_run_at"/>
+                            <field name="run_count"/>
+                            <field name="processed_count"/>
+                            <field name="error_count"/>
+                        </group>
+                    </group>
+                    <group string="Sparex Dealer Source">
+                        <field name="sparex_dealer_configured"/>
+                        <field name="sparex_dealer_login_url"/>
+                        <field name="sparex_dealer_products_url"/>
+                        <field name="sparex_dealer_username"/>
+                    </group>
+                    <group string="Last Message">
+                        <field name="last_message" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_southern_parts_catalog_sync" model="ir.actions.act_window">
+        <field name="name">Catalog Sync Jobs</field>
+        <field name="res_model">southern.parts.catalog.sync</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="menu_southern_parts_catalog_sync"
+              name="Catalog Sync Jobs"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_parts_catalog_sync"
+              sequence="5"/>
+    <menuitem id="menu_inventory_sparex_dealer_sync"
+              name="Sparex Dealer Sync"
+              parent="stock.menu_stock_config_settings"
+              action="action_southern_parts_catalog_sync"
+              sequence="91"/>
+</odoo>

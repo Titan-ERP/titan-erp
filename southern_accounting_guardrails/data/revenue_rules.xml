@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <record id="revenue_rule_tx60_rental" model="southern.accounting.revenue.rule">
+        <field name="name">Rental equipment: TX60</field>
+        <field name="sequence">1</field>
+        <field name="match_text">TX60</field>
+        <field name="revenue_bucket">rental</field>
+        <field name="note">User-confirmed rental item during Shop Boss migration cleanup.</field>
+    </record>
+    <record id="revenue_rule_tx18_rental" model="southern.accounting.revenue.rule">
+        <field name="name">Rental equipment: TX18</field>
+        <field name="sequence">1</field>
+        <field name="match_text">TX18</field>
+        <field name="revenue_bucket">rental</field>
+        <field name="note">User-confirmed rental item during Shop Boss migration cleanup.</field>
+    </record>
+    <record id="revenue_rule_tx10_rental" model="southern.accounting.revenue.rule">
+        <field name="name">Rental equipment: TX10</field>
+        <field name="sequence">1</field>
+        <field name="match_text">TX10</field>
+        <field name="revenue_bucket">rental</field>
+        <field name="note">User-confirmed rental item during Shop Boss migration cleanup.</field>
+    </record>
+    <record id="revenue_rule_u35_rental" model="southern.accounting.revenue.rule">
+        <field name="name">Rental equipment: U35</field>
+        <field name="sequence">1</field>
+        <field name="match_text">U35</field>
+        <field name="revenue_bucket">rental</field>
+        <field name="note">User-confirmed rental item during Shop Boss migration cleanup.</field>
+    </record>
+    <record id="revenue_rule_labor_service" model="southern.accounting.revenue.rule">
+        <field name="name">Service: Labor</field>
+        <field name="sequence">5</field>
+        <field name="match_text">labor</field>
+        <field name="revenue_bucket">service</field>
+    </record>
+    <record id="revenue_rule_repair_service" model="southern.accounting.revenue.rule">
+        <field name="name">Service: Repair</field>
+        <field name="sequence">5</field>
+        <field name="match_text">repair</field>
+        <field name="revenue_bucket">service</field>
+    </record>
+</odoo>
