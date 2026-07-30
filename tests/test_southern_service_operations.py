@@ -85,6 +85,13 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         ):
             self.assertIn(marker, source)
 
+    def test_sales_reuses_an_unbilled_routed_task(self):
+        source = (MODULE / "models" / "sale_order.py").read_text(encoding="utf-8")
+        self.assertIn("def _timesheet_create_task(self, project):", source)
+        self.assertIn("not task.sale_line_id", source)
+        self.assertIn('"sale_line_id": self.id', source)
+        self.assertIn("return existing_task", source)
+
     def test_routing_is_idempotent_for_each_execution_model(self):
         source = (MODULE / "models" / "service_case.py").read_text(
             encoding="utf-8"
