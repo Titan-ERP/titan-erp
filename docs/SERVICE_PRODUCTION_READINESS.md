@@ -4,10 +4,10 @@
 
 - Add-on: `southern_service_operations`
 - User-facing application: **Sales**
-- Candidate code commit: `2be1b18`
+- Candidate code commit: `a47a086`
 - Odoo.sh development branch: `codex/service-development-test`
-- Odoo.sh development commit: `d4d92f5`
-- Odoo.sh build: `35709850`
+- Odoo.sh development commit: `e183c6d`
+- Odoo.sh build: `35710787`
 - Odoo version: 19.0 Enterprise
 - Production deployment: **not performed**
 
@@ -32,16 +32,17 @@ replacing Odoo's native transaction models:
 
 | Check | Result | Evidence |
 |---|---|---|
-| Odoo.sh module install/upgrade | Pass | Build `35709850` loaded the module, security, Sales/Service views, menus, and all dependencies |
-| Odoo 19 transaction tests | Pass | `0 failed, 0 error(s) of 7 tests`; unified Service-job quotation creation, Sales scheduling, on-site idempotency, internal Maintenance routing, and Sales task reuse included |
-| Standalone repository tests | Pass | 14 tests |
+| Odoo.sh module install/upgrade | Pass | Build `35710787` loaded the module, security, Sales/Service views, menus, and all dependencies |
+| Odoo 19 transaction tests | Pass | 7 Service transaction test methods started; `0 failed, 0 error(s)`; unified Service-job quotation creation, Sales scheduling, on-site idempotency, internal Maintenance routing, and Sales task reuse included |
+| Standalone repository tests | Pass | 15 tests |
 | Python compilation | Pass | `compileall` on `southern_service_operations` |
 | XML parse and manifest file validation | Pass | Included in standalone suite |
 | Odoo 19 search-view compatibility | Pass | Static regression plus live build load |
 | Odoo 19 SQL constraint API | Pass | Native `models.Constraint`; legacy `_sql_constraints` warning removed |
-| Sales-hosted Service menus | Pass | Live UI shows Service inside Sales with New Service, Internal Maintenance, cases, work queues, equipment, and purchasing |
+| Sales-hosted Service menus | Pass | Live UI shows Service inside Sales with Service Jobs, Internal Maintenance, cases, work queues, equipment, and purchasing |
 | Sales entry actions | Pass | Parts, Equipment Sale, and Rental open native Sales quotations; Service opens Odoo's native Field Service workspace inside Sales |
 | Unified Service Job and quotation | Pass | Live UI shows equipment, serial number, run hours, scheduling, and an embedded Quotation tab with editable labor/parts lines plus Build Quotation, Send Quote, and Confirm Sales Order controls |
+| Personnel-facing terminology | Pass | Live UI title is **Service Jobs**, the default filter is **My Service Jobs**, and Sales, equipment, repair, purchase, and Service Case links use Service Job terminology |
 | Technician Service quotation | Pass | Live UI created Sales quotation `S00031`, Service Case `SVC26-00001`, and one linked Field Work record |
 | Customer equipment relationship | Pass | Equipment owner drives customer and mismatched commercial entities are blocked |
 | On-site Service routing | Pass | One Field Service task; second routing action creates no duplicate |
@@ -80,7 +81,7 @@ Service-specific model, view, manifest, constraint, test, or traceback warning.
 - Allow authorized Service personnel to route Field Service and/or Shop Repair
   directly from the quotation before customer approval when diagnosis is
   required.
-- Show the linked Service Case, Field Work, Shop Work, and Purchase tracking as
+- Show the linked Service Case, Service Jobs, Shop Work, and Purchase tracking as
   smart buttons on the Sales document.
 - Require a Service Job title, equipment description, serial number, requested
   work, and valid nonnegative run hours before confirming a Service quotation.
@@ -115,7 +116,7 @@ Service-specific model, view, manifest, constraint, test, or traceback warning.
   Field Service, and Repair.
 - Require a real serial number or the explicit **Unserialized** flag.
 - Require an Odoo Product mapping before shop repair routing.
-- Preserve service history with smart links to cases, scheduled work, and shop
+- Preserve service history with smart links to cases, Service Jobs, and shop
   work.
 - Keep Maintenance Equipment separate for company-owned assets.
 
@@ -160,7 +161,7 @@ These are operational approvals, not missing code:
    Maintenance, Purchase, and their declared dependencies.
 4. Install or upgrade `southern_service_operations` in staging.
 5. Run:
-   - the 14 standalone repository checks;
+   - the 15 standalone repository checks;
    - the Odoo transaction suite (currently 7 tests reported by Odoo);
    - the role-based UAT scenarios in this dossier;
    - a dry-run equipment/readiness audit.
