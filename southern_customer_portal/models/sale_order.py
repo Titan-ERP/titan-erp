@@ -31,6 +31,37 @@ class SaleOrder(models.Model):
     southern_estimated_parts_margin_rate = fields.Float(copy=False)
     southern_cost_verification_note = fields.Text(copy=False)
     southern_cost_verified_at = fields.Datetime(copy=False)
+    southern_parts_review_state = fields.Selection(
+        [
+            ("not_parts", "Not a Parts Order"),
+            ("parts_review", "Parts Desk Review"),
+            ("supplier_verification", "Supplier Verification"),
+            ("confirmed", "Confirmed"),
+            ("ready_for_pickup", "Ready for Pickup"),
+            ("shipping_in_progress", "Shipping in Progress"),
+            ("needs_customer_confirmation", "Needs Customer Confirmation"),
+            ("completed", "Complete"),
+        ],
+        default="not_parts",
+        copy=False,
+    )
+    southern_parts_review_note = fields.Text(copy=False)
+    southern_supplier_confirmation = fields.Char(copy=False)
+    southern_supplier_verified_at = fields.Datetime(copy=False)
+    southern_pickup_or_shipping_note = fields.Char(copy=False)
+    southern_customer_last_update_state = fields.Selection(
+        [
+            ("parts_review", "Parts Desk Review"),
+            ("supplier_verification", "Supplier Verification"),
+            ("confirmed", "Confirmed"),
+            ("ready_for_pickup", "Ready for Pickup"),
+            ("shipping_in_progress", "Shipping in Progress"),
+            ("needs_customer_confirmation", "Needs Customer Confirmation"),
+            ("completed", "Complete"),
+        ],
+        copy=False,
+    )
+    southern_customer_last_update_at = fields.Datetime(copy=False)
 
     def _cart_add(self, *args, **kwargs):
         result = super()._cart_add(*args, **kwargs)
@@ -49,9 +80,139 @@ class SaleOrder(models.Model):
         self._southern_sync_website_cost_check()
         self._southern_apply_website_fulfillment_routes()
         result = super().action_confirm()
+        self._southern_start_website_parts_review()
         self._southern_note_website_purchase_orders()
         self._southern_activate_paid_memberships()
         return result
+
+    def _southern_is_website_parts_order(self):
+        self.ensure_one()
+        return bool(self._southern_parts_order_lines_for_cost_check())
+
+    def _southern_start_website_parts_review(self):
+        for order in self:
+            if (
+                not order.website_id
+                or order.company_id.id != 2
+                or not order._southern_is_website_parts_order()
+            ):
+                continue
+            order._southern_set_parts_review_state(
+                "parts_review",
+                notify_customer=True,
+                internal_note=(
+                    "Website parts order received. Cost, availability, and pickup "
+                    "or shipping details should be reviewed before fulfillment."
+                ),
+            )
+
+    def _southern_customer_update_body(self, state):
+        self.ensure_one()
+        messages = {
+            "parts_review": (
+                "We received your parts order. The Southern Equipment parts desk "
+                "is reviewing availability, fitment, and pickup or shipping details."
+            ),
+            "supplier_verification": (
+                "Your parts order is being verified with our supplier. We will update "
+                "you when fulfillment details are confirmed."
+            ),
+            "confirmed": (
+                "Your parts order has been confirmed. We will update you when it is "
+                "ready for pickup or shipment."
+            ),
+            "ready_for_pickup": (
+                "Your parts order is ready for pickup at Southern Equipment."
+            ),
+            "shipping_in_progress": (
+                "Your parts order is moving through shipping. Tracking or delivery "
+                "details will be shared when available."
+            ),
+            "needs_customer_confirmation": (
+                "Your parts order needs confirmation before fulfillment. A Southern "
+                "Equipment team member will contact you with the next step."
+            ),
+            "completed": "Your parts order is complete. Thank you for choosing Southern Equipment.",
+        }
+        return messages.get(state)
+
+    def _southern_set_parts_review_state(
+        self,
+        state,
+        notify_customer=False,
+        internal_note=None,
+        customer_note=None,
+    ):
+        for order in self:
+            vals = {"southern_parts_review_state": state}
+            if state in ("supplier_verification", "confirmed"):
+                vals["southern_supplier_verified_at"] = fields.Datetime.now()
+            if internal_note:
+                vals["southern_parts_review_note"] = (
+                    f"{order.southern_parts_review_note or ''}\n{internal_note}"
+                ).strip()
+            order.sudo().write(vals)
+
+            if internal_note:
+                order.message_post(body=html_escape(internal_note))
+
+            if notify_customer and order.southern_customer_last_update_state != state:
+                body = customer_note or order._southern_customer_update_body(state)
+                if body:
+                    order.message_post(
+                        body=html_escape(body),
+                        partner_ids=order.partner_id.ids,
+                        subtype_xmlid="mail.mt_comment",
+                    )
+                    order.sudo().write(
+                        {
+                            "southern_customer_last_update_state": state,
+                            "southern_customer_last_update_at": fields.Datetime.now(),
+                        }
+                    )
+        return True
+
+    def action_southern_parts_supplier_verification(self):
+        return self._southern_set_parts_review_state(
+            "supplier_verification",
+            notify_customer=True,
+            internal_note="Parts order moved to supplier verification.",
+        )
+
+    def action_southern_parts_confirmed(self):
+        return self._southern_set_parts_review_state(
+            "confirmed",
+            notify_customer=True,
+            internal_note="Parts order cost, availability, and fulfillment details confirmed.",
+        )
+
+    def action_southern_parts_ready_for_pickup(self):
+        return self._southern_set_parts_review_state(
+            "ready_for_pickup",
+            notify_customer=True,
+            internal_note="Parts order marked ready for pickup.",
+        )
+
+    def action_southern_parts_shipping_in_progress(self):
+        return self._southern_set_parts_review_state(
+            "shipping_in_progress",
+            notify_customer=True,
+            internal_note="Parts order marked shipping in progress.",
+        )
+
+    def action_southern_parts_needs_customer_confirmation(self):
+        return self._southern_set_parts_review_state(
+            "needs_customer_confirmation",
+            notify_customer=True,
+            internal_note="Parts order needs customer confirmation before fulfillment.",
+        )
+
+    def action_southern_parts_completed(self):
+        return self._southern_set_parts_review_state(
+            "completed",
+            notify_customer=True,
+            internal_note="Parts order review and fulfillment marked complete.",
+        )
 
     def _southern_parts_order_lines_for_cost_check(self):
         self.ensure_one()

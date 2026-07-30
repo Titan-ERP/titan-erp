@@ -6,6 +6,29 @@
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="arch" type="xml">
             <xpath expr="//notebook" position="inside">
+                <page string="Southern Parts Review" name="southern_parts_review">
+                    <group>
+                        <group>
+                            <field name="southern_parts_review_state" widget="statusbar" readonly="1"/>
+                            <field name="southern_customer_last_update_state" readonly="1"/>
+                            <field name="southern_customer_last_update_at" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="southern_supplier_confirmation"/>
+                            <field name="southern_supplier_verified_at" readonly="1"/>
+                            <field name="southern_pickup_or_shipping_note"/>
+                        </group>
+                    </group>
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <button name="action_southern_parts_supplier_verification" type="object" string="Supplier Verification" class="btn-secondary"/>
+                        <button name="action_southern_parts_confirmed" type="object" string="Confirm Order" class="btn-primary"/>
+                        <button name="action_southern_parts_ready_for_pickup" type="object" string="Ready for Pickup" class="btn-secondary"/>
+                        <button name="action_southern_parts_shipping_in_progress" type="object" string="Shipping in Progress" class="btn-secondary"/>
+                        <button name="action_southern_parts_needs_customer_confirmation" type="object" string="Needs Customer Confirmation" class="btn-secondary"/>
+                        <button name="action_southern_parts_completed" type="object" string="Complete" class="btn-secondary"/>
+                    </div>
+                    <field name="southern_parts_review_note" placeholder="Internal parts desk review notes..." nolabel="1"/>
+                </page>
                 <page string="Southern Cost Check" name="southern_cost_check">
                     <group>
                         <group>

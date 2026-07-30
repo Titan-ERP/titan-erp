@@ -1,5 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <template id="southern_sale_order_portal_parts_review_status" inherit_id="sale.sale_order_portal_content" name="Southern Parts Order Portal Status">
+        <xpath expr="//div[@id='informations']" position="before">
+            <div t-if="sale_order.southern_parts_review_state != 'not_parts'" class="alert border mb-4" style="background:#f6f4ed;border-left:4px solid #f2b632!important;color:#141719;">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                    <div>
+                        <strong>Southern parts order status:</strong>
+                        <span t-field="sale_order.southern_parts_review_state"/>
+                    </div>
+                    <span t-if="sale_order.southern_customer_last_update_at" class="small text-muted">
+                        Updated <span t-field="sale_order.southern_customer_last_update_at"/>
+                    </span>
+                </div>
+                <p class="mb-0 mt-2">
+                    Southern Equipment reviews parts orders before fulfillment and confirms pickup or shipping details after review.
+                </p>
+                <p t-if="sale_order.southern_pickup_or_shipping_note" class="mb-0 mt-2">
+                    <strong>Pickup/shipping:</strong>
+                    <span t-field="sale_order.southern_pickup_or_shipping_note"/>
+                </p>
+            </div>
+        </xpath>
+    </template>
+
     <template id="portal_my_home_repair_orders" inherit_id="portal.portal_my_home" name="Outstanding ROs and Invoices">
         <xpath expr="//div[hasclass('o_portal_docs')]" position="before">
             <t t-set="portal_service_category_enable" t-value="True"/>
