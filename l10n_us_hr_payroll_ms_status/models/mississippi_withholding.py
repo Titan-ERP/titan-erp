@@ -40,6 +40,15 @@ MS_PAY_PERIODS = {
 }
 
 
+def with_ms_filing_statuses(selection):
+    values = list(selection or [])
+    existing = {value for value, _label in values}
+    for value, config in MS_FILING_STATUSES.items():
+        if value not in existing:
+            values.append((value, config["label"]))
+    return values
+
+
 def _money(value):
     return Decimal(str(value or "0")).quantize(Decimal("0.01"))
 
