@@ -40,7 +40,7 @@ class ProjectTask(models.Model):
     )
     southern_sale_currency_id = fields.Many2one(
         related="southern_sale_order_id.currency_id",
-        string="Currency",
+        string="Quote Currency",
         readonly=True,
     )
     southern_sale_amount_total = fields.Monetary(
