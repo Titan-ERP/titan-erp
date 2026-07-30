@@ -1,4 +1,4 @@
-from odoo import _, api, fields, models
+from odoo import Command, _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
 
@@ -363,7 +363,31 @@ class SouthernServiceCase(models.Model):
                 "southern_service_location": self.service_location,
                 "southern_client_equipment_id": self.client_equipment_id.id,
                 "southern_equipment_exception_reason": self.exception_reason,
+                "southern_service_request": self.complaint,
+                "southern_commercial_basis": self.commercial_basis,
                 "southern_service_case_id": self.id,
+                "order_line": [
+                    Command.create(
+                        {
+                            "display_type": "line_section",
+                            "name": _("%(case)s — %(equipment)s")
+                            % {
+                                "case": self.name,
+                                "equipment": (
+                                    self.client_equipment_id.display_name
+                                    if self.client_equipment_id
+                                    else _("Equipment exception")
+                                ),
+                            },
+                        }
+                    ),
+                    Command.create(
+                        {
+                            "display_type": "line_note",
+                            "name": self.complaint,
+                        }
+                    ),
+                ],
             }
         )
         self.sale_order_id = order
@@ -379,6 +403,7 @@ class SouthernServiceCase(models.Model):
             "res_model": "sale.order",
             "view_mode": "form",
             "res_id": self.sale_order_id.id,
+            "context": {"form_view_initial_mode": "edit"},
         }
 
     def action_view_tasks(self):

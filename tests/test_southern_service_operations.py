@@ -100,6 +100,47 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         self.assertIn('"sale_line_id": self.id', source)
         self.assertIn("return existing_task", source)
 
+    def test_service_users_work_from_sales(self):
+        security = etree.parse(
+            str(MODULE / "security" / "service_security.xml")
+        )
+        service_user = security.xpath(
+            "//record[@id='group_southern_service_user']"
+            "/field[@name='implied_ids']"
+        )[0]
+        self.assertIn("sales_team.group_sale_salesman", service_user.get("eval"))
+
+        menus = etree.parse(str(MODULE / "views" / "service_menus.xml"))
+        root = menus.xpath("//menuitem[@id='menu_southern_service_root']")[0]
+        self.assertEqual(root.get("parent"), "sale.sale_menu_root")
+        new_service = menus.xpath(
+            "//menuitem[@id='menu_southern_service_new']"
+        )[0]
+        self.assertEqual(new_service.get("action"), "action_new_service_quotation")
+
+    def test_sales_form_is_the_service_workspace(self):
+        source = (MODULE / "models" / "sale_order.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("def action_route_southern_service_work(self):", source)
+        self.assertIn("def action_view_southern_service_tasks(self):", source)
+        self.assertIn("def action_view_southern_service_repairs(self):", source)
+        self.assertIn("def action_view_southern_service_purchases(self):", source)
+
+        document = etree.parse(str(MODULE / "views" / "sale_order_views.xml"))
+        self.assertEqual(
+            len(
+                document.xpath(
+                    "//button[@name='action_route_southern_service_work']"
+                )
+            ),
+            1,
+        )
+        self.assertEqual(
+            len(document.xpath("//page[@name='southern_service_work']")),
+            1,
+        )
+
     def test_routing_is_idempotent_for_each_execution_model(self):
         source = (MODULE / "models" / "service_case.py").read_text(
             encoding="utf-8"

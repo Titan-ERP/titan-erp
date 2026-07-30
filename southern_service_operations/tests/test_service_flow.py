@@ -73,6 +73,7 @@ class TestSouthernServiceFlow(TransactionCase):
                 "southern_quote_type": "service",
                 "southern_service_location": "onsite",
                 "southern_client_equipment_id": self.equipment.id,
+                "southern_service_request": "Development workflow test",
                 "southern_service_case_id": case.id,
                 "order_line": [
                     Command.create(
@@ -92,6 +93,33 @@ class TestSouthernServiceFlow(TransactionCase):
         self.assertEqual(case.task_ids, routed_task)
         self.assertEqual(routed_task.sale_order_id, order)
         self.assertEqual(routed_task.sale_line_id, order.order_line)
+
+    def test_sales_service_workspace_routes_one_contextual_job(self):
+        order = self.env["sale.order"].create(
+            {
+                "partner_id": self.partner.id,
+                "southern_quote_type": "service",
+                "southern_service_location": "onsite",
+                "southern_client_equipment_id": self.equipment.id,
+                "southern_service_request": "Technician diagnosis and estimate",
+                "southern_commercial_basis": "estimate",
+            }
+        )
+
+        action = order.action_route_southern_service_work()
+        case = order.southern_service_case_id
+        self.assertTrue(case)
+        self.assertEqual(order.partner_id, self.partner)
+        self.assertEqual(order.southern_quote_type, "service")
+        self.assertEqual(order.southern_client_equipment_id, self.equipment)
+        self.assertEqual(case.sale_order_id, order)
+        self.assertEqual(case.complaint, order.southern_service_request)
+        self.assertEqual(case.task_count, 1)
+        self.assertEqual(case.task_ids.partner_id, self.partner)
+        self.assertEqual(action, {"type": "ir.actions.client", "tag": "reload"})
+
+        order.action_route_southern_service_work()
+        self.assertEqual(case.task_count, 1)
 
     def test_internal_service_routes_to_maintenance(self):
         internal_equipment = self.env["maintenance.equipment"].create(
