@@ -5,12 +5,100 @@
         <field name="model">project.task</field>
         <field name="inherit_id" ref="dmc_fieldservice.view_task_form2_inherit_dmc_fieldservice"/>
         <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_timer_stop']" position="after">
+                <button name="action_southern_create_quotation" type="object"
+                        string="Build Quotation" class="btn-primary"
+                        groups="sales_team.group_sale_salesman"
+                        invisible="not is_fsm or southern_sale_order_id"/>
+                <button name="action_southern_send_quotation" type="object"
+                        string="Send Quote" class="btn-secondary"
+                        groups="sales_team.group_sale_salesman"
+                        invisible="not is_fsm or not southern_sale_order_id or southern_sale_state not in ('draft', 'sent')"/>
+                <button name="action_southern_confirm_sale_order" type="object"
+                        string="Confirm Sales Order" class="btn-primary"
+                        groups="sales_team.group_sale_salesman"
+                        invisible="not is_fsm or not southern_sale_order_id or southern_sale_state not in ('draft', 'sent')"/>
+            </xpath>
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_southern_open_sale_order" type="object"
+                        class="oe_stat_button" icon="fa-dollar"
+                        groups="sales_team.group_sale_salesman"
+                        invisible="not southern_sale_order_id">
+                    <div class="o_field_widget o_stat_info">
+                        <span class="o_stat_value">
+                            <field name="southern_sale_amount_total"
+                                   widget="monetary"
+                                   options="{'currency_field': 'southern_sale_currency_id'}"/>
+                        </span>
+                        <span class="o_stat_text">
+                            <field name="southern_sale_order_id" nolabel="1"/>
+                        </span>
+                    </div>
+                </button>
+            </xpath>
             <xpath expr="//field[@name='dmc_equipment']" position="before">
                 <field name="southern_service_case_id"
                        invisible="not is_fsm"/>
                 <field name="southern_client_equipment_id"
                        invisible="not is_fsm"
                        domain="[('client', 'child_of', partner_id)]"/>
+            </xpath>
+            <xpath expr="//page[@name='description_page']" position="after">
+                <page name="southern_quotation" string="Quotation"
+                      invisible="not is_fsm"
+                      groups="sales_team.group_sale_salesman">
+                    <group>
+                        <group>
+                            <field name="southern_sale_order_id" readonly="1"/>
+                            <field name="southern_sale_state" readonly="1"
+                                   widget="badge"/>
+                        </group>
+                        <group>
+                            <field name="southern_sale_amount_total"
+                                   readonly="1"
+                                   widget="monetary"
+                                   options="{'currency_field': 'southern_sale_currency_id'}"/>
+                            <field name="southern_sale_currency_id" invisible="1"/>
+                        </group>
+                    </group>
+                    <div class="alert alert-info" role="status"
+                         invisible="southern_sale_order_id">
+                        Save the Service Job, then use
+                        <strong>Build Quotation</strong>. Add labor, parts,
+                        sections, and notes here without leaving the job.
+                    </div>
+                    <field name="southern_quote_line_ids"
+                           invisible="not southern_sale_order_id"
+                           readonly="southern_sale_state not in ('draft', 'sent')"
+                           context="{'default_order_id': southern_sale_order_id}">
+                        <list editable="bottom">
+                            <control>
+                                <create string="Add a product"/>
+                                <create string="Add a section"
+                                        context="{'default_display_type': 'line_section'}"/>
+                                <create string="Add a note"
+                                        context="{'default_display_type': 'line_note'}"/>
+                            </control>
+                            <field name="sequence" widget="handle"/>
+                            <field name="display_type" column_invisible="True"/>
+                            <field name="product_id"
+                                   required="not display_type"/>
+                            <field name="name"/>
+                            <field name="product_uom_qty"
+                                   invisible="display_type"/>
+                            <field name="product_uom"
+                                   invisible="display_type"/>
+                            <field name="price_unit"
+                                   invisible="display_type"/>
+                            <field name="tax_ids"
+                                   widget="many2many_tags"
+                                   invisible="display_type"/>
+                            <field name="price_subtotal"
+                                   sum="Subtotal"
+                                   invisible="display_type"/>
+                        </list>
+                    </field>
+                </page>
             </xpath>
         </field>
     </record>

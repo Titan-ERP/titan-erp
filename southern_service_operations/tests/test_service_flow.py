@@ -154,6 +154,37 @@ class TestSouthernServiceFlow(TransactionCase):
         self.assertEqual(case.task_ids.planned_date_begin, updated_start)
         self.assertEqual(case.task_ids.allocated_hours, 4.0)
 
+    def test_field_service_job_builds_one_editable_sales_quotation(self):
+        case = self._create_customer_case()
+        case.action_route_work()
+        task = case.task_ids
+
+        action = task.action_southern_create_quotation()
+        order = task.southern_sale_order_id
+        self.assertTrue(order)
+        self.assertEqual(case.sale_order_id, order)
+        self.assertEqual(order.partner_id, self.partner)
+        self.assertEqual(order.southern_quote_type, "service")
+        self.assertEqual(
+            order.southern_equipment_description,
+            self.equipment.name,
+        )
+        self.assertEqual(order.southern_serial_number, self.equipment.serial_no)
+        self.assertEqual(order.southern_equipment_run_hours, 2450)
+        self.assertEqual(action, {"type": "ir.actions.client", "tag": "reload"})
+
+        line = self.env["sale.order.line"].create(
+            {
+                "order_id": order.id,
+                "product_id": self.service_product.id,
+                "product_uom_qty": 2.0,
+            }
+        )
+        self.assertEqual(task.southern_quote_line_ids, line)
+
+        task.action_southern_create_quotation()
+        self.assertEqual(task.southern_sale_order_id, order)
+
     def test_internal_service_routes_to_maintenance(self):
         internal_equipment = self.env["maintenance.equipment"].create(
             {"name": "Southern Internal Test Equipment"}

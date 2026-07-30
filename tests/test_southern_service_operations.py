@@ -179,6 +179,36 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         self.assertIn('"dmc_equipment_run_hours":', source)
         self.assertIn("case.task_ids.write(task_values)", source)
 
+    def test_field_service_form_embeds_native_sales_quotation(self):
+        source = (MODULE / "models" / "project_task.py").read_text(
+            encoding="utf-8"
+        )
+        for marker in (
+            "southern_sale_order_id",
+            "southern_quote_line_ids",
+            "def action_southern_create_quotation(self):",
+            "def action_southern_send_quotation(self):",
+            "def action_southern_confirm_sale_order(self):",
+        ):
+            self.assertIn(marker, source)
+
+        document = etree.parse(
+            str(MODULE / "views" / "project_task_views.xml")
+        )
+        self.assertEqual(
+            len(document.xpath("//page[@name='southern_quotation']")),
+            1,
+        )
+        self.assertEqual(
+            len(
+                document.xpath(
+                    "//field[@name='southern_quote_line_ids']"
+                    "/list[@editable='bottom']"
+                )
+            ),
+            1,
+        )
+
     def test_routing_is_idempotent_for_each_execution_model(self):
         source = (MODULE / "models" / "service_case.py").read_text(
             encoding="utf-8"
