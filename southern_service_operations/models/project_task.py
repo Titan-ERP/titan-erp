@@ -14,7 +14,7 @@ class ProjectTask(models.Model):
     )
     southern_client_equipment_id = fields.Many2one(
         "equipment.details",
-        string="Equipment",
+        string="Client Equipment",
         tracking=True,
         index=True,
         ondelete="restrict",
