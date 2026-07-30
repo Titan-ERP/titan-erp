@@ -5,3 +5,5 @@ from . import res_config_settings
 from . import order_refresh_queue
 from . import sale_order
 from . import purchase_order
+from . import automation_control
+from . import product_quality

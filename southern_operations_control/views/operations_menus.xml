@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem id="menu_southern_operations_root" name="Southern Operations" sequence="42"/>
+    <menuitem id="menu_southern_operations_daily"
+              name="Daily Control"
+              parent="menu_southern_operations_root"
+              action="action_southern_operations_daily_controls"
+              sequence="5"/>
+    <menuitem id="menu_southern_operations_crm" name="CRM" parent="menu_southern_operations_root" sequence="10"/>
+    <menuitem id="menu_southern_actual_opportunities"
+              name="Actual Opportunities"
+              parent="menu_southern_operations_crm"
+              action="action_southern_actual_opportunities"
+              sequence="5"/>
+    <menuitem id="menu_southern_imported_crm_references"
+              name="Imported References"
+              parent="menu_southern_operations_crm"
+              action="action_southern_imported_crm_references"
+              sequence="10"/>
+    <menuitem id="menu_southern_contact_import_batches"
+              name="Contact Import Review"
+              parent="menu_southern_operations_crm"
+              action="action_southern_contact_import_batches"
+              sequence="15"/>
+    <menuitem id="menu_southern_operations_products"
+              name="Product Master Quality"
+              parent="menu_southern_operations_root"
+              action="southern_parts_intelligence.action_southern_product_quality_issues"
+              sequence="20"/>
+    <menuitem id="menu_southern_operations_automation"
+              name="Product Automation Runs"
+              parent="menu_southern_operations_root"
+              action="southern_parts_intelligence.action_southern_parts_automation_runs"
+              sequence="25"/>
+    <menuitem id="menu_southern_operations_equipment"
+              name="Equipment Discovery"
+              parent="menu_southern_operations_root"
+              action="southern_equipment_brokerage.action_southern_equipment_discovery_candidates"
+              sequence="30"/>
+</odoo>

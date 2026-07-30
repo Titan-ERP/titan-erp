@@ -6,3 +6,4 @@ from . import revenue_rule
 from . import daily_control
 from . import shop_boss_document
 from . import shop_boss_payment_batch
+from . import bank_coding

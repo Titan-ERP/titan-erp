@@ -1,0 +1,28 @@
+{
+    "name": "Southern Operations Control",
+    "version": "19.0.1.0.0",
+    "category": "Operations",
+    "summary": "Odoo-native daily controls, CRM classification, and contact import review.",
+    "depends": [
+        "account",
+        "crm",
+        "mail",
+        "project",
+        "sale",
+        "southern_parts_intelligence",
+        "southern_equipment_brokerage",
+        "southern_accounting_guardrails",
+    ],
+    "data": [
+        "security/ir.model.access.csv",
+        "security/record_rules.xml",
+        "data/ir_cron.xml",
+        "views/daily_control_views.xml",
+        "views/crm_lead_views.xml",
+        "views/contact_import_views.xml",
+        "views/operations_menus.xml",
+    ],
+    "installable": True,
+    "application": True,
+    "license": "LGPL-3",
+}
