@@ -14,6 +14,8 @@ class SaleOrder(models.Model):
     SOUTHERN_LEGACY_SHIP_CARRIERS = ("Flat-rate shipping from Southern Equipment",)
     SOUTHERN_PARTS_PORTAL_TAG = "Website Parts Order"
     SOUTHERN_MIN_PARTS_MARGIN_RATE = 0.15
+    SOUTHERN_PARTS_FAILURE_EMAIL = "raymy@southernequipment.co"
+    SOUTHERN_MEMBER_PARTS_DISCOUNT = 5.0
 
     southern_cost_verification_status = fields.Selection(
         [
@@ -65,23 +67,27 @@ class SaleOrder(models.Model):
 
     def _cart_add(self, *args, **kwargs):
         result = super()._cart_add(*args, **kwargs)
+        self._southern_sync_membership_discount()
         self._southern_sync_website_card_fee()
         self._southern_sync_website_cost_check()
         return result
 
     def _cart_update_line_quantity(self, *args, **kwargs):
         result = super()._cart_update_line_quantity(*args, **kwargs)
+        self._southern_sync_membership_discount()
         self._southern_sync_website_card_fee()
         self._southern_sync_website_cost_check()
         return result
 
     def action_confirm(self):
+        self._southern_sync_membership_discount()
         self._southern_sync_website_card_fee()
         self._southern_sync_website_cost_check()
         self._southern_apply_website_fulfillment_routes()
         result = super().action_confirm()
         self._southern_start_website_parts_review()
         self._southern_note_website_purchase_orders()
+        self._southern_auto_advance_parts_review_after_confirm()
         self._southern_activate_paid_memberships()
         return result
 
@@ -105,6 +111,109 @@ class SaleOrder(models.Model):
                     "or shipping details should be reviewed before fulfillment."
                 ),
             )
+
+    def _southern_linked_purchase_orders(self):
+        self.ensure_one()
+        return self.env["purchase.order"].sudo().search([("origin", "ilike", self.name)])
+
+    def _southern_auto_advance_parts_review_after_confirm(self):
+        for order in self:
+            if order.southern_parts_review_state == "not_parts":
+                continue
+            if order.southern_cost_verification_status == "loss_risk":
+                order._southern_set_parts_review_state(
+                    "needs_customer_confirmation",
+                    notify_customer=True,
+                    internal_note=(
+                        "Automation paused this parts order because the cost check "
+                        "found loss risk before fulfillment."
+                    ),
+                )
+                order._southern_notify_parts_review_failure(
+                    "Website parts order paused for loss risk",
+                    (
+                        f"Order {order.name} was paused because the website cost check "
+                        "found loss risk before fulfillment."
+                    ),
+                )
+                continue
+            if order.southern_cost_verification_status == "review":
+                order._southern_notify_parts_review_failure(
+                    "Website parts order needs cost review",
+                    (
+                        f"Order {order.name} needs parts desk review before automation "
+                        f"continues.\n\n{order.southern_cost_verification_note or ''}"
+                    ),
+                )
+                continue
+
+            purchase_orders = order._southern_linked_purchase_orders()
+            if purchase_orders:
+                order._southern_set_parts_review_state(
+                    "supplier_verification",
+                    notify_customer=True,
+                    internal_note=(
+                        "Automation found vendor purchasing records for this website "
+                        "parts order and moved it to supplier verification."
+                    ),
+                )
+            else:
+                order._southern_notify_parts_review_failure(
+                    "Website parts order has no vendor PO",
+                    (
+                        f"Order {order.name} passed cost review but no linked vendor "
+                        "purchase order was found after confirmation."
+                    ),
+                )
+
+    def _southern_notify_parts_review_failure(self, subject, body):
+        for order in self:
+            marker = f"[Southern parts alert] {subject}"
+            if marker in (order.southern_parts_review_note or ""):
+                continue
+            email_body = (
+                f"{html_escape(body)}<br/><br/>"
+                f"Customer: {html_escape(order.partner_id.display_name or '')}<br/>"
+                f"Order: {html_escape(order.name or '')}<br/>"
+                f"Review state: {html_escape(order.southern_parts_review_state or '')}<br/>"
+                f"Cost check: {html_escape(order.southern_cost_verification_status or '')}"
+            )
+            order.sudo().write(
+                {
+                    "southern_parts_review_note": (
+                        f"{order.southern_parts_review_note or ''}\n{marker}"
+                    ).strip()
+                }
+            )
+            order.message_post(body=f"<strong>{html_escape(subject)}</strong><br/>{email_body}")
+            self.env["mail.mail"].sudo().create(
+                {
+                    "subject": subject,
+                    "body_html": email_body,
+                    "email_to": self.SOUTHERN_PARTS_FAILURE_EMAIL,
+                    "auto_delete": False,
+                }
+            ).send()
+        return True
+
+    def _cron_southern_auto_advance_parts_review(self):
+        orders = self.sudo().search(
+            [
+                ("website_id", "!=", False),
+                ("company_id", "=", 2),
+                ("southern_parts_review_state", "not in", ["not_parts", "completed"]),
+                ("state", "in", ["sale", "done"]),
+            ],
+            limit=100,
+        )
+        for order in orders:
+            if order.southern_cost_verification_status in ("not_checked", "ok"):
+                order._southern_sync_website_cost_check()
+            order._southern_auto_advance_parts_review_after_confirm()
+            purchase_orders = order._southern_linked_purchase_orders()
+            purchase_orders._southern_advance_linked_parts_orders_from_purchase()
+            order.picking_ids._southern_advance_parts_orders_from_picking()
+        return True
 
     def _southern_customer_update_body(self, state):
         self.ensure_one()
@@ -223,6 +332,31 @@ class SaleOrder(models.Model):
             and line.product_id.default_code
             not in (self.SOUTHERN_MEMBERSHIP_CODE, self.SOUTHERN_CARD_FEE_CODE)
         )
+
+    def _southern_has_active_membership_discount(self):
+        self.ensure_one()
+        partner = self.partner_id.commercial_partner_id
+        if not partner or partner.southern_partner_status in ("approved", "active"):
+            return False
+        return (
+            partner.southern_account_type == "member"
+            and partner.southern_membership_status == "active"
+        )
+
+    def _southern_sync_membership_discount(self):
+        for order in self:
+            if not order.website_id or order.state not in ("draft", "sent"):
+                continue
+
+            discount = (
+                self.SOUTHERN_MEMBER_PARTS_DISCOUNT
+                if order._southern_has_active_membership_discount()
+                else 0.0
+            )
+            for line in order._southern_parts_order_lines_for_cost_check():
+                if line.discount != discount:
+                    line.sudo().discount = discount
+        return True
 
     def _southern_vendor_unit_cost(self, line):
         product = line.product_id
