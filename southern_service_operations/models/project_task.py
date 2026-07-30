@@ -251,6 +251,13 @@ class ProjectTask(models.Model):
 
     def _southern_sync_tasks_to_quotation(self, order=None):
         for task in self:
+            task.invalidate_recordset(
+                [
+                    "southern_service_work_item_ids",
+                    "southern_labor_sale_line_id",
+                    "sale_line_id",
+                ]
+            )
             task_order = order or task.southern_sale_order_id
             if not task_order:
                 continue
