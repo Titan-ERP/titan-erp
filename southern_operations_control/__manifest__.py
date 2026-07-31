@@ -1,8 +1,10 @@
 {
     "name": "Southern Operations Control",
-    "version": "19.0.1.0.0",
+    "version": "19.0.1.1.0",
     "category": "Operations",
     "summary": "Odoo-native daily controls, CRM classification, and contact import review.",
+    "author": "Southern Equipment Company",
+    "website": "https://github.com/Titan-ERP/titan-erp",
     "depends": [
         "account",
         "crm",

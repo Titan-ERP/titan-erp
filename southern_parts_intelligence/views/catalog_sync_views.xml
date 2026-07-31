@@ -67,6 +67,7 @@
                     <group string="External Worker Safety">
                         <group>
                             <field name="minimum_free_gb"/>
+                            <field name="internal_cron_enabled"/>
                             <field name="cooldown_until"/>
                             <field name="next_allowed_run_at"/>
                             <field name="last_external_command_id"/>
@@ -132,6 +133,7 @@
                             <field name="mode"/>
                             <field name="external_run_id"/>
                             <field name="command_id"/>
+                            <field name="idempotency_key"/>
                             <field name="free_gb"/>
                         </group>
                         <group>
@@ -150,6 +152,7 @@
                         <field name="artifact_sha256"/>
                         <field name="artifact_schema_version"/>
                         <field name="archive_uri"/>
+                        <field name="artifact_archived"/>
                     </group>
                     <field name="evidence_summary"/>
                     <field name="error_message"/>

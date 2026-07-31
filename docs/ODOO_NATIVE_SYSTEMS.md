@@ -31,13 +31,19 @@ External tools retain:
 - large file transformations;
 - Git, GitHub Actions, tests, and deployment packaging.
 
+Artifacts use a versioned envelope and manifest, SHA-256 integrity metadata, a
+2 GB local free-space floor, a default 90-day local retention policy, and a
+verified S3 archive URI before an apply run may be completed successfully.
+
 External workers must create or update the corresponding Odoo run/evidence
 record. Local CSV, JSON, JSONL, Markdown, Codex memory, and task logs are
 supporting artifacts only; they are not authoritative workflow state.
 
 External product workers use
 `scripts/odoo_record_product_automation_run.py` to start and finish their Odoo
-run ledger record through the shared supervised write gate.
+run ledger record through the shared supervised write gate. New integrations
+use Odoo 19 JSON-2 with API keys; legacy XML-RPC is disabled unless an explicit
+temporary migration flag is set.
 
 ## Implemented Models
 
@@ -88,8 +94,9 @@ conflict-free candidate can be converted into an unpublished sourced listing.
 3. Upgrade `southern_equipment_brokerage`.
 4. Install `southern_operations_control`.
 5. Run CRM reference classification and review the separated result.
-6. Run Product Master Quality manually and review volume before enabling its
-   disabled daily scheduled action.
+6. Review the first bounded Product Master Quality batch. Its daily scheduled
+   action is active, overlap-protected, and advances a per-company cursor over
+   at most 500 products per company.
 7. Configure and approve bank-coding rules. Review at least one complete dry
    candidate cycle before applying any candidate.
 8. Update external product and equipment workers to write their run/evidence
@@ -97,6 +104,10 @@ conflict-free candidate can be converted into an unpublished sourced listing.
 9. After the first successful Odoo bank-candidate cycle, disable the legacy
    `Odoo Daily Auto Reconcile Agent` Windows scheduled task. Do not operate both
    write paths concurrently.
+
+Public partner-pricing enrollment remains disabled unless
+`southern_customer_portal.partner_application_enabled` is explicitly enabled
+after a commercial and security review.
 
 No module upgrade automatically imports existing local artifact files or
 applies bank-coding candidates.

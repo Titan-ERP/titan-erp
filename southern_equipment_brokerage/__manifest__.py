@@ -1,7 +1,8 @@
 {
     "name": "Southern Equipment Brokerage",
-    "version": "19.0.1.18.0",
+    "version": "19.0.1.19.0",
     "author": "Southern Equipment",
+    "website": "https://github.com/Titan-ERP/titan-erp",
     "category": "Sales/CRM",
     "summary": "Broker-assisted sourced equipment listings, inquiries, inspections, and assignments.",
     "description": """

@@ -1,9 +1,10 @@
 {
     "name": "Southern Parts Intelligence",
-    "version": "19.0.1.1.0",
+    "version": "19.0.1.2.0",
     "category": "Inventory/Inventory",
     "summary": "Adds OEM cross references, fitment, specifications, catalog pages, and source tracking to parts.",
     "author": "Southern Equipment Company",
+    "website": "https://github.com/Titan-ERP/titan-erp",
     "depends": [
         "product",
         "stock",
@@ -14,6 +15,7 @@
     "data": [
         "security/ir.model.access.csv",
         "security/record_rules.xml",
+        "data/security_defaults.xml",
         "data/catalog_sync_cron.xml",
         "data/evidence_queue_cron.xml",
         "data/partner_pricelist.xml",

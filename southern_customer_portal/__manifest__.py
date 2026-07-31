@@ -1,9 +1,10 @@
 {
     "name": "Southern Customer Portal",
-    "version": "19.0.1.0.15",
+    "version": "19.0.1.0.16",
     "category": "Website/Portal",
     "summary": "Customer portal pages for memberships, outstanding repair orders, and invoices.",
     "author": "Southern Equipment Company",
+    "website": "https://github.com/Titan-ERP/titan-erp",
     "depends": [
         "portal",
         "account",

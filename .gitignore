@@ -1,2 +1,16 @@
 __pycache__/
 *.pyc
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+*.env
+!.env.example
+!*.env.example
+odoo_connection.env
+outputs/
+tmp/
+node_modules/
+dist/
+*.egg-info/
+*.log

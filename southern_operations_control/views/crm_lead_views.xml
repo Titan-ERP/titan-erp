@@ -20,6 +20,10 @@
                     <field name="southern_record_class"/>
                     <field name="southern_classification_reason" readonly="1"/>
                     <field name="southern_classified_at" readonly="1"/>
+                    <field name="southern_source_system"/>
+                    <field name="southern_import_batch_key"/>
+                    <field name="southern_imported_at" readonly="1"/>
+                    <field name="southern_classification_version" readonly="1"/>
                 </group>
             </xpath>
         </field>
@@ -46,7 +50,7 @@
         <field name="model_id" ref="crm.model_crm_lead"/>
         <field name="binding_model_id" ref="crm.model_crm_lead"/>
         <field name="state">code</field>
-        <field name="code">model.action_classify_reference_cohorts()</field>
+        <field name="code">model.action_classify_reference_cohorts(apply=True, limit=500)</field>
     </record>
 
     <record id="action_southern_actual_opportunities" model="ir.actions.act_window">

@@ -1,0 +1,49 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadWorkerState",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeInstances",
+        "ssm:DescribeInstanceInformation",
+        "ssm:ListCommandInvocations",
+        "ssm:GetCommandInvocation"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "RunOnlyApprovedWorkerDocument",
+      "Effect": "Allow",
+      "Action": "ssm:SendCommand",
+      "Resource": [
+        "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:document/${SSM_DOCUMENT_NAME}",
+        "arn:aws:ec2:${AWS_REGION}:${AWS_ACCOUNT_ID}:instance/${WORKER_INSTANCE_ID}"
+      ]
+    },
+    {
+      "Sid": "ListOnlyAutomationArtifactPrefix",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::${ARTIFACT_BUCKET}",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": [
+            "${ARTIFACT_PREFIX}",
+            "${ARTIFACT_PREFIX}/*"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "WriteOnlyAutomationArtifacts",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:GetObjectAttributes"
+      ],
+      "Resource": "arn:aws:s3:::${ARTIFACT_BUCKET}/${ARTIFACT_PREFIX}/*"
+    }
+  ]
+}

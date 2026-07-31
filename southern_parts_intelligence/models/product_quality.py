@@ -123,24 +123,42 @@ class SouthernProductQualityIssue(models.Model):
             and price > max(cost, 1.49)
             and product.public_categ_ids
             and product.image_128
+            and (product.southern_source_url or evidence_count)
+            and (product.description_ecommerce or product.description_sale)
         ):
             codes.append("publication_ready")
         return codes
 
     @api.model
-    def refresh_quality_queue(self, limit=None):
+    def refresh_quality_queue(self, limit=None, after_id=0):
         Product = self.env["product.template"].with_context(
             active_test=False, bin_size=True
         )
+        product_domain = [
+            ("company_id", "in", [False, self.env.company.id]),
+            ("id", ">", int(after_id or 0)),
+        ]
         products = Product.search(
-            [("company_id", "in", [False, self.env.company.id])], limit=limit
+            product_domain,
+            order="id",
+            limit=limit,
         )
-        references = [
-            "".join((reference or "").upper().split())
+        raw_references = [
+            reference
             for reference in products.mapped("default_code")
             if reference
         ]
-        duplicate_counts = Counter(references)
+        duplicate_candidates = Product.search(
+            [
+                ("company_id", "in", [False, self.env.company.id]),
+                ("default_code", "in", raw_references),
+            ]
+        )
+        duplicate_counts = Counter(
+            "".join((reference or "").upper().split())
+            for reference in duplicate_candidates.mapped("default_code")
+            if reference
+        )
         now = fields.Datetime.now()
         detected = set()
         created = updated = resolved = 0
@@ -181,9 +199,11 @@ class SouthernProductQualityIssue(models.Model):
                         )
                     )
                     created += 1
+        product_ids = products.ids
         open_issues = self.search(
             [
                 ("company_id", "=", self.env.company.id),
+                ("product_tmpl_id", "in", product_ids),
                 ("state", "in", ["open", "in_progress", "blocked"]),
             ]
         )
@@ -197,15 +217,39 @@ class SouthernProductQualityIssue(models.Model):
                     }
                 )
                 resolved += 1
-        return {"created": created, "updated": updated, "resolved": resolved}
+        return {
+            "created": created,
+            "updated": updated,
+            "resolved": resolved,
+            "scanned": len(products),
+            "last_product_id": products[-1].id if products else 0,
+        }
 
     @api.model
     def cron_refresh_quality_queue(self):
-        return self.refresh_quality_queue()
+        self.env.cr.execute(
+            "SELECT pg_try_advisory_xact_lock(hashtext(%s))",
+            ("southern_product_quality_queue",),
+        )
+        if not self.env.cr.fetchone()[0]:
+            return {"skipped": "already_running"}
+
+        Config = self.env["ir.config_parameter"].sudo()
+        results = {}
+        for company in self.env["res.company"].sudo().search([]):
+            key = f"southern_parts_intelligence.quality_cursor.{company.id}"
+            cursor = int(Config.get_param(key, "0") or 0)
+            queue = self.with_company(company)
+            result = queue.refresh_quality_queue(limit=500, after_id=cursor)
+            if not result["scanned"] and cursor:
+                result = queue.refresh_quality_queue(limit=500, after_id=0)
+            Config.set_param(key, str(result["last_product_id"]))
+            results[company.id] = result
+        return results
 
     @api.model
     def action_refresh_quality_queue(self):
-        self.refresh_quality_queue()
+        self.cron_refresh_quality_queue()
         return {
             "type": "ir.actions.client",
             "tag": "reload",

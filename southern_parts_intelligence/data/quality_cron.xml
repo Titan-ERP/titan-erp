@@ -9,4 +9,13 @@
         <field name="interval_type">days</field>
         <field name="active">False</field>
     </record>
+    <record id="ir_cron_southern_product_quality_queue_v2" model="ir.cron">
+        <field name="name">Southern Product Master Quality Refresh (Bounded)</field>
+        <field name="model_id" ref="model_southern_product_quality_issue"/>
+        <field name="state">code</field>
+        <field name="code">model.cron_refresh_quality_queue()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="active">True</field>
+    </record>
 </odoo>
