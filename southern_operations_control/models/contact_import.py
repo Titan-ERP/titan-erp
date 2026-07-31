@@ -5,7 +5,7 @@ import re
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
-from odoo.osv import expression
+from odoo.fields import Domain
 
 
 MAX_IMPORT_BYTES = 5 * 1024 * 1024
@@ -121,27 +121,31 @@ class SouthernContactImportBatch(models.Model):
                 for row in source_chunk:
                     row_domain = []
                     if row["email"]:
-                        row_domain.append([("email", "=ilike", row["email"])])
+                        row_domain.append(Domain("email", "=ilike", row["email"]))
                     if row["phone"]:
                         phone_tail = row["phone"][-7:]
                         row_domain.extend(
                             [
-                                [("phone", "ilike", phone_tail)],
-                                [("mobile", "ilike", phone_tail)],
+                                Domain("phone", "ilike", phone_tail),
+                                Domain("mobile", "ilike", phone_tail),
                             ]
                         )
                     if row["name"]:
-                        row_domain.append([("name", "=ilike", row["name"])])
+                        row_domain.append(Domain("name", "=ilike", row["name"]))
                     if row_domain:
-                        candidate_domains.append(expression.OR(row_domain))
+                        candidate_domains.append(Domain.OR(row_domain))
                 candidate_domain = (
-                    expression.OR(candidate_domains)
+                    Domain.OR(candidate_domains)
                     if candidate_domains
-                    else [("id", "=", 0)]
+                    else Domain.FALSE
                 )
-                company_domain = [("company_id", "in", [False, batch.company_id.id])]
+                company_domain = Domain(
+                    "company_id",
+                    "in",
+                    [False, batch.company_id.id],
+                )
                 partners = Partner.search(
-                    expression.AND([company_domain, candidate_domain]),
+                    company_domain & candidate_domain,
                     limit=2000,
                 )
                 by_email = {}

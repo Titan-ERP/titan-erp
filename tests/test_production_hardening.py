@@ -50,6 +50,11 @@ class ProductionHardeningTests(unittest.TestCase):
             self.assertNotIn("TARGET_COMPANY_ID", source)
             self.assertNotIn("company_id.id != 2", source)
 
+    def test_contact_matching_uses_odoo_19_domain_api(self):
+        source = self.source("southern_operations_control/models/contact_import.py")
+        self.assertIn("from odoo.fields import Domain", source)
+        self.assertNotIn("from odoo.osv", source)
+
     def test_apply_run_requires_idempotency_and_verified_artifact(self):
         source = self.source(
             "southern_parts_intelligence/models/automation_control.py"
