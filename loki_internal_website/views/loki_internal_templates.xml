@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="loki_internal_dashboard" name="LOKI Internal Dashboard">
+        <t t-call="website.layout">
+            <t t-set="pageName" t-value="'loki_internal_dashboard'"/>
+            <t t-set="additional_title">LOKI</t>
+            <main id="main" class="loki-internal-page" data-loki-dashboard="true">
+                <section class="loki-hero" aria-labelledby="loki-page-title">
+                    <div class="container">
+                        <p class="loki-eyebrow">Internal workspace</p>
+                        <h1 id="loki-page-title">LOKI</h1>
+                        <p class="loki-hero-copy">
+                            Parcel intelligence and CRM pipeline visibility for
+                            <strong t-esc="company.display_name"/>.
+                        </p>
+                        <div class="loki-actions" aria-label="LOKI workspace links">
+                            <a class="btn btn-primary" t-att-href="crm_url">Open Odoo CRM</a>
+                            <a class="btn btn-outline-light" t-att-href="parcel_url">Open parcel links</a>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="container loki-content" aria-labelledby="pipeline-heading">
+                    <div class="loki-section-heading">
+                        <div>
+                            <p class="loki-eyebrow">Current company</p>
+                            <h2 id="pipeline-heading">CRM pipeline</h2>
+                        </div>
+                        <p>Live Odoo counts for the active company and your permitted records.</p>
+                    </div>
+                    <div class="loki-metric-grid">
+                        <article class="loki-metric-card" t-foreach="pipeline_counts" t-as="metric">
+                            <p t-esc="metric['label']"/>
+                            <strong t-esc="metric['count']" t-att-data-loki-stage="metric['label']"/>
+                            <span>CRM records</span>
+                        </article>
+                    </div>
+                </section>
+
+                <section class="container loki-content" aria-labelledby="parcel-heading">
+                    <div class="loki-panel loki-parcel-panel">
+                        <div>
+                            <p class="loki-eyebrow">CRM + parcel intelligence</p>
+                            <h2 id="parcel-heading">Parcel links</h2>
+                            <p>
+                                Review auditable links between CRM records and external parcel
+                                accounts. Full parcel geometry remains outside Odoo.
+                            </p>
+                            <a class="loki-text-link" t-att-href="parcel_url">Review parcel links <span aria-hidden="true">&#8594;</span></a>
+                        </div>
+                        <dl class="loki-parcel-stats">
+                            <div>
+                                <dt>Active links</dt>
+                                <dd t-esc="parcel_count"/>
+                            </div>
+                            <div>
+                                <dt>Matched</dt>
+                                <dd t-esc="matched_parcel_count"/>
+                            </div>
+                        </dl>
+                    </div>
+                </section>
+
+                <section class="container loki-content loki-ai-section" aria-labelledby="ai-research-heading">
+                    <div class="loki-panel">
+                        <p class="loki-status-label">Planned capability</p>
+                        <h2 id="ai-research-heading">AI Research</h2>
+                        <p>
+                            This reserved workspace will support reviewed research summaries and
+                            source-backed enrichment. It is a placeholder only: no external AI,
+                            browsing, or provider calls are made from this page.
+                        </p>
+                        <p class="loki-placeholder-note" role="status">AI Research is not enabled.</p>
+                    </div>
+                </section>
+            </main>
+        </t>
+    </template>
+</odoo>
