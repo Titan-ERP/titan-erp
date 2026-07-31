@@ -121,6 +121,30 @@ class OdooNativeSystemsTests(unittest.TestCase):
         self.assertNotIn("latest(", source)
         self.assertNotIn("standard_price", source)
 
+    def test_external_and_write_capable_crons_are_noupdate(self):
+        cron_records = (
+            (
+                "southern_parts_intelligence/data/catalog_sync_cron.xml",
+                "ir_cron_southern_parts_catalog_sync",
+            ),
+            (
+                "southern_parts_intelligence/data/evidence_queue_cron.xml",
+                "ir_cron_southern_parts_price_evidence_refresh",
+            ),
+            (
+                "southern_customer_portal/data/parts_review_cron.xml",
+                "ir_cron_southern_parts_review_auto_advance",
+            ),
+        )
+        for relative, record_id in cron_records:
+            root = ET.parse(ROOT / relative).getroot()
+            protected = root.get("noupdate") == "1" or any(
+                data.get("noupdate") == "1"
+                and data.find(f"./record[@id='{record_id}']") is not None
+                for data in root.findall("./data")
+            )
+            self.assertTrue(protected, relative)
+
 
 if __name__ == "__main__":
     unittest.main()
