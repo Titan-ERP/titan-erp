@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem id="menu_loki_crm_root" name="LOKI CRM" sequence="36" groups="base.group_user"/>
+    <menuitem id="menu_loki_crm_parcel_links" name="Parcel Links" parent="menu_loki_crm_root" action="action_loki_crm_parcel_links" sequence="10" groups="base.group_user"/>
+</odoo>
