@@ -47,6 +47,16 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         self.assertIn('<field name="type">service</field>', product_xml)
         self.assertIn('<field name="service_tracking">no</field>', product_xml)
 
+    def test_zero_labor_rate_is_flagged_before_quote_handoff(self):
+        view_source = (MODULE / "views" / "project_task_views.xml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            'invisible="not southern_labor_product_id or southern_labor_rate &gt; 0"',
+            view_source,
+        )
+        self.assertIn("has a $0.00 sales price", view_source)
+
     def test_digital_inspection_result_fields_remain_editable(self):
         view_source = (
             MODULE / "views" / "service_inspection_views.xml"

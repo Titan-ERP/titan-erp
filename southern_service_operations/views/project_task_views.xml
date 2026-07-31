@@ -272,6 +272,12 @@
                         Select the Labor Sales Product before applying billable
                         labor suggestions.
                     </div>
+                    <div class="alert alert-danger" role="status"
+                         invisible="not southern_labor_product_id or southern_labor_rate &gt; 0">
+                        The selected labor product has a $0.00 sales price. A
+                        service manager must set the native Odoo product's Sales
+                        Price before this quotation is sent or confirmed.
+                    </div>
                     <div class="alert alert-warning" role="status">
                         AI suggestions never confirm or send the quotation. A
                         technician must review and apply selected tasks, actual
