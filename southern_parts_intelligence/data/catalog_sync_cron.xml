@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
+  <data>
     <record id="southern_parts_catalog_sync_snapshot_refresh" model="southern.parts.catalog.sync">
         <field name="name">Website Parts Snapshot Refresh</field>
         <field name="sequence">10</field>
@@ -7,7 +8,9 @@
         <field name="mode">snapshot_refresh</field>
         <field name="batch_size">500</field>
     </record>
+  </data>
 
+  <data noupdate="1">
     <record id="ir_cron_southern_parts_catalog_sync" model="ir.cron">
         <field name="name">Southern Parts Catalog Sync</field>
         <field name="model_id" ref="model_southern_parts_catalog_sync"/>
@@ -15,6 +18,7 @@
         <field name="code">model._cron_run_active_syncs()</field>
         <field name="interval_number">10</field>
         <field name="interval_type">minutes</field>
-        <field name="active">True</field>
+        <field name="active">False</field>
     </record>
+  </data>
 </odoo>

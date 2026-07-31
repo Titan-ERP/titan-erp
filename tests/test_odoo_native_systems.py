@@ -99,6 +99,65 @@ class OdooNativeSystemsTests(unittest.TestCase):
         )
         self.assertNotIn("shop_boss", " ".join(manifest["depends"]).casefold())
 
+    def test_sparex_sourcing_queue_never_writes_standard_cost(self):
+        source = (
+            ROOT
+            / "southern_parts_intelligence"
+            / "models"
+            / "sparex_sourcing.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('_name = "southern.sparex.sourcing.queue"', source)
+        self.assertIn('"product.supplierinfo"', source)
+        self.assertNotIn('"standard_price":', source)
+        self.assertIn("publication_eligible", source)
+        self.assertIn("evidence_sha256", source)
+        self.assertIn("next_attempt_at", source)
+
+    def test_sparex_pipeline_requires_explicit_artifact_hashes(self):
+        source = (ROOT / "scripts" / "sparex_sourcing_pipeline.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("--input-sha256", source)
+        self.assertNotIn("latest(", source)
+        self.assertNotIn("standard_price", source)
+
+    def test_external_and_write_capable_crons_are_noupdate(self):
+        cron_records = (
+            (
+                "southern_parts_intelligence/data/catalog_sync_cron.xml",
+                "ir_cron_southern_parts_catalog_sync",
+            ),
+            (
+                "southern_parts_intelligence/data/evidence_queue_cron.xml",
+                "ir_cron_southern_parts_price_evidence_refresh",
+            ),
+            (
+                "southern_customer_portal/data/parts_review_cron.xml",
+                "ir_cron_southern_parts_review_auto_advance",
+            ),
+        )
+        for relative, record_id in cron_records:
+            root = ET.parse(ROOT / relative).getroot()
+            protected = root.get("noupdate") == "1" or any(
+                data.get("noupdate") == "1"
+                and data.find(f"./record[@id='{record_id}']") is not None
+                for data in root.findall("./data")
+            )
+            self.assertTrue(protected, relative)
+
+    def test_sparex_write_capable_crons_install_inactive(self):
+        for relative in (
+            "southern_parts_intelligence/data/catalog_sync_cron.xml",
+            "southern_parts_intelligence/data/evidence_queue_cron.xml",
+        ):
+            root = ET.parse(ROOT / relative).getroot()
+            records = root.findall(".//record[@model='ir.cron']")
+            self.assertTrue(records, relative)
+            for record in records:
+                active = record.find("field[@name='active']")
+                self.assertIsNotNone(active, relative)
+                self.assertEqual((active.text or "").strip(), "False", relative)
+
 
 if __name__ == "__main__":
     unittest.main()

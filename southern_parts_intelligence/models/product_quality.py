@@ -6,11 +6,13 @@ from odoo import _, api, fields, models
 ISSUE_TYPES = [
     ("placeholder_price", "Placeholder Price"),
     ("price_not_above_cost", "Price Not Above Cost"),
+    ("missing_verified_supplier_cost", "Missing Verified Supplier Cost"),
     ("missing_evidence", "Missing Evidence"),
     ("taxonomy_review", "Taxonomy Review"),
     ("duplicate_reference", "Duplicate Internal Reference"),
     ("published_missing_image", "Published Without Image"),
     ("published_missing_description", "Published Without Description"),
+    ("publication_gate_blocked", "Published but Sourcing Gate Blocked"),
     ("publication_ready", "Publication Ready"),
 ]
 
@@ -93,6 +95,17 @@ class SouthernProductQualityIssue(models.Model):
         price = product.list_price or 0.0
         cost = product.standard_price or 0.0
         reference = "".join((product.default_code or "").upper().split())
+        is_sparex = reference.startswith("S.")
+        sourcing_rows = product.southern_sparex_sourcing_ids if is_sparex else self.env["southern.sparex.sourcing.queue"]
+        verified_supplier_costs = sourcing_rows.filtered(
+            lambda row: row.supplier_price > 0 and row.state in (
+                "cost_approved",
+                "cost_applied",
+                "retail_approved",
+                "publication_ready",
+            )
+        ).mapped("supplier_price")
+        verified_supplier_cost = min(verified_supplier_costs) if verified_supplier_costs else 0.0
         evidence_count = sum(
             getattr(product, field_name, 0) or 0
             for field_name in (
@@ -104,8 +117,12 @@ class SouthernProductQualityIssue(models.Model):
         )
         if price <= 1.49:
             codes.append("placeholder_price")
-        elif cost > 0 and price <= cost:
+        elif is_sparex and verified_supplier_cost > 0 and price <= verified_supplier_cost:
             codes.append("price_not_above_cost")
+        elif not is_sparex and cost > 0 and price <= cost:
+            codes.append("price_not_above_cost")
+        if is_sparex and verified_supplier_cost <= 0:
+            codes.append("missing_verified_supplier_cost")
         if not product.southern_source_url and not evidence_count:
             codes.append("missing_evidence")
         if product.website_published and not product.public_categ_ids:
@@ -118,13 +135,17 @@ class SouthernProductQualityIssue(models.Model):
             product.description_ecommerce or product.description_sale
         ):
             codes.append("published_missing_description")
+        if is_sparex and product.website_published and not product.southern_sparex_publication_eligible:
+            codes.append("publication_gate_blocked")
+        sourcing_ready = not is_sparex or product.southern_sparex_publication_eligible
         if (
             not product.website_published
-            and price > max(cost, 1.49)
+            and price > max(verified_supplier_cost if is_sparex else cost, 1.49)
             and product.public_categ_ids
             and product.image_128
             and (product.southern_source_url or evidence_count)
             and (product.description_ecommerce or product.description_sale)
+            and sourcing_ready
         ):
             codes.append("publication_ready")
         return codes
@@ -190,7 +211,12 @@ class SouthernProductQualityIssue(models.Model):
                             issue_type=issue_type,
                             severity=(
                                 "4_blocker"
-                                if issue_type in ("placeholder_price", "price_not_above_cost")
+                                if issue_type in (
+                                    "placeholder_price",
+                                    "price_not_above_cost",
+                                    "missing_verified_supplier_cost",
+                                    "publication_gate_blocked",
+                                )
                                 and product.website_published
                                 else "3_high"
                                 if issue_type.startswith("published_")
