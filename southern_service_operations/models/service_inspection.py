@@ -256,6 +256,29 @@ class ProjectTaskDigitalEquipmentInspection(models.Model):
             task.write(values)
         return {"type": "ir.actions.client", "tag": "reload"}
 
+    def action_southern_add_inspection_finding(self):
+        self.ensure_one()
+        if not self.is_fsm:
+            raise ValidationError(
+                _("Inspection findings are available only on Service Jobs.")
+            )
+        if self.southern_inspection_state == "completed":
+            raise ValidationError(
+                _("Reopen the inspection before adding another finding.")
+            )
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Add Inspection Finding"),
+            "res_model": "southern.service.inspection.item",
+            "view_mode": "form",
+            "view_id": self.env.ref(
+                "southern_service_operations."
+                "view_southern_service_inspection_item_form"
+            ).id,
+            "target": "new",
+            "context": {"default_task_id": self.id},
+        }
+
     def action_southern_complete_inspection(self):
         for task in self:
             if not task.southern_inspection_item_ids:

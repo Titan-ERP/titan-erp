@@ -1,6 +1,6 @@
 {
     "name": "Southern Service",
-    "version": "19.0.1.17.0",
+    "version": "19.0.1.18.0",
     "author": "Southern Equipment",
     "category": "Services",
     "summary": "One Service workflow across Sales, customer equipment, field work, shop work, maintenance, and purchasing.",

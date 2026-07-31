@@ -434,6 +434,14 @@ class SouthernServiceOperationsTests(unittest.TestCase):
             len(document.xpath("//field[@name='image'][@widget='image']")),
             2,
         )
+        self.assertEqual(
+            len(
+                document.xpath(
+                    "//button[@name='action_southern_add_inspection_finding']"
+                )
+            ),
+            1,
+        )
 
         project_view = etree.parse(
             str(MODULE / "views" / "project_task_views.xml")

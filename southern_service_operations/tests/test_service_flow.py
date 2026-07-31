@@ -489,6 +489,15 @@ class TestSouthernServiceFlow(TransactionCase):
             start_action,
             {"type": "ir.actions.client", "tag": "reload"},
         )
+        finding_action = task.action_southern_add_inspection_finding()
+        self.assertEqual(
+            finding_action["res_model"],
+            "southern.service.inspection.item",
+        )
+        self.assertEqual(
+            finding_action["context"]["default_task_id"],
+            task.id,
+        )
 
         included = self.env["southern.service.inspection.item"].create(
             {
