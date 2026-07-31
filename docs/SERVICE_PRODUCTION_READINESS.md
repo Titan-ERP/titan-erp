@@ -214,6 +214,16 @@ test, or traceback warning.
 
 These are operational approvals, not missing code:
 
+Approved production-copy staging role mapping (2026-07-31):
+
+- **Cross** — Service Manager.
+- **Raymy** — Service Manager.
+- **Service** — Service User and Field Service User.
+
+All three assignments were saved and read back in Odoo.sh staging build
+`35740172`. Production user records remain unchanged pending deployment and
+role-based sign-off.
+
 1. Assign named users to **Service User** or **Service Manager** and verify their
    existing Sales, Field Service, Repair, Maintenance, Purchase, and Accounting
    permissions. Service User grants access to the user's own Sales quotations.
