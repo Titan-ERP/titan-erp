@@ -18,8 +18,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      - name: Install test dependencies
+        run: python -m pip install --disable-pip-version-check lxml
       - name: Compile Python
-        run: python -m compileall -q scripts southern_* custom_addons
+        run: python -m compileall -q scripts southern_* custom_addons loki_*
       - name: Run standalone regression tests
         run: python -m unittest discover -s tests -p "test_*.py" -v
       - name: Parse Odoo XML
@@ -29,7 +31,7 @@ jobs:
           import xml.etree.ElementTree as ET
 
           paths = []
-          for pattern in ("southern_*", "custom_addons/*"):
+          for pattern in ("southern_*", "custom_addons/*", "loki_*"):
               for root in Path(".").glob(pattern):
                   paths.extend(root.rglob("*.xml"))
           for path in paths:
