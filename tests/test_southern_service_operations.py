@@ -315,6 +315,15 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         ):
             self.assertIn(marker, source)
 
+        sale_order_source = (
+            MODULE / "models" / "sale_order.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("southern_service_task_id", sale_order_source)
+        self.assertIn(
+            '[("southern_sale_order_id", "=", order.id)]',
+            sale_order_source,
+        )
+
         self.assertEqual(
             len(
                 document.xpath(

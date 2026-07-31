@@ -278,13 +278,24 @@ class TestSouthernServiceFlow(TransactionCase):
         self.assertEqual(labor_line.order_id, order)
         self.assertEqual(labor_line.product_uom_qty, 4.5)
         self.assertEqual(labor_line.price_unit, 125.0)
+        self.assertEqual(labor_line.southern_service_task_id, task)
         self.assertIn(labor.name, labor_line.name)
         self.assertIn(second_labor.name, labor_line.name)
         self.assertFalse(nonbillable.sale_line_id)
         self.assertEqual(part.sale_line_id.order_id, order)
+        self.assertEqual(part.sale_line_id.southern_service_task_id, task)
         self.assertEqual(part.sale_line_id.product_id, self.part_product)
         self.assertEqual(part.sale_line_id.product_uom_qty, 2.0)
         self.assertEqual(part.sale_line_id.price_unit, 42.50)
+        native_line = self.env["sale.order.line"].create(
+            {
+                "order_id": order.id,
+                "product_id": self.part_product.id,
+                "product_uom_qty": 1.0,
+            }
+        )
+        self.assertEqual(native_line.southern_service_task_id, task)
+        self.assertIn(native_line, task.southern_quote_line_ids)
 
         part_action = task.action_southern_add_part()
         self.assertEqual(
