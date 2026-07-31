@@ -82,6 +82,30 @@ service-account key is entered in this staging database and one reviewed
 suggestion is generated. The key must not be copied into this dossier, source
 control, chatter, screenshots, or test output.
 
+## Record-preserving deployment guarantees
+
+- Install the add-on into the existing production database. Never replace
+  production with the staging database or import the staging UAT records.
+- Preserve every existing customer, contact, Sales quotation/order, invoice,
+  Product, Client Equipment record, Field Service task, Repair Order,
+  Maintenance record, Purchase Order, attachment, and chatter entry.
+- The add-on is additive: it adds nullable links, Service coordination models,
+  views, menus, and security. It has no pre-install, post-install, or uninstall
+  hook; no migration or upgrade script; and no raw delete, truncate, table-drop,
+  or column-drop operation.
+- Do not uninstall existing Client Equipment, Field Service, Repair,
+  Maintenance, Sales, Purchase, Inventory, or Accounting modules as part of
+  this deployment.
+- Do not deduplicate, resequence, archive, rewrite, or bulk-update existing
+  records during installation. Any future cleanup requires its own backup,
+  dry-run report, approval, and reversible change plan.
+- Service-generated draft quotation lines may only be removed through an
+  explicit user change to that Service scope. Confirmed Sales Order lines are
+  protected from Service-side removal.
+- Verify the pre-change production backup and restore controls immediately
+  before deployment. A staging database copy validates behavior but is not a
+  substitute for the production backup.
+
 The Odoo.sh build is yellow because the inherited production stack emits
 warnings outside this add-on: legacy Client Equipment access-record creation
 messages and an accessibility warning in the existing company setup wizard.
@@ -228,7 +252,8 @@ These are operational approvals, not missing code:
    rate is nonzero. Do not create a duplicate labor product.
 8. Take and verify the production backup immediately before the change window.
 9. Deploy the exact staging-tested commit and install/upgrade only
-   `southern_service_operations`.
+   `southern_service_operations` in the existing production database. Do not
+   restore, import, or copy the staging database into production.
 10. Enter the dedicated production OpenAI service-account key through the
     admin-only Southern Service setting unless the approved server environment
     secret is already present. Save, generate one controlled AI review, then
@@ -261,5 +286,5 @@ These are operational approvals, not missing code:
 
 The isolated code candidate and core workflow have passed a current-production-
 copy staging/UAT cycle. Production remains a **no-go** until the dedicated AI
-key passes one controlled reviewed suggestion and the named operational
-approval gates above are signed off.
+key passes one controlled reviewed suggestion and the named operational role,
+change-window, smoke-test, and rollback approval gates above are signed off.

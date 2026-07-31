@@ -37,6 +37,21 @@ class SouthernServiceOperationsTests(unittest.TestCase):
             if path.suffix == ".xml":
                 etree.parse(str(path))
 
+    def test_install_is_additive_and_has_no_destructive_hooks(self):
+        manifest = _manifest()
+        for hook in ("pre_init_hook", "post_init_hook", "uninstall_hook"):
+            self.assertNotIn(hook, manifest)
+        self.assertFalse((MODULE / "migrations").exists())
+        self.assertFalse((MODULE / "upgrades").exists())
+        module_source = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (MODULE / "models").glob("*.py")
+        ).upper()
+        self.assertNotIn("DELETE FROM", module_source)
+        self.assertNotIn("TRUNCATE", module_source)
+        self.assertNotIn("DROP TABLE", module_source)
+        self.assertNotIn("DROP COLUMN", module_source)
+
     def test_module_uses_only_existing_native_products(self):
         manifest = _manifest()
         task_source = (MODULE / "models" / "project_task.py").read_text(
