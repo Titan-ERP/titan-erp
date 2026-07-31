@@ -4,6 +4,8 @@ from werkzeug.exceptions import NotFound
 
 
 class LokiInternalWebsite(http.Controller):
+    _LOKI_COMPANY_NAMES = {"loki", "loki llc", "loki analytics"}
+
     @http.route(
         "/loki",
         type="http",
@@ -18,6 +20,9 @@ class LokiInternalWebsite(http.Controller):
             raise NotFound()
 
         company = request.env.company
+        if company.name.strip().casefold() not in self._LOKI_COMPANY_NAMES:
+            raise NotFound()
+
         lead_model = request.env["crm.lead"]
         company_domain = [("company_id", "=", company.id)]
         pipeline_counts = [
