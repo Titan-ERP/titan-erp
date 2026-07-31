@@ -249,14 +249,21 @@ class TestSouthernServiceFlow(TransactionCase):
 
         task.action_southern_create_quotation()
         order = task.southern_sale_order_id
+        self.env.flush_all()
+        task.invalidate_recordset(["southern_labor_sale_line_id"])
+        order.invalidate_recordset(["order_line"])
+        labor_line = task.southern_labor_sale_line_id
+        quoted_labor_lines = order.order_line.filtered(
+            lambda line: line.product_id == self.service_product
+            and line.name.startswith("Service Labor")
+        )
         self.assertEqual(task.southern_service_task_hours, 5.0)
-        self.assertTrue(labor.sale_line_id)
-        self.assertEqual(labor.sale_line_id, task.southern_labor_sale_line_id)
-        self.assertEqual(labor.sale_line_id.order_id, order)
-        self.assertEqual(labor.sale_line_id.product_uom_qty, 4.5)
-        self.assertEqual(labor.sale_line_id.price_unit, 125.0)
-        self.assertIn(labor.name, labor.sale_line_id.name)
-        self.assertIn(second_labor.name, labor.sale_line_id.name)
+        self.assertEqual(quoted_labor_lines, labor_line)
+        self.assertEqual(labor_line.order_id, order)
+        self.assertEqual(labor_line.product_uom_qty, 4.5)
+        self.assertEqual(labor_line.price_unit, 125.0)
+        self.assertIn(labor.name, labor_line.name)
+        self.assertIn(second_labor.name, labor_line.name)
         self.assertFalse(nonbillable.sale_line_id)
 
         labor.allocated_hours = 4.25
