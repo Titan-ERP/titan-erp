@@ -199,7 +199,7 @@ class ProjectTaskDigitalEquipmentInspection(models.Model):
         copy=True,
     )
     southern_service_photo_count = fields.Integer(
-        string="Service Photos",
+        string="Service Photo Count",
         compute="_compute_southern_service_photo_count",
     )
     southern_inspection_attention_count = fields.Integer(
