@@ -250,7 +250,24 @@ class ProjectTask(models.Model):
         )
 
     def _southern_sync_tasks_to_quotation(self, order=None):
+        WorkItem = self.env["southern.service.work.item"]
+        WorkItem.flush_model(
+            [
+                "task_id",
+                "sequence",
+                "name",
+                "work_type",
+                "allocated_hours",
+                "quantity",
+                "product_id",
+                "unit_price",
+                "billable",
+            ]
+        )
         for task in self:
+            task.flush_recordset(
+                ["southern_labor_sale_line_id", "sale_line_id"]
+            )
             task.invalidate_recordset(
                 [
                     "southern_service_work_item_ids",
@@ -264,7 +281,10 @@ class ProjectTask(models.Model):
             if task_order.state not in ("draft", "sent"):
                 continue
 
-            work_items = task.southern_service_work_item_ids
+            work_items = WorkItem.search(
+                [("task_id", "=", task.id)],
+                order="sequence, id",
+            )
             labor_items = work_items.filtered(
                 lambda item: item.billable and item.work_type == "labor"
             )
