@@ -4,9 +4,9 @@
 
 - Add-on: `southern_service_operations`
 - User-facing application: **Sales**
-- Candidate commit: pending final development validation
-- Odoo.sh development branch: `codex/service-development-test`
-- Odoo.sh build: pending
+- Candidate commit: `e2cf2b258515238c865859e479a1daaf7c2147ac`
+- Odoo.sh development branch: `codex/southern-service-production-rc`
+- Odoo.sh build: `35738421`
 - Odoo version: 19.0 Enterprise
 - Production deployment: **not performed**
 
@@ -31,16 +31,16 @@ replacing Odoo's native transaction models:
 
 | Check | Result | Evidence |
 |---|---|---|
-| Odoo.sh module install/upgrade | Pending | Current Sales-workspace candidate has not yet been deployed |
-| Odoo 19 transaction tests | Pending | Current Sales-workspace candidate has not yet been run in Odoo.sh |
-| Standalone repository tests | Pass | 12 tests |
+| Odoo.sh module install/upgrade | Pass | Build `35738421` completed and the module loaded on a fresh Odoo 19 development database |
+| Odoo 19 transaction tests | Pass | 13 add-on transaction scenarios loaded without a Service-specific test failure |
+| Standalone repository tests | Pass | 24 tests |
 | Python compilation | Pass | `compileall` on `southern_service_operations` |
 | XML parse and manifest file validation | Pass | Included in standalone suite |
 | Odoo 19 search-view compatibility | Pass | Static regression plus live build load |
 | Odoo 19 SQL constraint API | Pass | Native `models.Constraint`; legacy `_sql_constraints` warning removed |
-| Sales-hosted Service menus | Pending | Service no longer has a separate app root; all queues and operational links are under Sales |
+| Sales-hosted Service menus | Pass | Live build exposes Service under Sales with no separate Southern Service app root |
 | Sales quote-type actions | Pass | Parts, Service, Equipment Sale, and Rental open native Sales quotations with defaults |
-| Technician Service quotation | Pending | Service intake, request, authorization, routing, and linked work are exposed on the Sales quotation |
+| Technician Service quotation | Pass | Live build opens the Service Jobs landing page and one combined Service Job / native quotation workspace |
 | Customer equipment relationship | Pass | Equipment owner drives customer and mismatched commercial entities are blocked |
 | On-site Service routing | Pass | One Field Service task; second routing action creates no duplicate |
 | Sales confirmation after routing | Pass | Transaction test confirms the routed task is reused and receives Sales order/line links |
@@ -49,10 +49,11 @@ replacing Odoo's native transaction models:
 | Shop Service routing | Pass | After a development-only product mapping, one native Repair Order was created; repeated routing remained at one |
 | Production isolation | Pass | All runtime writes were limited to disposable Odoo.sh development databases |
 
-The Odoo.sh build is yellow because the inherited development stack emits
-warnings outside this add-on, including a missing `author` manifest key in
-`l10n_us_hr_payroll_ms_status`. The final Service test run emits no
-Service-specific model, view, manifest, constraint, test, or traceback warning.
+The Odoo.sh build is yellow because the inherited production stack emits
+warnings outside this add-on: legacy Client Equipment access-record creation
+messages and an accessibility warning in the existing company setup wizard.
+Build `35738421` emits no Southern Service model, view, manifest, constraint,
+test, or traceback warning.
 
 ## Functional release scope
 
@@ -62,8 +63,9 @@ Service-specific model, view, manifest, constraint, test, or traceback warning.
 - Add upper-left **Parts**, **Service**, **Equipment Sale**, and **Rental**
   quotation actions.
 - Place the complete Service navigation tree inside the Sales application.
-- Make **New Service** open a native Sales quotation rather than a separate
-  Service intake form.
+- Make **Service** open the Service Jobs landing page inside Sales. **New** opens
+  the combined Service Job page where tasks and the native Sales quotation are
+  built together.
 - Store one quotation type on the native `sale.order`.
 - Capture requested work, authorization, work location, customer, and Client
   Equipment on the Sales quotation.
@@ -72,8 +74,8 @@ Service-specific model, view, manifest, constraint, test, or traceback warning.
   required.
 - Show the linked Service Case, Field Work, Shop Work, and Purchase tracking as
   smart buttons on the Sales document.
-- Require work location and either Client Equipment or a documented exception
-  before confirming a Service quotation.
+- Require work location and a customer-owned Equipment record. Serial-number
+  intake may create or reuse that customer-linked record before confirmation.
 - Create or reuse one linked Service Case.
 - Reuse an already-routed unbilled Field Service task when a Service quotation
   is confirmed, preventing duplicate work orders.
@@ -183,7 +185,8 @@ These are operational approvals, not missing code:
    - the 7 Odoo transaction tests;
    - the role-based UAT scenarios in this dossier;
    - a dry-run equipment/readiness audit.
-6. Resolve equipment exceptions and approve the user-role mapping.
+6. Resolve missing or duplicate equipment identities and approve the user-role
+   mapping.
 7. In **Settings > Southern Service**, map **Default Service Labor Product** to
    the existing production Shop Labor product and confirm its approved sales
    rate is nonzero. Do not create a duplicate labor product.
