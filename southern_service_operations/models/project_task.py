@@ -65,6 +65,7 @@ class ProjectTask(models.Model):
     southern_labor_rate = fields.Monetary(
         string="Labor Rate",
         currency_field="southern_work_currency_id",
+        compute="_compute_southern_labor_rate",
     )
     southern_work_currency_id = fields.Many2one(
         "res.currency",
@@ -109,6 +110,15 @@ class ProjectTask(models.Model):
         for task in self:
             task.southern_service_task_hours = sum(
                 task.southern_service_work_item_ids.mapped("allocated_hours")
+            )
+
+    @api.depends("southern_labor_product_id.lst_price")
+    def _compute_southern_labor_rate(self):
+        for task in self:
+            task.southern_labor_rate = (
+                task.southern_labor_product_id.lst_price
+                if task.southern_labor_product_id
+                else 0.0
             )
 
     @api.depends(

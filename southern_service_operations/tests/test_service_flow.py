@@ -223,9 +223,9 @@ class TestSouthernServiceFlow(TransactionCase):
             {
                 "southern_quote_workflow": True,
                 "southern_labor_product_id": self.service_product.id,
-                "southern_labor_rate": 125.0,
             }
         )
+        self.assertEqual(task.southern_labor_rate, 125.0)
         labor = self.env["southern.service.work.item"].create(
             {
                 "task_id": task.id,
