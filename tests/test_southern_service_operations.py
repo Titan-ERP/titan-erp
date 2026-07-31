@@ -286,12 +286,12 @@ class SouthernServiceOperationsTests(unittest.TestCase):
                     "//button[@name='action_southern_add_part']"
                 )
             ),
-            1,
+            0,
         )
         self.assertEqual(
             len(
                 document.xpath(
-                    "//separator[@string='Native Sales Quotation Lines']"
+                    "//separator[@string='Sales Quotation Lines']"
                 )
             ),
             1,
@@ -314,6 +314,26 @@ class SouthernServiceOperationsTests(unittest.TestCase):
             "total_hours = sum(labor_items.mapped(\"allocated_hours\"))",
         ):
             self.assertIn(marker, source)
+
+        self.assertEqual(
+            len(
+                document.xpath(
+                    "//field[@name='southern_quote_line_ids']"
+                    "/list[@editable='bottom']"
+                    "/control/create[@string='Add a product']"
+                )
+            ),
+            1,
+        )
+        self.assertEqual(
+            len(
+                document.xpath(
+                    "//field[@name='southern_service_work_item_ids']"
+                    "/list/control/create"
+                )
+            ),
+            1,
+        )
 
     def test_routing_is_idempotent_for_each_execution_model(self):
         source = (MODULE / "models" / "service_case.py").read_text(
