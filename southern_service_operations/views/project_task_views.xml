@@ -246,7 +246,11 @@
                     <separator string="Sales Quotation Lines"/>
                     <field name="southern_quote_line_ids"
                            readonly="southern_sale_state not in (False, 'draft', 'sent')"
-                           context="{'default_order_id': southern_sale_order_id}"
+                           invisible="not southern_sale_order_id"
+                           context="{
+                               'default_order_id': southern_sale_order_id,
+                               'default_southern_service_task_id': id
+                           }"
                            nolabel="1">
                         <list editable="bottom">
                             <control>

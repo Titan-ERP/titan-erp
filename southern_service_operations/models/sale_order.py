@@ -317,6 +317,13 @@ class SaleOrder(models.Model):
 class SaleOrderLine(models.Model):
     _inherit = "sale.order.line"
 
+    southern_service_task_id = fields.Many2one(
+        "project.task",
+        string="Service Job",
+        index=True,
+        copy=False,
+        ondelete="set null",
+    )
     southern_client_equipment_id = fields.Many2one(
         "equipment.details",
         string="Equipment",
@@ -331,6 +338,26 @@ class SaleOrderLine(models.Model):
         store=True,
         index=True,
     )
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        Task = self.env["project.task"]
+        Order = self.env["sale.order"]
+        for values in vals_list:
+            if values.get("southern_service_task_id") or not values.get(
+                "order_id"
+            ):
+                continue
+            order = Order.browse(values["order_id"])
+            if order.southern_quote_type != "service":
+                continue
+            task = Task.search(
+                [("southern_sale_order_id", "=", order.id)],
+                limit=1,
+            )
+            if task:
+                values["southern_service_task_id"] = task.id
+        return super().create(vals_list)
 
     def _timesheet_create_task(self, project):
         self.ensure_one()

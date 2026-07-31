@@ -40,9 +40,9 @@ class ProjectTask(models.Model):
         copy=False,
     )
     southern_quote_line_ids = fields.One2many(
-        related="southern_sale_order_id.order_line",
+        "sale.order.line",
+        "southern_service_task_id",
         string="Quotation Lines",
-        readonly=False,
     )
     southern_service_work_item_ids = fields.One2many(
         "southern.service.work.item",
@@ -287,6 +287,9 @@ class ProjectTask(models.Model):
                 continue
             if task_order.state not in ("draft", "sent"):
                 continue
+            task_order.order_line.filtered(
+                lambda line: not line.southern_service_task_id
+            ).write({"southern_service_task_id": task.id})
 
             work_items = WorkItem.search(
                 [("task_id", "=", task.id)],
@@ -311,6 +314,7 @@ class ProjectTask(models.Model):
                 )
                 labor_values = {
                     "order_id": task_order.id,
+                    "southern_service_task_id": task.id,
                     "product_id": task.southern_labor_product_id.id,
                     "name": _("Service Labor\n%(scope)s") % {"scope": scope},
                     "product_uom_qty": total_hours,
