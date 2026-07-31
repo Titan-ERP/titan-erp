@@ -207,6 +207,8 @@ class SouthernServiceWorkItem(models.Model):
         Product = self.env["product.product"]
         Task = self.env["project.task"]
         for values in vals_list:
+            if values.get("work_type", "labor") != "labor":
+                values.setdefault("allocated_hours", 0.0)
             product = (
                 Product.browse(values["product_id"])
                 if values.get("product_id")
