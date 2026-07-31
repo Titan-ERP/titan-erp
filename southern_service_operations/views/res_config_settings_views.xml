@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_southern_service_ai" model="ir.ui.view">
+        <field name="name">res.config.settings.form.southern.service.ai</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app string="Southern Service" name="southern_service_ai"
+                     groups="base.group_system">
+                    <block title="AI Estimate Assistant"
+                           help="Server-side OpenAI configuration for technician task, labor, part, and quotation-note suggestions.">
+                        <setting string="OpenAI API Key"
+                                 help="Prefer the OPENAI_API_KEY server environment variable in production. This database value is an admin-only fallback.">
+                            <field name="southern_openai_api_key" password="True"
+                                   placeholder="Paste the service-account key"/>
+                        </setting>
+                        <setting string="OpenAI Model"
+                                 help="Model used for structured Service estimate suggestions.">
+                            <field name="southern_openai_model"/>
+                        </setting>
+                        <setting string="Equipment Manual Vector Store"
+                                 help="Optional OpenAI vector store containing approved equipment manuals and service bulletins.">
+                            <field name="southern_openai_vector_store_id"
+                                   placeholder="vs_..."/>
+                        </setting>
+                    </block>
+                    <block title="Service Quotation Defaults"
+                           help="Standard products and defaults used when technicians build Service quotations.">
+                        <setting string="Default Service Labor Product"
+                                 help="Automatically applied to new Service Jobs. If blank, Southern Service looks for an active sales service product named Shop Labor.">
+                            <field name="southern_default_labor_product_id"/>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+</odoo>

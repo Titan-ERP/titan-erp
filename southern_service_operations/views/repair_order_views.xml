@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_repair_order_form_southern_service" model="ir.ui.view">
+        <field name="name">repair.order.form.southern.service</field>
+        <field name="model">repair.order</field>
+        <field name="inherit_id" ref="repair.view_repair_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_southern_service_case" type="object"
+                        class="oe_stat_button" icon="fa-wrench"
+                        invisible="not southern_service_case_id">
+                    <div class="o_field_widget o_stat_info">
+                        <span class="o_stat_value">
+                            <field name="southern_service_case_id" nolabel="1"/>
+                        </span>
+                        <span class="o_stat_text">Service</span>
+                    </div>
+                </button>
+            </xpath>
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="southern_service_case_id"/>
+                <field name="southern_client_equipment_id"
+                       domain="[('client', 'child_of', partner_id)]"/>
+                <field name="southern_field_task_id"
+                       invisible="not southern_field_task_id"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_repair_order_list_southern_service" model="ir.ui.view">
+        <field name="name">repair.order.list.southern.service</field>
+        <field name="model">repair.order</field>
+        <field name="inherit_id" ref="repair.view_repair_order_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="southern_service_case_id" optional="show"/>
+                <field name="southern_client_equipment_id" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_southern_service_shop" model="ir.actions.act_window">
+        <field name="name">Shop Floor</field>
+        <field name="res_model">repair.order</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="domain">[('southern_service_case_id', '!=', False)]</field>
+    </record>
+</odoo>
