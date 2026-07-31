@@ -66,6 +66,16 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         self.assertIn("if task.southern_labor_rate <= 0:", task_source)
         self.assertIn("and task.southern_labor_rate <= 0", ai_source)
 
+    def test_project_task_extension_has_unambiguous_field_labels(self):
+        task_source = (MODULE / "models" / "project_task.py").read_text(
+            encoding="utf-8"
+        )
+        inspection_source = (
+            MODULE / "models" / "service_inspection.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('string="Labor Tasks"', task_source)
+        self.assertIn('string="Service Photo Count"', inspection_source)
+
     def test_ai_review_opens_editable_with_selection_totals(self):
         model_source = (
             MODULE / "models" / "service_ai_suggestion.py"

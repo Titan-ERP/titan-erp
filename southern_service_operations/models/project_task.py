@@ -54,7 +54,7 @@ class ProjectTask(models.Model):
     southern_labor_work_item_ids = fields.One2many(
         "southern.service.work.item",
         "task_id",
-        string="Service Tasks",
+        string="Labor Tasks",
         domain=[("work_type", "=", "labor")],
         copy=True,
     )
