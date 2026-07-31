@@ -4,10 +4,10 @@
 
 - Add-on: `southern_service_operations`
 - User-facing application: **Sales**
-- Candidate code commit: `46e49ab`
+- Candidate code commit: `845dd49`
 - Odoo.sh development branch: `codex/service-development-test`
-- Odoo.sh development commit: `a9c4ecc`
-- Odoo.sh build: `35713488`
+- Odoo.sh development commit: `cebb5fd`
+- Odoo.sh build: `35724968`
 - Odoo version: 19.0 Enterprise
 - Production deployment: **not performed**
 
@@ -32,18 +32,19 @@ replacing Odoo's native transaction models:
 
 | Check | Result | Evidence |
 |---|---|---|
-| Odoo.sh module install/upgrade | Pass | Build `35713488` loaded the module, security, Sales/Service views, menus, and all dependencies |
+| Odoo.sh module install/upgrade | Pass | Build `35724968` loaded the module, security, Sales/Service views, menus, and all dependencies |
 | Odoo 19 transaction tests | Pass | 8 Service transaction test methods started; `0 failed, 0 error(s)`; unified Service-job quotation creation, task-fed labor aggregation, Sales scheduling, on-site idempotency, internal Maintenance routing, and Sales task reuse included |
-| Standalone repository tests | Pass | 16 tests |
+| Standalone repository tests | Pass | 21 tests |
 | Python compilation | Pass | `compileall` on `southern_service_operations` |
 | XML parse and manifest file validation | Pass | Included in standalone suite |
 | Odoo 19 search-view compatibility | Pass | Static regression plus live build load |
 | Odoo 19 SQL constraint API | Pass | Native `models.Constraint`; legacy `_sql_constraints` warning removed |
 | Sales-hosted Service menus | Pass | Live UI shows Service inside Sales with Service Jobs, Internal Maintenance, cases, work queues, equipment, and purchasing |
 | Sales entry actions | Pass | Parts, Equipment Sale, and Rental open native Sales quotations; Service opens Odoo's native Field Service workspace inside Sales |
-| Unified Service Job and quotation | Pass | Live UI shows equipment, serial number, run hours, scheduling, and one **Tasks & Sales Quote** page that creates and updates the Sales quotation automatically |
+| Unified Service Job and quotation | Pass | Live UI shows equipment, serial number, run hours, scheduling, and one **Jobs & Quotation** page backed by a real Odoo Sales quotation |
 | Service tasks feed one labor quote line | Pass | Two billable labor tasks totaling 4.5 allocated hours produce one 4.5-hour Sales line containing both scopes; a 0.5-hour non-billable task remains in the 5.0 planned-hour total but is excluded from the quote |
-| Mechanic product selection creates native quote lines | Pass | In disposable build `35713488`, **Add Part Product** selected `[FURN_6666] Acoustic Bloc Screens (White)` and created a native line on Sales quotation `S00035`: quantity `2.00`, unit price `$295.00`, subtotal and quotation total `$590.00`; the same values are visible in **Native Sales Quotation Lines** |
+| Mechanic product selection creates native quote lines | Pass | In disposable build `35724968`, **Add a product** selected `[FURN_6666] Acoustic Bloc Screens (White)` directly on Sales quotation `S00031`; Odoo supplied the sales description, unit, `$295.00` price, and subtotal, and the line persisted after save and reload |
+| Combined labor and parts quotation | Pass | In build `35724968`, a 2.50-hour **Inspect hydraulic system** task generated one native **Field Service** labor line at `$100.00/hour` while the catalog part remained a separate native product line; untaxed lines totaled `$545.00` and the tax-inclusive quotation total was `$582.50` |
 | Personnel-facing terminology | Pass | Live UI title is **Service Jobs**, the default filter is **My Service Jobs**, and Sales, equipment, repair, purchase, and Service Case links use Service Job terminology |
 | Refined technician workspace | Pass | Live new-job form uses **Service Job Title**, **Work Details**, **Follow-up Work**, and an **Equipment & Service Record** section; the technical Service Case selector is hidden |
 | Structured service record | Pass | Diagnosis, work performed/resolution, and recommendations are available on the Service Job and synchronized to its Service Case |
@@ -64,6 +65,24 @@ Service-specific model, view, manifest, constraint, test, or traceback warning.
 
 ## Functional release scope
 
+### Design rule
+
+The Service workspace follows the operating pattern used by modern shop
+management systems while retaining Odoo as the system of record:
+
+- The Service Job is the repair-order/work-order shell for the customer,
+  equipment, concern, scheduling, technician assignment, findings, and work.
+- `sale.order` is the only estimate, quotation, and sales-order model.
+- `sale.order.line` is the only priced labor, part, travel, subcontract, or
+  other sales line.
+- Labor tasks contain scope, technician, allocated hours, billable state, and
+  execution status, then aggregate into one configured labor product line.
+- Product selection, descriptions, quantities, units, prices, taxes,
+  discounts, delivery, invoicing, and accounting continue to use native Odoo.
+- Field Service tasks, timesheets, Repair Orders, Maintenance Requests, and
+  Purchase Orders remain the authoritative execution records behind the Sales
+  workspace.
+
 ### Sales — the unified workspace
 
 - Keep standard **New** for General quotations.
@@ -75,9 +94,10 @@ Service-specific model, view, manifest, constraint, test, or traceback warning.
   timesheet, worksheet, and technician execution record, while presenting it
   to personnel as one Service Job.
 - Combine Service Tasks, allocated time, quote total, and Sales status on one
-  **Tasks & Sales Quote** page.
+  **Jobs & Quotation** page.
 - Aggregate all billable labor tasks into one Sales quotation line while parts,
-  travel, subcontract, and other billable work remain individually priced.
+  travel, subcontract, and other billable work remain individually priced
+  native Odoo product lines.
 - Create and update the quotation automatically when the Service Job is saved;
   retain **Send Quote**, **Confirm Sales Order**, and linked Sales-document
   controls on the same page.
