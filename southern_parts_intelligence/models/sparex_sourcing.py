@@ -322,6 +322,15 @@ class SouthernSparexSourcingQueue(models.Model):
                     "failure_reason": values.get("failure_reason") or _("No exact supplier price was accepted."),
                 }
             )
+            if values.get("evidence_url") and values.get("evidence_sha256"):
+                update.update(
+                    {
+                        "evidence_url": values.get("evidence_url"),
+                        "evidence_sha256": values.get("evidence_sha256"),
+                        "evidence_schema_version": values.get("evidence_schema_version") or "1.0",
+                        "evidence_retrieved_at": values.get("evidence_retrieved_at") or fields.Datetime.now(),
+                    }
+                )
         row.write(update)
         return row.id
 
