@@ -33,6 +33,12 @@
         ]"/>
     </record>
 
+    <!-- Technical administrators must retain full Southern Service access on
+         newly initialized and rebuilt databases. -->
+    <record id="base.group_system" model="res.groups">
+        <field name="implied_ids" eval="[(4, ref('group_southern_service_manager'))]"/>
+    </record>
+
     <record id="southern_service_case_company_rule" model="ir.rule">
         <field name="name">Service Case: User companies</field>
         <field name="model_id" ref="model_southern_service_case"/>

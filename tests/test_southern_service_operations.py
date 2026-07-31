@@ -120,6 +120,14 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         )[0]
         self.assertIn("sales_team.group_sale_salesman", service_user.get("eval"))
 
+        administrator = security.xpath(
+            "//record[@id='base.group_system']"
+            "/field[@name='implied_ids']"
+        )[0]
+        self.assertIn(
+            "group_southern_service_manager", administrator.get("eval")
+        )
+
         menus = etree.parse(str(MODULE / "views" / "service_menus.xml"))
         root = menus.xpath("//menuitem[@id='menu_southern_service_root']")[0]
         self.assertEqual(root.get("parent"), "sale.sale_menu_root")
