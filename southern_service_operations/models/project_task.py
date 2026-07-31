@@ -265,14 +265,11 @@ class ProjectTask(models.Model):
             ]
         )
         for task in self:
-            task.flush_recordset(
-                ["southern_labor_sale_line_id", "sale_line_id"]
-            )
+            task.flush_recordset(["southern_labor_sale_line_id"])
             task.invalidate_recordset(
                 [
                     "southern_service_work_item_ids",
                     "southern_labor_sale_line_id",
-                    "sale_line_id",
                 ]
             )
             task_order = order or task.southern_sale_order_id
@@ -289,12 +286,6 @@ class ProjectTask(models.Model):
                 lambda item: item.billable and item.work_type == "labor"
             )
             labor_line = task.southern_labor_sale_line_id
-            if labor_items and not labor_line:
-                labor_line = (
-                    task.sale_line_id
-                    if task.sale_line_id.order_id == task_order
-                    else self.env["sale.order.line"]
-                )
             if labor_items:
                 if not task.southern_labor_product_id:
                     raise ValidationError(
@@ -322,18 +313,12 @@ class ProjectTask(models.Model):
                 else:
                     labor_line = self.env["sale.order.line"].create(labor_values)
                 task.with_context(southern_skip_auto_quote=True).write(
-                    {
-                        "southern_labor_sale_line_id": labor_line.id,
-                        "sale_line_id": labor_line.id,
-                    }
+                    {"southern_labor_sale_line_id": labor_line.id}
                 )
                 labor_items.write({"sale_line_id": labor_line.id})
             elif labor_line:
                 task.with_context(southern_skip_auto_quote=True).write(
-                    {
-                        "southern_labor_sale_line_id": False,
-                        "sale_line_id": False,
-                    }
+                    {"southern_labor_sale_line_id": False}
                 )
                 labor_line.unlink()
 
