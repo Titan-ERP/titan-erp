@@ -120,8 +120,10 @@ Service-specific model, view, manifest, constraint, test, or traceback warning.
 
 - Use the OpenAI Responses API only from the Odoo server; the API key is never
   sent to a technician's browser or stored in source control.
-- Prefer the `OPENAI_API_KEY` server environment variable in production. The
-  admin-only Odoo setting is a development fallback.
+- Prefer the `OPENAI_API_KEY` server environment variable in production. When
+  Odoo.sh does not expose a supported persistent environment-secret mechanism,
+  enter the dedicated production service-account key only in the admin-only
+  Southern Service setting. Never commit it to Git or an `.env` file.
 - Generate structured, reviewable suggestions from the customer complaint,
   equipment identity and hours, technician findings, approved manuals, and a
   bounded Odoo product catalog.
@@ -131,6 +133,11 @@ Service-specific model, view, manifest, constraint, test, or traceback warning.
   part to a real Odoo Product before applying it.
 - Apply accepted labor to Service Tasks, accepted parts to native product-backed
   Sales quotation lines, and approved wording to a native quotation note line.
+- Create no products during module installation. Map Shop Labor to an existing
+  production service product; map AI parts only by exact production product
+  code, with technician review required when no exact match exists.
+- Block billable labor from reaching a quotation while the mapped production
+  labor product has a zero sales rate.
 - Never let AI send, confirm, purchase, deliver, invoice, or silently modify a
   quotation.
 - Use `store: false` for Responses API requests and avoid sending customer
@@ -177,10 +184,17 @@ These are operational approvals, not missing code:
    - the role-based UAT scenarios in this dossier;
    - a dry-run equipment/readiness audit.
 6. Resolve equipment exceptions and approve the user-role mapping.
-7. Take and verify the production backup immediately before the change window.
-8. Deploy the exact staging-tested commit and install/upgrade only
+7. In **Settings > Southern Service**, map **Default Service Labor Product** to
+   the existing production Shop Labor product and confirm its approved sales
+   rate is nonzero. Do not create a duplicate labor product.
+8. Take and verify the production backup immediately before the change window.
+9. Deploy the exact staging-tested commit and install/upgrade only
    `southern_service_operations`.
-9. Perform production smoke tests without creating unnecessary live customer
+10. Enter the dedicated production OpenAI service-account key through the
+    admin-only Southern Service setting unless the approved server environment
+    secret is already present. Save, generate one controlled AI review, then
+    verify the key is masked and never appears in chatter or logs.
+11. Perform production smoke tests without creating unnecessary live customer
    transactions:
    - Sales → Service menu access;
    - Sales quote-type buttons;
@@ -188,7 +202,7 @@ These are operational approvals, not missing code:
    - Service Work tab and linked-work smart buttons;
    - one controlled on-site or shop routing test;
    - linked Sales/Service/equipment navigation.
-10. Monitor module errors, failed validations, duplicate work records, waiting
+12. Monitor module errors, failed validations, duplicate work records, waiting
     queues, and user feedback daily for the first week.
 
 ## Rollback plan

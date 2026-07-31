@@ -642,3 +642,48 @@ class TestSouthernServiceFlow(TransactionCase):
             lambda line: line.product_id == self.part_product
         )
         self.assertEqual(part_line.product_uom_qty, 1.0)
+
+    def test_ai_labor_cannot_apply_at_zero_rate(self):
+        case = self._create_customer_case()
+        case.action_route_work()
+        task = case.task_ids
+        zero_rate_labor = self.env["product.product"].create(
+            {
+                "name": "Southern Zero Rate Labor Test",
+                "type": "service",
+                "service_tracking": "no",
+                "list_price": 0.0,
+            }
+        )
+        task.write(
+            {
+                "southern_quote_workflow": True,
+                "southern_labor_product_id": zero_rate_labor.id,
+            }
+        )
+        suggestion = self.env["southern.service.ai.suggestion"].create(
+            {
+                "task_id": task.id,
+                "model_name": "test-model",
+                "summary": "Review zero-rate protection",
+                "line_ids": [
+                    Command.create(
+                        {
+                            "work_type": "labor",
+                            "name": "Inspect hydraulic system",
+                            "estimated_hours": 1.0,
+                            "hours_low": 0.5,
+                            "hours_high": 1.5,
+                            "quantity": 0.0,
+                            "confidence": "medium",
+                        }
+                    )
+                ],
+            }
+        )
+
+        with self.assertRaises(ValidationError):
+            suggestion.action_apply_selected()
+
+        self.assertEqual(suggestion.state, "draft")
+        self.assertFalse(task.southern_service_work_item_ids)

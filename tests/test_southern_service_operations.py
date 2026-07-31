@@ -38,14 +38,15 @@ class SouthernServiceOperationsTests(unittest.TestCase):
             if path.suffix == ".xml":
                 etree.parse(str(path))
 
-    def test_module_provides_single_native_shop_labor_product(self):
-        product_xml = (MODULE / "data" / "service_products.xml").read_text(
+    def test_module_uses_only_existing_native_products(self):
+        manifest = _manifest()
+        task_source = (MODULE / "models" / "project_task.py").read_text(
             encoding="utf-8"
         )
-        self.assertIn('model="product.product"', product_xml)
-        self.assertIn('<field name="name">Shop Labor</field>', product_xml)
-        self.assertIn('<field name="type">service</field>', product_xml)
-        self.assertIn('<field name="service_tracking">no</field>', product_xml)
+        self.assertNotIn("data/service_products.xml", manifest["data"])
+        self.assertNotIn("post_init_hook", manifest)
+        self.assertIn('(\"name\", \"=ilike\", \"Shop Labor\")', task_source)
+        self.assertNotIn('Product.create(', task_source)
 
     def test_zero_labor_rate_is_flagged_before_quote_handoff(self):
         view_source = (MODULE / "views" / "project_task_views.xml").read_text(
@@ -56,6 +57,14 @@ class SouthernServiceOperationsTests(unittest.TestCase):
             view_source,
         )
         self.assertIn("has a $0.00 sales price", view_source)
+        task_source = (MODULE / "models" / "project_task.py").read_text(
+            encoding="utf-8"
+        )
+        ai_source = (
+            MODULE / "models" / "service_ai_suggestion.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("if task.southern_labor_rate <= 0:", task_source)
+        self.assertIn("and task.southern_labor_rate <= 0", ai_source)
 
     def test_ai_review_opens_editable_with_selection_totals(self):
         model_source = (
@@ -77,6 +86,8 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         self.assertIn('"labor_product_name": (', model_source)
         self.assertIn('"labor_rate": self.southern_labor_rate or 0.0', model_source)
         self.assertIn("authoritative selected labor product", model_source)
+        self.assertIn('(\"company_id\", \"=\", self.env.company.id)', model_source)
+        self.assertIn('(\"company_id\", \"=\", self.company_id.id)', model_source)
 
     def test_digital_inspection_result_fields_remain_editable(self):
         view_source = (

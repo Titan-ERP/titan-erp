@@ -118,6 +118,13 @@ class SouthernServiceAiSuggestion(models.Model):
                 )
 
             selected = suggestion.line_ids.filtered("selected")
+            if not selected and not suggestion.customer_note:
+                raise ValidationError(
+                    _(
+                        "Select at least one suggested item or keep a customer "
+                        "quotation note before applying this estimate."
+                    )
+                )
             if selected.filtered(lambda line: line.work_type == "labor") and not (
                 task.southern_labor_product_id
             ):
@@ -125,6 +132,16 @@ class SouthernServiceAiSuggestion(models.Model):
                     _(
                         "Select the Labor Sales Product on the Service Job before "
                         "applying suggested labor tasks."
+                    )
+                )
+            if (
+                selected.filtered(lambda line: line.work_type == "labor")
+                and task.southern_labor_rate <= 0
+            ):
+                raise ValidationError(
+                    _(
+                        "The selected Labor Sales Product has a $0.00 sales price. "
+                        "Set the approved Shop Labor rate before applying AI labor."
                     )
                 )
             missing_products = selected.filtered(
@@ -304,6 +321,9 @@ class ProjectTaskAiEstimate(models.Model):
                 ("sale_ok", "=", True),
                 ("active", "=", True),
                 ("type", "=", "consu"),
+                "|",
+                ("company_id", "=", False),
+                ("company_id", "=", self.env.company.id),
             ],
             limit=250,
             order="default_code, name, id",
@@ -547,7 +567,14 @@ class ProjectTaskAiEstimate(models.Model):
             code = line.get("product_code", "").strip()
             if code:
                 product = Product.search(
-                    [("default_code", "=", code), ("sale_ok", "=", True)],
+                    [
+                        ("default_code", "=", code),
+                        ("sale_ok", "=", True),
+                        ("active", "=", True),
+                        "|",
+                        ("company_id", "=", False),
+                        ("company_id", "=", self.company_id.id),
+                    ],
                     limit=1,
                 )
             line_commands.append(

@@ -368,6 +368,14 @@ class ProjectTask(models.Model):
                             "billable labor tasks."
                         )
                     )
+                if task.southern_labor_rate <= 0:
+                    raise ValidationError(
+                        _(
+                            "The selected Labor Quote Product has a $0.00 sales "
+                            "price. Set the approved Shop Labor rate before saving "
+                            "billable labor tasks."
+                        )
+                    )
                 total_hours = sum(labor_items.mapped("allocated_hours"))
                 scope = "\n".join(
                     f"- {item.name} ({item.allocated_hours:.2f} hours)"
