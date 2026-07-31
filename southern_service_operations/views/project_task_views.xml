@@ -221,6 +221,27 @@
                         Odoo's standard product, quantity, pricing, tax, and
                         subtotal fields.
                     </div>
+                    <group string="AI Estimate Assistant">
+                        <group>
+                            <button name="action_southern_generate_ai_estimate"
+                                    type="object"
+                                    string="Suggest Tasks, Hours &amp; Parts"
+                                    class="btn-primary"
+                                    icon="fa-magic"
+                                    groups="southern_service_operations.group_southern_service_user"/>
+                        </group>
+                        <group>
+                            <field name="southern_ai_current_suggestion_id"
+                                   string="Latest Review"
+                                   readonly="1"
+                                   options="{'no_create': True}"/>
+                        </group>
+                    </group>
+                    <div class="alert alert-warning" role="status">
+                        AI suggestions never confirm or send the quotation. A
+                        technician must review and apply selected tasks, actual
+                        Odoo products, hours, and customer wording.
+                    </div>
                     <separator string="Service Tasks"/>
                     <field name="southern_service_work_item_ids"
                            domain="[('work_type', '=', 'labor')]"

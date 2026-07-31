@@ -3,6 +3,8 @@ from . import maintenance
 from . import project_task
 from . import purchase_order
 from . import repair_order
+from . import res_config_settings
 from . import sale_order
 from . import service_case
+from . import service_ai_suggestion
 from . import service_work_item

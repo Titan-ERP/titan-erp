@@ -365,6 +365,45 @@ class SouthernServiceOperationsTests(unittest.TestCase):
             source,
         )
 
+    def test_ai_estimate_is_reviewed_before_native_quote_changes(self):
+        source = (MODULE / "models" / "service_ai_suggestion.py").read_text(
+            encoding="utf-8"
+        )
+        for marker in (
+            '"https://api.openai.com/v1/responses"',
+            '"store": False',
+            '"type": "json_schema"',
+            '"type": "file_search"',
+            "def action_southern_generate_ai_estimate(self):",
+            "def action_apply_selected(self):",
+            '"display_type": "line_note"',
+            '"southern.service.work.item"',
+        ):
+            self.assertIn(marker, source)
+
+        project_view = etree.parse(
+            str(MODULE / "views" / "project_task_views.xml")
+        )
+        self.assertEqual(
+            len(
+                project_view.xpath(
+                    "//button[@name='action_southern_generate_ai_estimate']"
+                )
+            ),
+            1,
+        )
+        review_view = etree.parse(
+            str(MODULE / "views" / "service_ai_suggestion_views.xml")
+        )
+        self.assertEqual(
+            len(review_view.xpath("//button[@name='action_apply_selected']")),
+            1,
+        )
+        self.assertEqual(
+            len(review_view.xpath("//button[@name='action_reject']")),
+            1,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

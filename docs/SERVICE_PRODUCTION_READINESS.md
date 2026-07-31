@@ -116,6 +116,28 @@ Service-specific model, view, manifest, constraint, test, or traceback warning.
 - Preserve native Sales/Purchase procurement and native Repair/Purchase
   behavior; the module does not invent a second procurement engine.
 
+### AI Estimate Assistant
+
+- Use the OpenAI Responses API only from the Odoo server; the API key is never
+  sent to a technician's browser or stored in source control.
+- Prefer the `OPENAI_API_KEY` server environment variable in production. The
+  admin-only Odoo setting is a development fallback.
+- Generate structured, reviewable suggestions from the customer complaint,
+  equipment identity and hours, technician findings, approved manuals, and a
+  bounded Odoo product catalog.
+- Keep customer symptoms distinct from AI suggestions and technician-confirmed
+  findings.
+- Require a technician to select every accepted task and map every accepted
+  part to a real Odoo Product before applying it.
+- Apply accepted labor to Service Tasks, accepted parts to native product-backed
+  Sales quotation lines, and approved wording to a native quotation note line.
+- Never let AI send, confirm, purchase, deliver, invoice, or silently modify a
+  quotation.
+- Use `store: false` for Responses API requests and avoid sending customer
+  contact details, payment data, or unrelated chatter.
+- Treat manual and service-bulletin retrieval as optional until an approved
+  OpenAI vector store is configured and its document ownership is established.
+
 ## Required approval gates
 
 These are operational approvals, not missing code:
@@ -150,8 +172,8 @@ These are operational approvals, not missing code:
    Maintenance, Purchase, and their declared dependencies.
 4. Install or upgrade `southern_service_operations` in staging.
 5. Run:
-   - the 12 standalone repository checks;
-   - the 4 Odoo transaction tests;
+   - the 17 standalone repository checks;
+   - the 7 Odoo transaction tests;
    - the role-based UAT scenarios in this dossier;
    - a dry-run equipment/readiness audit.
 6. Resolve equipment exceptions and approve the user-role mapping.

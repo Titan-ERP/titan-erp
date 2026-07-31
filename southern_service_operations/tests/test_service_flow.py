@@ -331,3 +331,60 @@ class TestSouthernServiceFlow(TransactionCase):
 
         case.action_route_work()
         self.assertEqual(case.maintenance_request_ids, request)
+
+    def test_reviewed_ai_estimate_creates_native_tasks_parts_and_note(self):
+        case = self._create_customer_case()
+        case.action_route_work()
+        task = case.task_ids
+        task.write(
+            {
+                "southern_quote_workflow": True,
+                "southern_labor_product_id": self.service_product.id,
+            }
+        )
+        task.action_southern_create_quotation()
+        suggestion = self.env["southern.service.ai.suggestion"].create(
+            {
+                "task_id": task.id,
+                "model_name": "test-model",
+                "summary": "Review hydraulic complaint",
+                "customer_note": "Proposed inspection and repair estimate.",
+                "confidence": "medium",
+                "line_ids": [
+                    Command.create(
+                        {
+                            "work_type": "labor",
+                            "name": "Inspect hydraulic system",
+                            "estimated_hours": 2.5,
+                            "hours_low": 2.0,
+                            "hours_high": 3.0,
+                            "quantity": 0.0,
+                            "confidence": "medium",
+                        }
+                    ),
+                    Command.create(
+                        {
+                            "work_type": "part",
+                            "name": "Hydraulic filter",
+                            "quantity": 1.0,
+                            "product_id": self.part_product.id,
+                            "confidence": "medium",
+                        }
+                    ),
+                ],
+            }
+        )
+
+        suggestion.action_apply_selected()
+
+        self.assertEqual(suggestion.state, "applied")
+        self.assertEqual(len(task.southern_service_work_item_ids), 2)
+        self.assertTrue(task.southern_labor_sale_line_id)
+        self.assertEqual(task.southern_labor_sale_line_id.product_uom_qty, 2.5)
+        self.assertTrue(task.southern_ai_note_line_id)
+        self.assertEqual(task.southern_ai_note_line_id.display_type, "line_note")
+        self.assertIn("Proposed inspection", task.southern_ai_note_line_id.name)
+        part_line = task.southern_quote_line_ids.filtered(
+            lambda line: line.product_id == self.part_product
+        )
+        self.assertEqual(part_line.product_uom_qty, 1.0)
