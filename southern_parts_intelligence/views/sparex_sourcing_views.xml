@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="southern_sparex_sourcing_queue_list" model="ir.ui.view">
+        <field name="name">southern.sparex.sourcing.queue.list</field>
+        <field name="model">southern.sparex.sourcing.queue</field>
+        <field name="arch" type="xml">
+            <list decoration-success="publication_eligible"
+                  decoration-danger="state == 'manual_review'"
+                  decoration-warning="state == 'cooldown'">
+                <field name="priority"/>
+                <field name="state"/>
+                <field name="sku"/>
+                <field name="product_tmpl_id"/>
+                <field name="supplier_id"/>
+                <field name="supplier_price"/>
+                <field name="currency_id"/>
+                <field name="approved_retail_price"/>
+                <field name="attempt_count"/>
+                <field name="next_attempt_at"/>
+                <field name="failure_code"/>
+                <field name="publication_eligible"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="southern_sparex_sourcing_queue_form" model="ir.ui.view">
+        <field name="name">southern.sparex.sourcing.queue.form</field>
+        <field name="model">southern.sparex.sourcing.queue</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_approve_supplier_cost" string="Approve Supplier Cost" type="object" class="btn-primary" invisible="state != 'evidence_found'"/>
+                    <button name="action_apply_supplier_cost" string="Apply Supplier Cost" type="object" class="btn-primary" invisible="state != 'cost_approved'"/>
+                    <button name="action_approve_retail" string="Approve Retail" type="object" class="btn-primary" invisible="state != 'cost_applied'"/>
+                    <button name="action_apply_approved_retail" string="Apply Approved Retail" type="object" class="btn-primary" invisible="state != 'retail_approved' or not publication_eligible"/>
+                    <button name="action_manual_review" string="Manual Review" type="object" invisible="state == 'manual_review'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="queued,cooldown,manual_review,evidence_found,cost_approved,cost_applied,retail_approved,publication_ready"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group>
+                            <field name="company_id"/>
+                            <field name="product_tmpl_id"/>
+                            <field name="sku"/>
+                            <field name="supplier_id"/>
+                            <field name="supplierinfo_id"/>
+                            <field name="priority"/>
+                        </group>
+                        <group>
+                            <field name="attempt_count"/>
+                            <field name="last_attempt_at"/>
+                            <field name="next_attempt_at"/>
+                            <field name="failure_code"/>
+                            <field name="failure_reason"/>
+                        </group>
+                    </group>
+                    <group string="Verified Supplier Evidence">
+                        <group>
+                            <field name="supplier_price"/>
+                            <field name="currency_id"/>
+                            <field name="price_effective_at"/>
+                            <field name="evidence_url" widget="url"/>
+                            <field name="evidence_retrieved_at"/>
+                        </group>
+                        <group>
+                            <field name="evidence_sha256"/>
+                            <field name="evidence_schema_version"/>
+                            <field name="parser_version"/>
+                            <field name="source_run_id"/>
+                            <field name="source_artifact_uri"/>
+                            <field name="source_input_sha256"/>
+                        </group>
+                    </group>
+                    <group string="Retail and Publication Gate">
+                        <group>
+                            <field name="required_margin_percent"/>
+                            <field name="proposed_retail_price"/>
+                            <field name="approved_retail_price"/>
+                            <field name="publication_eligible"/>
+                        </group>
+                        <group>
+                            <field name="approved_cost_by_id"/>
+                            <field name="approved_cost_at"/>
+                            <field name="approved_retail_by_id"/>
+                            <field name="approved_retail_at"/>
+                        </group>
+                    </group>
+                    <field name="publication_blockers" nolabel="1"/>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="southern_sparex_sourcing_queue_search" model="ir.ui.view">
+        <field name="name">southern.sparex.sourcing.queue.search</field>
+        <field name="model">southern.sparex.sourcing.queue</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="sku"/>
+                <field name="product_tmpl_id"/>
+                <field name="supplier_id"/>
+                <filter name="manual_review" string="Manual Review" domain="[('state','=','manual_review')]"/>
+                <filter name="cooldown" string="Cooldown" domain="[('state','=','cooldown')]"/>
+                <filter name="ready" string="Publication Ready" domain="[('publication_eligible','=',True)]"/>
+                <separator/>
+                <filter name="group_state" string="Status" context="{'group_by':'state'}"/>
+                <filter name="group_supplier" string="Supplier" context="{'group_by':'supplier_id'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_southern_sparex_sourcing_queue" model="ir.actions.act_window">
+        <field name="name">Sparex Sourcing Control</field>
+        <field name="res_model">southern.sparex.sourcing.queue</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="southern_sparex_sourcing_queue_search"/>
+    </record>
+
+    <menuitem id="menu_southern_sparex_sourcing_queue"
+              name="Sparex Sourcing Control"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_sparex_sourcing_queue"
+              sequence="5"/>
+</odoo>

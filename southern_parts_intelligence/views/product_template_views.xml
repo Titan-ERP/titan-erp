@@ -17,6 +17,7 @@
                         </group>
                         <group>
                             <field name="southern_enrichment_status"/>
+                            <field name="southern_sparex_publication_eligible" readonly="1"/>
                             <field name="southern_parts_search_text" invisible="1"/>
                             <field name="southern_parts_snapshot_refreshed_at" readonly="1"/>
                         </group>
@@ -32,6 +33,20 @@
                         <field name="southern_alternate_barcode_count" readonly="1"/>
                     </group>
                     <notebook>
+                        <page string="Sparex Sourcing" name="southern_sparex_sourcing">
+                            <field name="southern_sparex_sourcing_ids" readonly="1">
+                                <list>
+                                    <field name="state"/>
+                                    <field name="supplier_id"/>
+                                    <field name="supplier_price"/>
+                                    <field name="currency_id"/>
+                                    <field name="approved_retail_price"/>
+                                    <field name="attempt_count"/>
+                                    <field name="next_attempt_at"/>
+                                    <field name="publication_eligible"/>
+                                </list>
+                            </field>
+                        </page>
                         <page string="Specifications" name="southern_specifications">
                             <field name="southern_specification_ids" context="{'default_product_tmpl_id': id}">
                                 <list editable="bottom">

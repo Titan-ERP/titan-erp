@@ -99,6 +99,28 @@ class OdooNativeSystemsTests(unittest.TestCase):
         )
         self.assertNotIn("shop_boss", " ".join(manifest["depends"]).casefold())
 
+    def test_sparex_sourcing_queue_never_writes_standard_cost(self):
+        source = (
+            ROOT
+            / "southern_parts_intelligence"
+            / "models"
+            / "sparex_sourcing.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('_name = "southern.sparex.sourcing.queue"', source)
+        self.assertIn('"product.supplierinfo"', source)
+        self.assertNotIn('"standard_price":', source)
+        self.assertIn("publication_eligible", source)
+        self.assertIn("evidence_sha256", source)
+        self.assertIn("next_attempt_at", source)
+
+    def test_sparex_pipeline_requires_explicit_artifact_hashes(self):
+        source = (ROOT / "scripts" / "sparex_sourcing_pipeline.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("--input-sha256", source)
+        self.assertNotIn("latest(", source)
+        self.assertNotIn("standard_price", source)
+
 
 if __name__ == "__main__":
     unittest.main()
