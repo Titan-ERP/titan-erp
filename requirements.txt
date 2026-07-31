@@ -1,0 +1,3 @@
+# Runtime is standard-library-only. Install optional groups from pyproject.toml:
+#   py -3.13 -m pip install -e ".[dev,aws]"
+-e .

@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <template id="southern_parts_product_detail_tabs" inherit_id="website_sale.product" name="Southern Parts Product Detail Tabs">
+        <xpath expr="//section[@id='product_detail']" position="after">
+            <t t-set="southern_sections" t-value="product._southern_website_catalog_sections() if product._southern_has_parts_catalog_data() else []"/>
+            <section t-if="southern_sections" class="container my-5 southern-parts-catalog">
+                <div class="southern-parts-catalog__header">
+                    <div>
+                        <p class="southern-parts-catalog__eyebrow">Parts Intelligence</p>
+                        <h2>Technical Part Details</h2>
+                    </div>
+                    <div class="southern-parts-catalog__search-note">
+                        Search by SKU, OEM number, make, model, barcode, or catalog reference.
+                    </div>
+                </div>
+
+                <div t-if="product._southern_website_quick_facts()" class="southern-quick-facts">
+                    <div t-foreach="product._southern_website_quick_facts()" t-as="fact" class="southern-quick-fact">
+                        <span class="southern-quick-fact__label" t-out="fact['label']"/>
+                        <span class="southern-quick-fact__value" t-out="fact['value']"/>
+                    </div>
+                </div>
+
+                <ul class="nav nav-tabs southern-parts-tabs" role="tablist">
+                    <li t-if="'specifications' in southern_sections" class="nav-item" role="presentation">
+                        <button t-attf-class="nav-link #{'active' if southern_sections[0] == 'specifications' else ''}"
+                                data-bs-toggle="tab" data-bs-target="#southern_specs" type="button" role="tab">
+                            Product Specifications
+                        </button>
+                    </li>
+                    <li t-if="'fitment' in southern_sections" class="nav-item" role="presentation">
+                        <button t-attf-class="nav-link #{'active' if southern_sections[0] == 'fitment' else ''}"
+                                data-bs-toggle="tab" data-bs-target="#southern_fitment" type="button" role="tab">
+                            Suitable For Make/Model
+                        </button>
+                    </li>
+                    <li t-if="'oem' in southern_sections" class="nav-item" role="presentation">
+                        <button t-attf-class="nav-link #{'active' if southern_sections[0] == 'oem' else ''}"
+                                data-bs-toggle="tab" data-bs-target="#southern_oem_refs" type="button" role="tab">
+                            OEM Part Numbers
+                        </button>
+                    </li>
+                    <li t-if="'catalog' in southern_sections" class="nav-item" role="presentation">
+                        <button t-attf-class="nav-link #{'active' if southern_sections[0] == 'catalog' else ''}"
+                                data-bs-toggle="tab" data-bs-target="#southern_catalog_pages" type="button" role="tab">
+                            Catalog Pages
+                        </button>
+                    </li>
+                    <li t-if="'related' in southern_sections" class="nav-item" role="presentation">
+                        <button t-attf-class="nav-link #{'active' if southern_sections[0] == 'related' else ''}"
+                                data-bs-toggle="tab" data-bs-target="#southern_related_parts" type="button" role="tab">
+                            Related Parts
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content southern-parts-panel">
+                    <div t-if="'specifications' in southern_sections"
+                         t-attf-class="tab-pane fade #{'show active' if southern_sections[0] == 'specifications' else ''}"
+                         id="southern_specs" role="tabpanel">
+                        <t t-foreach="product._southern_grouped_specifications()" t-as="spec_group">
+                            <section class="southern-parts-section">
+                                <h3 t-out="spec_group['group']"/>
+                                <div class="southern-spec-grid">
+                                    <div t-foreach="spec_group['items']" t-as="spec" class="southern-spec-row">
+                                        <div class="southern-spec-row__name" t-out="spec['name']"/>
+                                        <div class="southern-spec-row__value">
+                                            <span t-out="spec['value']"/>
+                                            <span t-if="spec['unit']"> <span t-out="spec['unit']"/></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+                        </t>
+                    </div>
+
+                    <div t-if="'fitment' in southern_sections"
+                         t-attf-class="tab-pane fade #{'show active' if southern_sections[0] == 'fitment' else ''}"
+                         id="southern_fitment" role="tabpanel">
+                        <section class="southern-parts-section">
+                            <h3>Suitable For Make/Model</h3>
+                            <div class="table-responsive">
+                                <table class="table table-sm southern-parts-table">
+                                    <tbody>
+                                        <tr t-foreach="product._southern_grouped_fitments()" t-as="fitment_group">
+                                            <th t-out="fitment_group['make']"/>
+                                            <td>
+                                                <span t-foreach="fitment_group['items']" t-as="fitment" class="southern-token">
+                                                    <span t-out="fitment['model']"/>
+                                                    <span t-if="fitment['engine']">, <span t-out="fitment['engine']"/></span>
+                                                    <span t-if="fitment['build_list']"> (<span t-out="fitment['build_list']"/>)</span>
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div t-if="'oem' in southern_sections"
+                         t-attf-class="tab-pane fade #{'show active' if southern_sections[0] == 'oem' else ''}"
+                         id="southern_oem_refs" role="tabpanel">
+                        <section class="southern-parts-section">
+                            <h3>OEM Part Numbers</h3>
+                            <div class="table-responsive">
+                                <table class="table table-sm southern-parts-table">
+                                    <tbody>
+                                        <tr t-foreach="product._southern_grouped_oem_references()" t-as="ref_group">
+                                            <th t-out="ref_group['manufacturer']"/>
+                                            <td>
+                                                <span t-foreach="ref_group['numbers']" t-as="part_number" class="southern-token" t-out="part_number"/>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div t-if="'catalog' in southern_sections"
+                         t-attf-class="tab-pane fade #{'show active' if southern_sections[0] == 'catalog' else ''}"
+                         id="southern_catalog_pages" role="tabpanel">
+                        <section class="southern-parts-section">
+                            <h3>Catalog Pages</h3>
+                            <div class="table-responsive">
+                                <table class="table table-sm southern-parts-table southern-parts-table--catalog">
+                                    <thead>
+                                        <tr>
+                                            <th>Catalog</th>
+                                            <th>Page No.</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr t-foreach="product._southern_grouped_catalog_pages()" t-as="catalog_group">
+                                            <th>
+                                                <span t-out="catalog_group['catalog']"/>
+                                                <small t-if="catalog_group['code']" class="d-block" t-out="catalog_group['code']"/>
+                                            </th>
+                                            <td>
+                                                <t t-foreach="catalog_group['pages']" t-as="page">
+                                                    <a t-if="page['source_url']" t-att-href="page['source_url']" class="southern-token" target="_blank" rel="noopener" t-out="page['page_number']"/>
+                                                    <span t-else="" class="southern-token" t-out="page['page_number']"/>
+                                                </t>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div t-if="'related' in southern_sections"
+                         t-attf-class="tab-pane fade #{'show active' if southern_sections[0] == 'related' else ''}"
+                         id="southern_related_parts" role="tabpanel">
+                        <section class="southern-parts-section">
+                            <h3>Related Parts</h3>
+                            <div class="southern-related-grid">
+                                <a t-foreach="product._southern_related_parts_summary()" t-as="related"
+                                   t-att-href="related['website_url'] or '#'"
+                                   class="southern-related-card">
+                                    <span class="southern-related-card__type" t-out="related['relationship_type']"/>
+                                    <span class="southern-related-card__name" t-out="related['name']"/>
+                                    <span t-if="related['default_code']" class="southern-related-card__sku" t-out="related['default_code']"/>
+                                </a>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </section>
+        </xpath>
+    </template>
+
+    <template id="southern_parts_product_item_metadata" inherit_id="website_sale.products_item" name="Southern Parts Product Card Metadata">
+        <xpath expr="//div[hasclass('o_wsale_product_information_text')]" position="inside">
+            <div t-if="product.default_code or product.southern_oem_reference_count or product.southern_fitment_count"
+                 class="southern-product-card-meta">
+                <span t-if="product.default_code" class="southern-product-card-meta__sku">
+                    <span>SKU </span><span t-field="product.default_code"/>
+                </span>
+                <span t-if="product.southern_oem_reference_count" class="southern-product-card-meta__item">
+                    <span>OEM refs </span><span t-out="product.southern_oem_reference_count"/>
+                </span>
+                <span t-if="product.southern_fitment_count" class="southern-product-card-meta__item">
+                    <span>Fits </span><span t-out="product.southern_fitment_model_count"/><span> models</span>
+                </span>
+            </div>
+        </xpath>
+    </template>
+</odoo>

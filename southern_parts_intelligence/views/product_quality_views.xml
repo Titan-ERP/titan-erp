@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="southern_product_quality_issue_list" model="ir.ui.view">
+        <field name="name">southern.product.quality.issue.list</field>
+        <field name="model">southern.product.quality.issue</field>
+        <field name="arch" type="xml">
+            <list decoration-danger="severity == '4_blocker'"
+                  decoration-warning="severity == '3_high'"
+                  decoration-muted="state in ['resolved', 'dismissed']">
+                <field name="severity"/>
+                <field name="issue_type"/>
+                <field name="product_tmpl_id"/>
+                <field name="internal_reference"/>
+                <field name="product_published"/>
+                <field name="state"/>
+                <field name="assigned_to_id"/>
+                <field name="last_detected_at"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="southern_product_quality_issue_form" model="ir.ui.view">
+        <field name="name">southern.product.quality.issue.form</field>
+        <field name="model">southern.product.quality.issue</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_start" type="object" string="Start" invisible="state != 'open'"/>
+                    <button name="action_resolve" type="object" string="Resolve" class="btn-primary"
+                            invisible="state in ['resolved', 'dismissed']"/>
+                    <button name="action_reopen" type="object" string="Reopen"
+                            invisible="state not in ['resolved', 'dismissed']"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="open,in_progress,blocked,resolved"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group>
+                            <field name="product_tmpl_id"/>
+                            <field name="internal_reference"/>
+                            <field name="issue_type"/>
+                            <field name="severity"/>
+                        </group>
+                        <group>
+                            <field name="company_id"/>
+                            <field name="assigned_to_id"/>
+                            <field name="detected_at"/>
+                            <field name="last_detected_at"/>
+                            <field name="resolved_at"/>
+                        </group>
+                    </group>
+                    <field name="details"/>
+                    <field name="resolution_note"/>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="southern_product_quality_issue_search" model="ir.ui.view">
+        <field name="name">southern.product.quality.issue.search</field>
+        <field name="model">southern.product.quality.issue</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="product_tmpl_id"/>
+                <field name="internal_reference"/>
+                <field name="assigned_to_id"/>
+                <filter name="open" string="Open" domain="[('state', 'in', ['open', 'in_progress', 'blocked'])]"/>
+                <filter name="blockers" string="Blockers" domain="[('severity', '=', '4_blocker')]"/>
+                <filter name="published" string="Published" domain="[('product_published', '=', True)]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_issue" string="Issue" context="{'group_by': 'issue_type'}"/>
+                    <filter name="group_assignee" string="Assignee" context="{'group_by': 'assigned_to_id'}"/>
+                    <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_southern_product_quality_issues" model="ir.actions.act_window">
+        <field name="name">Product Master Quality</field>
+        <field name="res_model">southern.product.quality.issue</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="southern_product_quality_issue_search"/>
+        <field name="context">{'search_default_open': 1}</field>
+    </record>
+
+    <record id="action_southern_product_quality_refresh" model="ir.actions.server">
+        <field name="name">Refresh Product Master Quality</field>
+        <field name="model_id" ref="model_southern_product_quality_issue"/>
+        <field name="binding_model_id" ref="model_southern_product_quality_issue"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_refresh_quality_queue()</field>
+    </record>
+
+    <menuitem id="menu_southern_product_quality_issues"
+              name="Product Master Quality"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_product_quality_issues"
+              sequence="6"/>
+</odoo>

@@ -1,0 +1,262 @@
+.southern-parts-catalog {
+    color: #111827;
+}
+
+.southern-parts-catalog__header {
+    align-items: end;
+    border-bottom: 1px solid #d9dde4;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    margin-bottom: 0;
+    padding-bottom: 1rem;
+
+    h2 {
+        font-size: 1.45rem;
+        font-weight: 700;
+        line-height: 1.25;
+        margin: 0;
+    }
+}
+
+.southern-parts-catalog__eyebrow {
+    color: #f15a24;
+    font-size: .78rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    margin: 0 0 .25rem;
+    text-transform: uppercase;
+}
+
+.southern-parts-catalog__search-note {
+    color: #4b5563;
+    font-size: .9rem;
+    max-width: 34rem;
+    text-align: right;
+}
+
+.southern-quick-facts {
+    display: grid;
+    gap: .75rem;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    margin-top: 1rem;
+}
+
+.southern-quick-fact {
+    background: #f5f7fa;
+    border: 1px solid #d9dde4;
+    border-radius: 6px;
+    display: grid;
+    gap: .15rem;
+    min-height: 4.15rem;
+    padding: .75rem .85rem;
+}
+
+.southern-quick-fact__label {
+    color: #6b7280;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.southern-quick-fact__value {
+    color: #111827;
+    font-size: .98rem;
+    font-weight: 800;
+    overflow-wrap: anywhere;
+}
+
+.southern-parts-tabs {
+    border-bottom: 1px solid #cfd5dd;
+    flex-wrap: nowrap;
+    margin-top: 1rem;
+    overflow-x: auto;
+
+    .nav-link {
+        border: 0;
+        border-bottom: 3px solid transparent;
+        color: #111827;
+        font-weight: 700;
+        padding: .85rem 1.1rem;
+        white-space: nowrap;
+
+        &.active {
+            border-bottom-color: #f15a24;
+            color: #111827;
+        }
+    }
+}
+
+.southern-parts-panel {
+    background: #f5f7fa;
+    border-bottom: 1px solid #d9dde4;
+    padding: 2rem 1.75rem;
+}
+
+.southern-parts-section {
+    & + & {
+        margin-top: 2rem;
+    }
+
+    h3 {
+        font-size: 1.35rem;
+        font-weight: 800;
+        margin: 0 0 1.3rem;
+    }
+}
+
+.southern-spec-grid {
+    display: grid;
+    gap: 0 2.5rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.southern-spec-row {
+    border-bottom: 1px solid #cfd5dd;
+    display: grid;
+    grid-template-columns: minmax(11rem, 34%) 1fr;
+    min-height: 2.6rem;
+}
+
+.southern-spec-row__name {
+    background: #fff;
+    font-weight: 700;
+    padding: .65rem .8rem;
+}
+
+.southern-spec-row__value {
+    padding: .65rem .8rem;
+}
+
+.southern-parts-table {
+    margin-bottom: 0;
+
+    th,
+    td {
+        border-color: #cfd5dd;
+        padding: .75rem .9rem;
+        vertical-align: top;
+    }
+
+    tbody th {
+        background: #fff;
+        font-weight: 800;
+        width: 28%;
+    }
+
+    thead th {
+        background: #fff;
+        font-weight: 800;
+    }
+
+    a {
+        color: #111827;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+}
+
+.southern-token {
+    display: inline;
+
+    &::after {
+        content: ", ";
+    }
+
+    &:last-child::after {
+        content: "";
+    }
+}
+
+.southern-related-grid {
+    display: grid;
+    gap: .75rem;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+
+.southern-related-card {
+    background: #fff;
+    border: 1px solid #cfd5dd;
+    border-radius: 6px;
+    color: #111827;
+    display: grid;
+    gap: .25rem;
+    padding: .9rem;
+    text-decoration: none;
+
+    &:hover {
+        border-color: #f15a24;
+        color: #111827;
+        text-decoration: none;
+    }
+}
+
+.southern-related-card__type {
+    color: #6b7280;
+    font-size: .78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.southern-related-card__name {
+    font-weight: 700;
+}
+
+.southern-related-card__sku {
+    color: #4b5563;
+    font-size: .88rem;
+}
+
+.southern-product-card-meta {
+    color: #4b5563;
+    display: flex;
+    flex-wrap: wrap;
+    font-size: .78rem;
+    gap: .35rem .5rem;
+    line-height: 1.3;
+    margin-top: .3rem;
+}
+
+.southern-product-card-meta__sku,
+.southern-product-card-meta__item {
+    background: #f5f7fa;
+    border: 1px solid #d9dde4;
+    border-radius: 4px;
+    padding: .15rem .35rem;
+}
+
+.southern-product-card-meta__sku {
+    color: #111827;
+    font-weight: 700;
+}
+
+@media (max-width: 767.98px) {
+    .southern-parts-catalog__header {
+        align-items: start;
+        display: grid;
+    }
+
+    .southern-parts-catalog__search-note {
+        text-align: left;
+    }
+
+    .southern-parts-panel {
+        padding: 1.25rem 1rem;
+    }
+
+    .southern-spec-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .southern-spec-row,
+    .southern-parts-table tbody th,
+    .southern-parts-table tbody td {
+        display: block;
+        width: 100%;
+    }
+
+    .southern-parts-table tbody td {
+        padding-top: .5rem;
+    }
+}

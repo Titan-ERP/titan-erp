@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="rule_loki_crm_parcel_link_allowed_companies" model="ir.rule">
+        <field name="name">LOKI parcel links: allowed companies</field>
+        <field name="model_id" ref="model_loki_crm_parcel_link"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+</odoo>

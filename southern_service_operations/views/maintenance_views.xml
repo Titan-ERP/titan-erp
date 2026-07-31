@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_maintenance_request_form_southern_service" model="ir.ui.view">
+        <field name="name">maintenance.request.form.southern.service</field>
+        <field name="model">maintenance.request</field>
+        <field name="inherit_id" ref="maintenance.hr_equipment_request_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='equipment_id']" position="after">
+                <field name="southern_service_case_id"/>
+                <field name="southern_waiting_parts"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_maintenance_equipment_form_southern_service" model="ir.ui.view">
+        <field name="name">maintenance.equipment.form.southern.service</field>
+        <field name="model">maintenance.equipment</field>
+        <field name="inherit_id" ref="maintenance.hr_equipment_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='category_id']" position="after">
+                <field name="southern_internal_asset"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_southern_service_internal_work" model="ir.actions.act_window">
+        <field name="name">Internal Work</field>
+        <field name="res_model">maintenance.request</field>
+        <field name="view_mode">kanban,list,form,calendar</field>
+        <field name="domain">[('southern_service_case_id', '!=', False)]</field>
+    </record>
+
+    <record id="action_southern_service_internal_equipment" model="ir.actions.act_window">
+        <field name="name">Our Equipment</field>
+        <field name="res_model">maintenance.equipment</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="domain">[('southern_internal_asset', '=', True)]</field>
+        <field name="context">{'default_southern_internal_asset': True}</field>
+    </record>
+</odoo>

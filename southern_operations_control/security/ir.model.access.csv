@@ -1,0 +1,7 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_southern_operations_daily_control_user,southern.operations.daily.control user,model_southern_operations_daily_control,base.group_user,1,1,1,0
+access_southern_operations_daily_control_manager,southern.operations.daily.control manager,model_southern_operations_daily_control,base.group_system,1,1,1,1
+access_southern_contact_import_batch_user,southern.contact.import.batch user,model_southern_contact_import_batch,base.group_user,1,1,1,0
+access_southern_contact_import_batch_manager,southern.contact.import.batch manager,model_southern_contact_import_batch,base.group_system,1,1,1,1
+access_southern_contact_import_line_user,southern.contact.import.line user,model_southern_contact_import_line,base.group_user,1,1,1,0
+access_southern_contact_import_line_manager,southern.contact.import.line manager,model_southern_contact_import_line,base.group_system,1,1,1,1

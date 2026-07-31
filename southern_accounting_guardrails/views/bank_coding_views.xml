@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_southern_bank_coding_rule_list" model="ir.ui.view">
+        <field name="name">southern.bank.coding.rule.list</field>
+        <field name="model">southern.bank.coding.rule</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="company_id"/>
+                <field name="state"/>
+                <field name="match_pattern"/>
+                <field name="amount_direction"/>
+                <field name="target_account_id"/>
+                <field name="target_account_name"/>
+                <field name="match_count"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_southern_bank_coding_rule_form" model="ir.ui.view">
+        <field name="name">southern.bank.coding.rule.form</field>
+        <field name="model">southern.bank.coding.rule</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_approve" type="object" string="Approve" class="btn-primary"
+                            invisible="state != 'draft'"/>
+                    <button name="action_retire" type="object" string="Retire"
+                            invisible="state == 'retired'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,approved,retired"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group>
+                            <field name="company_id"/>
+                            <field name="sequence"/>
+                            <field name="active"/>
+                            <field name="match_pattern"/>
+                            <field name="amount_direction"/>
+                        </group>
+                        <group>
+                            <field name="target_account_id"/>
+                            <field name="target_account_name"/>
+                            <field name="minimum_amount"/>
+                            <field name="maximum_amount"/>
+                            <field name="effective_from"/>
+                            <field name="effective_to"/>
+                            <field name="approved_by_id"/>
+                            <field name="approved_at"/>
+                        </group>
+                    </group>
+                    <field name="note"/>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_southern_bank_coding_rules" model="ir.actions.act_window">
+        <field name="name">Bank Coding Rules</field>
+        <field name="res_model">southern.bank.coding.rule</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="action_seed_southern_bank_coding_rules" model="ir.actions.server">
+        <field name="name">Load Existing Bank Rules as Drafts</field>
+        <field name="model_id" ref="model_southern_bank_coding_rule"/>
+        <field name="binding_model_id" ref="model_southern_bank_coding_rule"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_seed_legacy_rules()</field>
+    </record>
+
+    <record id="view_southern_bank_coding_run_list" model="ir.ui.view">
+        <field name="name">southern.bank.coding.run.list</field>
+        <field name="model">southern.bank.coding.run</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="started_at"/>
+                <field name="name"/>
+                <field name="company_id"/>
+                <field name="date_from"/>
+                <field name="date_to"/>
+                <field name="state"/>
+                <field name="lines_scanned"/>
+                <field name="candidate_count"/>
+                <field name="unmatched_count"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_southern_bank_coding_run_form" model="ir.ui.view">
+        <field name="name">southern.bank.coding.run.form</field>
+        <field name="model">southern.bank.coding.run</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_evaluate" type="object" string="Evaluate" class="btn-primary"
+                            invisible="state not in ['draft', 'failed']"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,running,complete,failed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group>
+                            <field name="company_id"/>
+                            <field name="date_from"/>
+                            <field name="date_to"/>
+                        </group>
+                        <group>
+                            <field name="started_at"/>
+                            <field name="finished_at"/>
+                            <field name="lines_scanned"/>
+                            <field name="candidate_count"/>
+                            <field name="unmatched_count"/>
+                        </group>
+                    </group>
+                    <field name="candidate_ids">
+                        <list>
+                            <field name="bank_date"/>
+                            <field name="bank_label"/>
+                            <field name="amount"/>
+                            <field name="rule_id"/>
+                            <field name="target_account_id"/>
+                            <field name="state"/>
+                        </list>
+                    </field>
+                    <field name="error_message"/>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_southern_bank_coding_runs" model="ir.actions.act_window">
+        <field name="name">Bank Coding Runs</field>
+        <field name="res_model">southern.bank.coding.run</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="view_southern_bank_coding_candidate_list" model="ir.ui.view">
+        <field name="name">southern.bank.coding.candidate.list</field>
+        <field name="model">southern.bank.coding.candidate</field>
+        <field name="arch" type="xml">
+            <list decoration-warning="state == 'pending'"
+                  decoration-success="state == 'applied'"
+                  decoration-danger="state == 'exception'">
+                <field name="bank_date"/>
+                <field name="bank_label"/>
+                <field name="amount"/>
+                <field name="rule_id"/>
+                <field name="target_account_id"/>
+                <field name="state"/>
+                <field name="approved_by_id"/>
+                <field name="applied_by_id"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_southern_bank_coding_candidate_form" model="ir.ui.view">
+        <field name="name">southern.bank.coding.candidate.form</field>
+        <field name="model">southern.bank.coding.candidate</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_approve" type="object" string="Approve" class="btn-primary"
+                            invisible="state != 'pending'"/>
+                    <button name="action_reject" type="object" string="Reject"
+                            invisible="state != 'pending'"/>
+                    <button name="action_apply" type="object" string="Apply Coding" class="btn-primary"
+                            invisible="state != 'approved'"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="pending,approved,applied,rejected,exception"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="run_id"/>
+                            <field name="bank_statement_line_id"/>
+                            <field name="bank_date"/>
+                            <field name="bank_label"/>
+                            <field name="amount"/>
+                        </group>
+                        <group>
+                            <field name="rule_id"/>
+                            <field name="target_account_id"/>
+                            <field name="approved_by_id"/>
+                            <field name="approved_at"/>
+                            <field name="applied_by_id"/>
+                            <field name="applied_at"/>
+                        </group>
+                    </group>
+                    <field name="review_note"/>
+                    <field name="error_message"/>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_southern_bank_coding_candidates" model="ir.actions.act_window">
+        <field name="name">Bank Coding Candidates</field>
+        <field name="res_model">southern.bank.coding.candidate</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('state', 'in', ['pending', 'approved', 'exception'])]</field>
+    </record>
+</odoo>

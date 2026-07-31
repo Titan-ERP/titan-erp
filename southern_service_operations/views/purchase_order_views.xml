@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_purchase_order_form_southern_service" model="ir.ui.view">
+        <field name="name">purchase.order.form.southern.service</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_southern_service_cases" type="object"
+                        class="oe_stat_button" icon="fa-wrench"
+                        invisible="not southern_service_case_count">
+                    <field name="southern_service_case_count" widget="statinfo"
+                           string="Service"/>
+                </button>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='product_id']" position="after">
+                <field name="southern_demand_type" optional="show"/>
+                <field name="southern_service_case_id" optional="show"/>
+                <field name="southern_task_id" optional="hide"/>
+                <field name="southern_repair_order_id" optional="hide"/>
+                <field name="southern_maintenance_request_id" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_southern_service_purchase_tracking" model="ir.actions.act_window">
+        <field name="name">Purchase Tracking</field>
+        <field name="res_model">purchase.order</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="domain">[('order_line.southern_service_case_id', '!=', False)]</field>
+    </record>
+</odoo>

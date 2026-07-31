@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_southern_equipment_comp_list" model="ir.ui.view">
+        <field name="name">southern.equipment.comp.list</field>
+        <field name="model">southern.equipment.comp</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="source"/>
+                <field name="equipment_type"/>
+                <field name="manufacturer"/>
+                <field name="model"/>
+                <field name="year"/>
+                <field name="hours"/>
+                <field name="price"/>
+                <field name="sale_type"/>
+                <field name="sale_date"/>
+                <field name="location"/>
+            </list>
+        </field>
+    </record>
+    <record id="view_southern_equipment_comp_form" model="ir.ui.view">
+        <field name="name">southern.equipment.comp.form</field>
+        <field name="model">southern.equipment.comp</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group string="Equipment">
+                            <field name="equipment_type"/>
+                            <field name="manufacturer"/>
+                            <field name="model"/>
+                            <field name="year"/>
+                            <field name="hours"/>
+                            <field name="location"/>
+                        </group>
+                        <group string="Valuation Source">
+                            <field name="source"/>
+                            <field name="source_url" widget="url"/>
+                            <field name="price"/>
+                            <field name="sale_type"/>
+                            <field name="sale_date"/>
+                        </group>
+                    </group>
+                    <field name="notes"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="action_southern_equipment_comps" model="ir.actions.act_window">
+        <field name="name">Equipment Comps</field>
+        <field name="res_model">southern.equipment.comp</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>
+
