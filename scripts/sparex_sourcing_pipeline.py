@@ -45,6 +45,13 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def odoo_datetime(value: datetime) -> str:
+    """Serialize a datetime in the server format accepted by Odoo fields."""
+    if value.tzinfo is not None:
+        value = value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value.strftime("%Y-%m-%d %H:%M:%S")
+
+
 def sha256_bytes(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
@@ -464,7 +471,7 @@ def apply_evidence(args: argparse.Namespace) -> dict[str, Any]:
                     "evidence_url": record.get("evidence_url"),
                     "evidence_sha256": record.get("evidence_sha256"),
                     "evidence_schema_version": SCHEMA_VERSION,
-                    "evidence_retrieved_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+                    "evidence_retrieved_at": odoo_datetime(datetime.now(timezone.utc)),
                 }
             )
         client.call(

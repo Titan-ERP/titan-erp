@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 from scripts.sparex_sourcing_pipeline import (
     choose_exact_price,
+    odoo_datetime,
     page_matches_sku,
     sha256_file,
     verify_explicit_input,
@@ -14,6 +16,10 @@ from scripts.sparex_sourcing_pipeline import (
 
 
 class SparexSourcingPipelineTests(unittest.TestCase):
+    def test_odoo_datetime_uses_server_field_format(self):
+        value = datetime(2026, 7, 31, 11, 32, 39, 273778, tzinfo=timezone.utc)
+        self.assertEqual(odoo_datetime(value), "2026-07-31 11:32:39")
+
     def test_json_ld_exact_price_is_accepted(self):
         payload = {
             "@type": "Product",
