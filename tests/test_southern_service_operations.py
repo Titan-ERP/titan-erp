@@ -57,6 +57,27 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         )
         self.assertIn("has a $0.00 sales price", view_source)
 
+    def test_ai_review_opens_editable_with_selection_totals(self):
+        model_source = (
+            MODULE / "models" / "service_ai_suggestion.py"
+        ).read_text(encoding="utf-8")
+        view_source = (
+            MODULE / "views" / "service_ai_suggestion_views.xml"
+        ).read_text(encoding="utf-8")
+        self.assertIn('"context": {"form_view_initial_mode": "edit"}', model_source)
+        self.assertIn("def _compute_review_totals(self):", model_source)
+        self.assertIn('string="Selected Estimate Totals"', view_source)
+        self.assertIn('name="selected_labor_hours"', view_source)
+
+    def test_ai_receives_current_labor_product_configuration(self):
+        model_source = (
+            MODULE / "models" / "service_ai_suggestion.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('"quote_configuration": {', model_source)
+        self.assertIn('"labor_product_name": (', model_source)
+        self.assertIn('"labor_rate": self.southern_labor_rate or 0.0', model_source)
+        self.assertIn("authoritative selected labor product", model_source)
+
     def test_digital_inspection_result_fields_remain_editable(self):
         view_source = (
             MODULE / "views" / "service_inspection_views.xml"

@@ -34,6 +34,11 @@
                     <group>
                         <field name="summary" readonly="1"/>
                     </group>
+                    <group string="Selected Estimate Totals">
+                        <field name="selected_item_count" readonly="1"/>
+                        <field name="selected_labor_hours" readonly="1"/>
+                        <field name="selected_part_quantity" readonly="1"/>
+                    </group>
                     <separator string="Suggested Tasks and Parts"/>
                     <field name="line_ids" nolabel="1"
                            readonly="state != 'draft'">

@@ -619,6 +619,15 @@ class TestSouthernServiceFlow(TransactionCase):
 
         self.assertIn("AI Estimate Review", suggestion.display_name)
         self.assertIn(task.name, suggestion.display_name)
+        self.assertEqual(suggestion.selected_item_count, 2)
+        self.assertEqual(suggestion.selected_labor_hours, 2.5)
+        self.assertEqual(suggestion.selected_part_quantity, 1.0)
+        quote_configuration = task._southern_ai_input()["quote_configuration"]
+        self.assertEqual(
+            quote_configuration["labor_product_name"],
+            self.service_product.display_name,
+        )
+        self.assertEqual(quote_configuration["labor_rate"], 125.0)
 
         suggestion.action_apply_selected()
 

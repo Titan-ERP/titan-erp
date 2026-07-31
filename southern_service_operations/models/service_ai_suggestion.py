@@ -65,6 +65,39 @@ class SouthernServiceAiSuggestion(models.Model):
         string="Suggested Work",
         copy=False,
     )
+    selected_item_count = fields.Integer(
+        string="Selected Items",
+        compute="_compute_review_totals",
+    )
+    selected_labor_hours = fields.Float(
+        string="Selected Labor Hours",
+        compute="_compute_review_totals",
+    )
+    selected_part_quantity = fields.Float(
+        string="Selected Part Quantity",
+        compute="_compute_review_totals",
+    )
+
+    @api.depends(
+        "line_ids.selected",
+        "line_ids.work_type",
+        "line_ids.estimated_hours",
+        "line_ids.quantity",
+    )
+    def _compute_review_totals(self):
+        for suggestion in self:
+            selected = suggestion.line_ids.filtered("selected")
+            suggestion.selected_item_count = len(selected)
+            suggestion.selected_labor_hours = sum(
+                selected.filtered(lambda line: line.work_type == "labor").mapped(
+                    "estimated_hours"
+                )
+            )
+            suggestion.selected_part_quantity = sum(
+                selected.filtered(lambda line: line.work_type == "part").mapped(
+                    "quantity"
+                )
+            )
 
     @api.depends("task_id.name")
     def _compute_name(self):
@@ -347,6 +380,19 @@ class ProjectTaskAiEstimate(models.Model):
             "technician_diagnosis": self.southern_diagnosis or "",
             "work_performed": self.southern_work_performed or "",
             "recommendations": self.southern_recommendations or "",
+            "quote_configuration": {
+                "labor_product_code": (
+                    self.southern_labor_product_id.default_code or ""
+                ),
+                "labor_product_name": (
+                    self.southern_labor_product_id.display_name or ""
+                ),
+                "labor_rate": self.southern_labor_rate or 0.0,
+                "labor_uom": (
+                    self.southern_labor_product_id.uom_id.display_name or ""
+                ),
+                "currency": self.southern_work_currency_id.name or "",
+            },
             "available_parts_catalog": self._southern_product_catalog(),
         }
 
@@ -418,7 +464,9 @@ class ProjectTaskAiEstimate(models.Model):
                         "parts quantities, and estimated versus actual labor. Historical "
                         "work is supporting evidence only: do not assume a past failure is "
                         "the current cause, and never reuse historical pricing in place of "
-                        "the current Odoo product catalog and price list."
+                        "the current Odoo product catalog and price list. Treat "
+                        "quote_configuration as the authoritative selected labor product; "
+                        "do not ask whether a labor product exists when it is populated."
                     ),
                 },
                 {
@@ -547,4 +595,5 @@ class ProjectTaskAiEstimate(models.Model):
             "view_mode": "form",
             "res_id": suggestion.id,
             "target": "new",
+            "context": {"form_view_initial_mode": "edit"},
         }
