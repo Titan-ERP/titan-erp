@@ -30,6 +30,13 @@ class TestSouthernServiceFlow(TransactionCase):
                 "list_price": 125.0,
             }
         )
+        cls.part_product = cls.env["product.product"].create(
+            {
+                "name": "Southern Service Test Filter",
+                "type": "consu",
+                "list_price": 42.50,
+            }
+        )
         cls.equipment = cls.env["equipment.details"].create(
             {
                 "name": "Southern Service Test Equipment",
@@ -76,13 +83,6 @@ class TestSouthernServiceFlow(TransactionCase):
                 "southern_diagnosis": "Relief valve out of adjustment",
                 "southern_work_performed": "Reset valve and verified pressure",
                 "southern_recommendations": "No immediate follow-up required",
-            }
-        )
-        cls.part_product = cls.env["product.product"].create(
-            {
-                "name": "Southern Service Test Filter",
-                "type": "consu",
-                "list_price": 42.50,
             }
         )
         self.assertEqual(case.diagnosis, "Relief valve out of adjustment")
