@@ -1,7 +1,7 @@
 {
     "name": "Southern Service",
-    "version": "19.0.1.12.0",
-    "author": "Titan Equipment",
+    "version": "19.0.1.13.0",
+    "author": "Southern Equipment",
     "category": "Services",
     "summary": "One Service workflow across Sales, customer equipment, field work, shop work, maintenance, and purchasing.",
     "depends": [
@@ -29,6 +29,7 @@
         "views/service_case_views.xml",
         "views/sale_order_views.xml",
         "views/project_task_views.xml",
+        "views/service_inspection_views.xml",
         "views/repair_order_views.xml",
         "views/maintenance_views.xml",
         "views/purchase_order_views.xml",

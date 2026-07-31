@@ -76,4 +76,15 @@
         ]</field>
         <field name="groups" eval="[(4, ref('group_southern_service_user'))]"/>
     </record>
+
+    <record id="southern_service_inspection_item_company_rule" model="ir.rule">
+        <field name="name">Digital Equipment Inspection: User companies</field>
+        <field name="model_id" ref="model_southern_service_inspection_item"/>
+        <field name="domain_force">[
+            '|',
+                ('company_id', '=', False),
+                ('company_id', 'in', company_ids)
+        ]</field>
+        <field name="groups" eval="[(4, ref('group_southern_service_user'))]"/>
+    </record>
 </odoo>

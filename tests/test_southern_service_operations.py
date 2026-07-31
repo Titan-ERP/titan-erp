@@ -18,7 +18,7 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         manifest = _manifest()
         self.assertIs(manifest["application"], True)
         self.assertEqual(manifest["name"], "Southern Service")
-        self.assertEqual(manifest["author"], "Titan Equipment")
+        self.assertEqual(manifest["author"], "Southern Equipment")
         self.assertTrue(
             {
                 "sale_management",

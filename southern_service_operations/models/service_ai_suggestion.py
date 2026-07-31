@@ -15,6 +15,13 @@ class SouthernServiceAiSuggestion(models.Model):
     _name = "southern.service.ai.suggestion"
     _description = "AI Service Estimate Suggestion"
     _order = "create_date desc, id desc"
+    _rec_name = "name"
+
+    name = fields.Char(
+        string="Review",
+        compute="_compute_name",
+        store=True,
+    )
 
     task_id = fields.Many2one(
         "project.task",
@@ -57,6 +64,13 @@ class SouthernServiceAiSuggestion(models.Model):
         string="Suggested Work",
         copy=False,
     )
+
+    @api.depends("task_id.name")
+    def _compute_name(self):
+        for suggestion in self:
+            suggestion.name = _("AI Estimate Review - %(job)s") % {
+                "job": suggestion.task_id.name or _("Service Job")
+            }
 
     def action_apply_selected(self):
         for suggestion in self:
@@ -271,11 +285,39 @@ class ProjectTaskAiEstimate(models.Model):
 
     def _southern_ai_input(self):
         self.ensure_one()
+        equipment = self.southern_client_equipment_id
+        inspection_items = self.southern_inspection_item_ids.filtered(
+            "include_in_ai"
+        )
         return {
             "customer_complaint": self.description or self.name or "",
             "equipment": self.dmc_equipment or "",
             "serial_number": self.dmc_serial_number or "",
             "run_hours": self.dmc_equipment_run_hours or 0.0,
+            "equipment_record": {
+                "manufacturer": equipment.manufacturer_id.display_name or "",
+                "model": equipment.model or "",
+                "category": equipment.category_id.display_name or "",
+                "asset_tag": equipment.asset_tag or "",
+                "systems": equipment.system_ids.mapped("display_name"),
+            },
+            "digital_equipment_inspection": {
+                "status": self.southern_inspection_state,
+                "summary": self.southern_inspection_summary or "",
+                "items": [
+                    {
+                        "area": item.inspection_area,
+                        "item": item.name,
+                        "result": item.result,
+                        "priority": item.priority,
+                        "measurement": item.measurement or "",
+                        "fault_code": item.fault_code or "",
+                        "finding": item.finding or "",
+                        "recommended_action": item.recommended_action or "",
+                    }
+                    for item in inspection_items
+                ],
+            },
             "technician_diagnosis": self.southern_diagnosis or "",
             "work_performed": self.southern_work_performed or "",
             "recommendations": self.southern_recommendations or "",
@@ -341,7 +383,10 @@ class ProjectTaskAiEstimate(models.Model):
                         "price, or safety assurance. Recommend parts only when their "
                         "exact product code appears in available_parts_catalog; otherwise "
                         "leave product_code empty. Cite an equipment manual or bulletin "
-                        "only when file search supplies it. Make the customer_note clear "
+                        "only when file search supplies it. Treat Digital Equipment "
+                        "Inspection entries as technician-recorded evidence, preserve "
+                        "their inspection status, and do not convert a Monitor item into "
+                        "a required repair without a stated technical reason. Make the customer_note clear "
                         "that proposed work is subject to technician inspection and approval."
                     ),
                 },

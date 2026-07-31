@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_task_form_southern_digital_equipment_inspection"
+            model="ir.ui.view">
+        <field name="name">project.task.form.southern.digital.equipment.inspection</field>
+        <field name="model">project.task</field>
+        <field name="inherit_id"
+               ref="southern_service_operations.view_task_form_southern_service"/>
+        <field name="priority">20</field>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='description_page']" position="after">
+                <page name="southern_equipment_inspection"
+                      string="Digital Equipment Inspection"
+                      invisible="not is_fsm"
+                      groups="southern_service_operations.group_southern_service_user">
+                    <group>
+                        <group string="Inspection Control">
+                            <field name="southern_inspection_state"
+                                   widget="statusbar"
+                                   statusbar_visible="not_started,in_progress,completed"/>
+                            <field name="southern_inspector_id" readonly="1"/>
+                            <field name="southern_inspection_started_at" readonly="1"/>
+                            <field name="southern_inspection_completed_at" readonly="1"/>
+                        </group>
+                        <group string="Inspection Results">
+                            <field name="southern_inspection_attention_count"
+                                   readonly="1"/>
+                            <field name="southern_inspection_summary"
+                                   placeholder="Summarize overall condition, important findings, and inspection limitations..."/>
+                        </group>
+                    </group>
+                    <div class="d-flex gap-2 mb-3">
+                        <button name="action_southern_start_inspection"
+                                type="object" string="Start Inspection"
+                                class="btn-primary"
+                                invisible="southern_inspection_state != 'not_started'"/>
+                        <button name="action_southern_complete_inspection"
+                                type="object" string="Complete Inspection"
+                                class="btn-primary"
+                                invisible="southern_inspection_state != 'in_progress'"/>
+                        <button name="action_southern_reopen_inspection"
+                                type="object" string="Reopen Inspection"
+                                class="btn-secondary"
+                                invisible="southern_inspection_state != 'completed'"/>
+                    </div>
+                    <div class="alert alert-info" role="status">
+                        Record what the technician observed. Written findings marked
+                        <strong>Use for AI Estimate</strong> become supporting evidence
+                        for the reviewed estimate; they do not automatically add work
+                        or products to the quotation.
+                    </div>
+                    <field name="southern_inspection_item_ids"
+                           nolabel="1"
+                           readonly="southern_inspection_state == 'completed'">
+                        <list editable="bottom">
+                            <field name="sequence" widget="handle"/>
+                            <field name="inspection_area"
+                                   placeholder="Hydraulics, Engine, Safety..."/>
+                            <field name="name"
+                                   placeholder="Component or inspection point..."/>
+                            <field name="result" widget="badge"/>
+                            <field name="priority" widget="badge"
+                                   optional="show"/>
+                            <field name="measurement" optional="show"/>
+                            <field name="fault_code" optional="show"/>
+                            <field name="finding" optional="show"/>
+                            <field name="recommended_action" optional="show"/>
+                            <field name="include_in_ai" optional="show"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

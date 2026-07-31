@@ -332,6 +332,67 @@ class TestSouthernServiceFlow(TransactionCase):
         case.action_route_work()
         self.assertEqual(case.maintenance_request_ids, request)
 
+    def test_digital_equipment_inspection_feeds_ai_evidence(self):
+        case = self._create_customer_case()
+        case.action_route_work()
+        task = case.task_ids
+
+        start_action = task.action_southern_start_inspection()
+        self.assertEqual(task.southern_inspection_state, "in_progress")
+        self.assertEqual(task.southern_inspector_id, self.env.user)
+        self.assertTrue(task.southern_inspection_started_at)
+        self.assertEqual(
+            start_action,
+            {"type": "ir.actions.client", "tag": "reload"},
+        )
+
+        included = self.env["southern.service.inspection.item"].create(
+            {
+                "task_id": task.id,
+                "inspection_area": "Hydraulics",
+                "name": "Main hydraulic pump",
+                "result": "repair",
+                "priority": "high",
+                "measurement": "1,850 psi",
+                "fault_code": "HYD-LOW-P",
+                "finding": "Pressure remained below specification during test.",
+                "recommended_action": "Confirm relief setting and pump condition.",
+            }
+        )
+        self.env["southern.service.inspection.item"].create(
+            {
+                "task_id": task.id,
+                "inspection_area": "Safety",
+                "name": "Internal-only observation",
+                "result": "monitor",
+                "include_in_ai": False,
+            }
+        )
+        task.southern_inspection_summary = "Hydraulic pressure requires attention."
+
+        service_input = task._southern_ai_input()
+        inspection = service_input["digital_equipment_inspection"]
+        self.assertEqual(inspection["status"], "in_progress")
+        self.assertEqual(inspection["summary"], task.southern_inspection_summary)
+        self.assertEqual(len(inspection["items"]), 1)
+        self.assertEqual(inspection["items"][0]["area"], "Hydraulics")
+        self.assertEqual(inspection["items"][0]["result"], "repair")
+        self.assertEqual(inspection["items"][0]["fault_code"], "HYD-LOW-P")
+        self.assertEqual(task.southern_inspection_attention_count, 2)
+
+        complete_action = task.action_southern_complete_inspection()
+        self.assertEqual(task.southern_inspection_state, "completed")
+        self.assertTrue(task.southern_inspection_completed_at)
+        self.assertEqual(
+            complete_action,
+            {"type": "ir.actions.client", "tag": "reload"},
+        )
+        self.assertIn(included, task.southern_inspection_item_ids)
+
+        task.action_southern_reopen_inspection()
+        self.assertEqual(task.southern_inspection_state, "in_progress")
+        self.assertFalse(task.southern_inspection_completed_at)
+
     def test_reviewed_ai_estimate_creates_native_tasks_parts_and_note(self):
         case = self._create_customer_case()
         case.action_route_work()
@@ -374,6 +435,9 @@ class TestSouthernServiceFlow(TransactionCase):
                 ],
             }
         )
+
+        self.assertIn("AI Estimate Review", suggestion.display_name)
+        self.assertIn(task.name, suggestion.display_name)
 
         suggestion.action_apply_selected()
 
