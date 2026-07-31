@@ -7,11 +7,10 @@ name = "titan-odoo-automation"
 version = "0.2.0"
 description = "Shared runtime and controlled workflows for Titan ERP Odoo automation."
 requires-python = ">=3.12"
-dependencies = []
+dependencies = ["requests>=2.32,<3"]
 
 [project.optional-dependencies]
 aws = ["boto3>=1.35,<2"]
-sparex = ["requests>=2.32,<3"]
 dev = ["lxml>=5.3,<7", "pytest>=8,<9", "ruff>=0.9,<1"]
 
 [tool.pytest.ini_options]

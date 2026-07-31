@@ -13,10 +13,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import os
 import re
-import sys
 import time
 from datetime import datetime, timedelta, timezone
 from html import unescape
