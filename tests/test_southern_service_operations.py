@@ -264,6 +264,7 @@ class SouthernServiceOperationsTests(unittest.TestCase):
             "southern_sale_order_id",
             "southern_quote_line_ids",
             "southern_service_work_item_ids",
+            "southern_labor_work_item_ids",
             "def action_southern_create_quotation(self):",
             "def action_southern_add_labor_task(self):",
             "def action_southern_add_part(self):",
@@ -283,7 +284,7 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         self.assertEqual(
             len(
                 document.xpath(
-                    "//field[@name='southern_service_work_item_ids']"
+                    "//field[@name='southern_labor_work_item_ids']"
                     "/list[@editable='bottom']"
                 )
             ),
@@ -358,7 +359,7 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         self.assertEqual(
             len(
                 document.xpath(
-                    "//field[@name='southern_service_work_item_ids']"
+                    "//field[@name='southern_labor_work_item_ids']"
                     "/list/control/create"
                 )
             ),
@@ -381,6 +382,8 @@ class SouthernServiceOperationsTests(unittest.TestCase):
             "not equipment.serial_no and not equipment.southern_unserialized",
             source,
         )
+        self.assertIn("_southern_find_or_create_serialized", source)
+        self.assertIn("_southern_ai_service_history", source)
 
     def test_ai_estimate_is_reviewed_before_native_quote_changes(self):
         source = (MODULE / "models" / "service_ai_suggestion.py").read_text(
@@ -395,6 +398,7 @@ class SouthernServiceOperationsTests(unittest.TestCase):
             "def action_apply_selected(self):",
             '"display_type": "line_note"',
             '"southern.service.work.item"',
+            '"service_history":',
         ):
             self.assertIn(marker, source)
 

@@ -179,7 +179,21 @@ class SouthernServiceCase(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        Equipment = self.env["equipment.details"]
+        Partner = self.env["res.partner"]
         for vals in vals_list:
+            if (
+                vals.get("service_domain", "customer") == "customer"
+                and not vals.get("client_equipment_id")
+                and vals.get("partner_id")
+            ):
+                equipment = Equipment._southern_find_or_create_serialized(
+                    Partner.browse(vals["partner_id"]),
+                    vals.get("equipment_description"),
+                    vals.get("serial_number"),
+                )
+                if equipment:
+                    vals["client_equipment_id"] = equipment.id
             if vals.get("name", _("New")) == _("New"):
                 vals["name"] = self.env["ir.sequence"].next_by_code(
                     "southern.service.case"
@@ -336,6 +350,7 @@ class SouthernServiceCase(models.Model):
             "allocated_hours": self.estimated_hours,
             "under_warranty": self.commercial_basis == "warranty",
             "southern_service_case_id": self.id,
+            "southern_quote_workflow": True,
             "southern_client_equipment_id": equipment.id,
             "dmc_equipment": self.equipment_description,
             "dmc_serial_number": self.serial_number,

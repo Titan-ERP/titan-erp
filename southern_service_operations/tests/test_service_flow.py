@@ -1,4 +1,5 @@
 from odoo import Command, fields
+from odoo.exceptions import ValidationError
 from odoo.tests import TransactionCase, tagged
 
 
@@ -97,6 +98,66 @@ class TestSouthernServiceFlow(TransactionCase):
 
         case.action_route_work()
         self.assertEqual(case.task_ids, task)
+
+    def test_serial_intake_creates_contact_equipment_and_reuses_history(self):
+        serial_number = "SOUTHERN-AUTO-EQUIPMENT-001"
+        first_case = self.env["southern.service.case"].create(
+            {
+                "service_domain": "customer",
+                "partner_id": self.partner.id,
+                "service_location": "onsite",
+                "service_title": "First hydraulic service",
+                "equipment_description": "Southern Test Excavator",
+                "serial_number": serial_number,
+                "equipment_run_hours": 1200,
+                "complaint": "Hydraulics lose power when warm",
+                "diagnosis": "Return filter restricted",
+                "work_performed": "Replaced return filter",
+                "recommendations": "Recheck after 50 hours",
+            }
+        )
+        equipment = first_case.client_equipment_id
+        self.assertTrue(equipment)
+        self.assertEqual(equipment.client, self.partner)
+        self.assertEqual(equipment.serial_no, serial_number)
+
+        second_case = self.env["southern.service.case"].create(
+            {
+                "service_domain": "customer",
+                "partner_id": self.partner.id,
+                "service_location": "onsite",
+                "service_title": "Follow-up hydraulic service",
+                "equipment_description": "Southern Test Excavator",
+                "serial_number": serial_number,
+                "equipment_run_hours": 1260,
+                "complaint": "Hydraulic performance follow-up",
+            }
+        )
+        self.assertEqual(second_case.client_equipment_id, equipment)
+        second_case.action_route_work()
+        service_history = second_case.task_ids._southern_ai_input()[
+            "equipment_record"
+        ]["service_history"]
+        self.assertEqual(len(service_history), 1)
+        self.assertEqual(service_history[0]["record"], first_case.name)
+        self.assertEqual(service_history[0]["run_hours"], 1200)
+        self.assertIn("Return filter", service_history[0]["diagnosis"])
+
+        other_customer = self.env["res.partner"].create(
+            {"name": "Other Southern Service Customer"}
+        )
+        with self.assertRaises(ValidationError):
+            self.env["southern.service.case"].create(
+                {
+                    "service_domain": "customer",
+                    "partner_id": other_customer.id,
+                    "service_location": "onsite",
+                    "service_title": "Incorrect customer intake",
+                    "equipment_description": "Southern Test Excavator",
+                    "serial_number": serial_number.lower(),
+                    "complaint": "This serial belongs to another customer",
+                }
+            )
 
     def test_confirmed_service_sale_reuses_routed_task(self):
         case = self._create_customer_case()
@@ -274,6 +335,14 @@ class TestSouthernServiceFlow(TransactionCase):
             and line.name.startswith("Service Labor")
         )
         self.assertEqual(task.southern_service_task_hours, 5.0)
+        self.assertEqual(
+            task.southern_labor_work_item_ids,
+            labor | second_labor | nonbillable,
+        )
+        self.assertNotIn(part, task.southern_labor_work_item_ids)
+        self.assertEqual(task.allocated_hours, 5.0)
+        self.assertEqual(order.southern_estimated_hours, 5.0)
+        self.assertEqual(case.estimated_hours, 5.0)
         self.assertEqual(quoted_labor_lines, labor_line)
         self.assertEqual(labor_line.order_id, order)
         self.assertEqual(labor_line.product_uom_qty, 4.5)
@@ -309,6 +378,9 @@ class TestSouthernServiceFlow(TransactionCase):
         self.assertEqual(labor.quote_quantity, 4.25)
         self.assertEqual(labor.sale_line_id.product_uom_qty, 5.75)
         self.assertEqual(task.southern_service_task_hours, 6.25)
+        self.assertEqual(task.allocated_hours, 6.25)
+        self.assertEqual(order.southern_estimated_hours, 6.25)
+        self.assertEqual(case.estimated_hours, 6.25)
 
     def test_internal_service_routes_to_maintenance(self):
         internal_equipment = self.env["maintenance.equipment"].create(

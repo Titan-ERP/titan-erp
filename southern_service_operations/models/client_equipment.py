@@ -43,6 +43,100 @@ class ClientEquipment(models.Model):
     southern_task_count = fields.Integer(compute="_compute_southern_counts")
     southern_repair_count = fields.Integer(compute="_compute_southern_counts")
 
+    @api.model
+    def _southern_find_or_create_serialized(
+        self,
+        partner,
+        equipment_name,
+        serial_number,
+    ):
+        """Return the durable customer-equipment record for service intake."""
+        partner = partner.exists()
+        equipment_name = (equipment_name or "").strip()
+        serial_number = (serial_number or "").strip()
+        if (
+            not partner
+            or not equipment_name
+            or not serial_number
+            or serial_number.casefold() == "unserialized"
+        ):
+            return self.browse()
+
+        equipment = self.search([("serial_no", "=ilike", serial_number)], limit=1)
+        if equipment:
+            if (
+                equipment.client
+                and equipment.client.commercial_partner_id
+                != partner.commercial_partner_id
+            ):
+                raise ValidationError(
+                    _(
+                        "Serial Number %(serial)s is already assigned to "
+                        "%(customer)s."
+                    )
+                    % {
+                        "serial": serial_number,
+                        "customer": equipment.client.display_name,
+                    }
+                )
+            if not equipment.client:
+                equipment.client = partner
+            return equipment
+
+        return self.create(
+            {
+                "name": equipment_name,
+                "client": partner.id,
+                "model": equipment_name,
+                "serial_no": serial_number,
+                "southern_active": True,
+            }
+        )
+
+    def _southern_ai_service_history(self, current_task=None, limit=12):
+        """Return concise, structured history for an AI estimate prompt."""
+        self.ensure_one()
+        current_case = current_task.southern_service_case_id if current_task else False
+        history = []
+        for case in self.southern_service_case_ids.filtered(
+            lambda row: row != current_case
+        ):
+            history.append(
+                {
+                    "record_type": "service_case",
+                    "record": case.name,
+                    "date": fields.Datetime.to_string(
+                        case.requested_date or case.create_date
+                    ),
+                    "title": case.service_title or "",
+                    "state": case.state,
+                    "run_hours": case.equipment_run_hours,
+                    "complaint": case.complaint or "",
+                    "diagnosis": case.diagnosis or "",
+                    "work_performed": case.work_performed or "",
+                    "recommendations": case.recommendations or "",
+                }
+            )
+        for task in self.southern_task_ids.filtered(
+            lambda row: row != current_task and not row.southern_service_case_id
+        ):
+            history.append(
+                {
+                    "record_type": "service_job",
+                    "record": task.display_name,
+                    "date": fields.Datetime.to_string(task.create_date),
+                    "title": task.name or "",
+                    "state": task.stage_id.display_name or "",
+                    "run_hours": task.dmc_equipment_run_hours,
+                    "complaint": task.description or "",
+                    "diagnosis": task.southern_diagnosis or "",
+                    "work_performed": task.southern_work_performed or "",
+                    "recommendations": task.southern_recommendations or "",
+                }
+            )
+        history.sort(key=lambda row: row["date"] or "", reverse=True)
+        return history[:limit]
+
     @api.depends(
         "southern_service_case_ids",
         "southern_task_ids",

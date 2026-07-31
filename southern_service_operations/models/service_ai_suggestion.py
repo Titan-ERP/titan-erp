@@ -300,6 +300,14 @@ class ProjectTaskAiEstimate(models.Model):
                 "category": equipment.category_id.display_name or "",
                 "asset_tag": equipment.asset_tag or "",
                 "systems": equipment.system_ids.mapped("display_name"),
+                "service_history": (
+                    equipment._southern_ai_service_history(
+                        current_task=self,
+                        limit=12,
+                    )
+                    if equipment
+                    else []
+                ),
             },
             "digital_equipment_inspection": {
                 "status": self.southern_inspection_state,

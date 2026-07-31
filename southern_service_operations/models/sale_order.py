@@ -115,6 +115,28 @@ class SaleOrder(models.Model):
         readonly=True,
     )
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        Equipment = self.env["equipment.details"]
+        Partner = self.env["res.partner"]
+        default_quote_type = self.env.context.get(
+            "default_southern_quote_type", "general"
+        )
+        for vals in vals_list:
+            if (
+                vals.get("southern_quote_type", default_quote_type) == "service"
+                and not vals.get("southern_client_equipment_id")
+                and vals.get("partner_id")
+            ):
+                equipment = Equipment._southern_find_or_create_serialized(
+                    Partner.browse(vals["partner_id"]),
+                    vals.get("southern_equipment_description"),
+                    vals.get("southern_serial_number"),
+                )
+                if equipment:
+                    vals["southern_client_equipment_id"] = equipment.id
+        return super().create(vals_list)
+
     @api.onchange("southern_client_equipment_id")
     def _onchange_southern_client_equipment_id(self):
         for order in self:

@@ -1,5 +1,6 @@
 from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
+from odoo.tools import float_compare
 
 
 class ProjectTask(models.Model):
@@ -48,6 +49,13 @@ class ProjectTask(models.Model):
         "southern.service.work.item",
         "task_id",
         string="Service Tasks",
+        copy=True,
+    )
+    southern_labor_work_item_ids = fields.One2many(
+        "southern.service.work.item",
+        "task_id",
+        string="Service Tasks",
+        domain=[("work_type", "=", "labor")],
         copy=True,
     )
     southern_service_task_hours = fields.Float(
@@ -105,11 +113,11 @@ class ProjectTask(models.Model):
         tracking=True,
     )
 
-    @api.depends("southern_service_work_item_ids.allocated_hours")
+    @api.depends("southern_labor_work_item_ids.allocated_hours")
     def _compute_southern_service_task_hours(self):
         for task in self:
             task.southern_service_task_hours = sum(
-                task.southern_service_work_item_ids.mapped("allocated_hours")
+                task.southern_labor_work_item_ids.mapped("allocated_hours")
             )
 
     @api.depends("southern_labor_product_id.lst_price")
@@ -298,6 +306,33 @@ class ProjectTask(models.Model):
             labor_items = work_items.filtered(
                 lambda item: item.billable and item.work_type == "labor"
             )
+            planned_hours = sum(
+                work_items.filtered(
+                    lambda item: item.work_type == "labor"
+                ).mapped("allocated_hours")
+            )
+            if planned_hours:
+                if float_compare(
+                    task.allocated_hours,
+                    planned_hours,
+                    precision_digits=2,
+                ):
+                    task.with_context(southern_skip_auto_quote=True).write(
+                        {"allocated_hours": planned_hours}
+                    )
+                if float_compare(
+                    task_order.southern_estimated_hours,
+                    planned_hours,
+                    precision_digits=2,
+                ):
+                    task_order.write({"southern_estimated_hours": planned_hours})
+                case = task.southern_service_case_id
+                if case and float_compare(
+                    case.estimated_hours,
+                    planned_hours,
+                    precision_digits=2,
+                ):
+                    case.write({"estimated_hours": planned_hours})
             labor_line = task.southern_labor_sale_line_id
             if labor_items:
                 if not task.southern_labor_product_id:
@@ -463,6 +498,29 @@ class ProjectTask(models.Model):
                     else service_order.southern_client_equipment_id
                 )
             )
+            partner = (
+                self.env["res.partner"].browse(vals["partner_id"])
+                if vals.get("partner_id")
+                else (
+                    case.partner_id if case else service_order.partner_id
+                )
+            )
+            is_service_job = bool(
+                vals.get(
+                    "southern_quote_workflow",
+                    self.env.context.get("default_southern_quote_workflow"),
+                )
+                or case
+                or service_order
+            )
+            if not equipment and is_service_job and partner:
+                equipment = Equipment._southern_find_or_create_serialized(
+                    partner,
+                    vals.get("dmc_equipment"),
+                    vals.get("dmc_serial_number"),
+                )
+                if equipment:
+                    vals["southern_client_equipment_id"] = equipment.id
             if case:
                 vals.setdefault("partner_id", case.partner_id.id)
                 vals.setdefault(
@@ -477,7 +535,19 @@ class ProjectTask(models.Model):
                     "dmc_serial_number",
                     equipment.serial_no or "Unserialized",
                 )
-        tasks = super().create(vals_list)
+        skip_stage_email = all(
+            vals.get(
+                "southern_quote_workflow",
+                self.env.context.get("default_southern_quote_workflow"),
+            )
+            for vals in vals_list
+        )
+        creator = (
+            self.with_context(southern_skip_stage_email=True)
+            if skip_stage_email
+            else self
+        )
+        tasks = super(ProjectTask, creator).create(vals_list)
         if not self.env.context.get("southern_skip_auto_quote"):
             tasks._southern_auto_prepare_quote()
         return tasks
@@ -505,3 +575,9 @@ class ProjectTask(models.Model):
             if quote_fields.intersection(vals):
                 self._southern_auto_prepare_quote()
         return result
+
+    def _track_template(self, changes):
+        templates = super()._track_template(changes)
+        if self.env.context.get("southern_skip_stage_email"):
+            templates.pop("stage_id", None)
+        return templates

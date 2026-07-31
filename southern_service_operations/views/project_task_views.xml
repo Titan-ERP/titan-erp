@@ -243,8 +243,7 @@
                         Odoo products, hours, and customer wording.
                     </div>
                     <separator string="Service Tasks"/>
-                    <field name="southern_service_work_item_ids"
-                           domain="[('work_type', '=', 'labor')]"
+                    <field name="southern_labor_work_item_ids"
                            readonly="southern_sale_state not in (False, 'draft', 'sent')"
                            context="{'default_task_id': id}">
                         <list editable="bottom">
