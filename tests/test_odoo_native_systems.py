@@ -145,6 +145,19 @@ class OdooNativeSystemsTests(unittest.TestCase):
             )
             self.assertTrue(protected, relative)
 
+    def test_sparex_write_capable_crons_install_inactive(self):
+        for relative in (
+            "southern_parts_intelligence/data/catalog_sync_cron.xml",
+            "southern_parts_intelligence/data/evidence_queue_cron.xml",
+        ):
+            root = ET.parse(ROOT / relative).getroot()
+            records = root.findall(".//record[@model='ir.cron']")
+            self.assertTrue(records, relative)
+            for record in records:
+                active = record.find("field[@name='active']")
+                self.assertIsNotNone(active, relative)
+                self.assertEqual((active.text or "").strip(), "False", relative)
+
 
 if __name__ == "__main__":
     unittest.main()
