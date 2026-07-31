@@ -25,6 +25,13 @@
                                    placeholder="vs_..."/>
                         </setting>
                     </block>
+                    <block title="Service Quotation Defaults"
+                           help="Standard products and defaults used when technicians build Service quotations.">
+                        <setting string="Default Service Labor Product"
+                                 help="Automatically applied to new Service Jobs. If blank, Southern Service looks for an active sales service product named Shop Labor.">
+                            <field name="southern_default_labor_product_id"/>
+                        </setting>
+                    </block>
                 </app>
             </xpath>
         </field>

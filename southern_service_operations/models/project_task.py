@@ -62,6 +62,11 @@ class ProjectTask(models.Model):
         string="Planned Task Hours",
         compute="_compute_southern_service_task_hours",
     )
+    southern_equipment_service_count = fields.Integer(
+        related="southern_client_equipment_id.southern_service_case_count",
+        string="Equipment Service Records",
+        readonly=True,
+    )
     southern_labor_product_id = fields.Many2one(
         "product.product",
         string="Labor Quote Product",
@@ -139,6 +144,26 @@ class ProjectTask(models.Model):
                 task.southern_sale_order_id.currency_id
                 or task.company_id.currency_id
             )
+
+    @api.model
+    def _southern_default_labor_product(self):
+        product_id = self.env["ir.config_parameter"].sudo().get_param(
+            "southern_service_operations.default_labor_product_id"
+        )
+        product = self.env["product.product"]
+        if product_id and str(product_id).isdigit():
+            product = self.env["product.product"].browse(int(product_id)).exists()
+        if product and product.sale_ok and product.type == "service":
+            return product
+        return self.env["product.product"].search(
+            [
+                ("name", "=ilike", "Shop Labor"),
+                ("sale_ok", "=", True),
+                ("type", "=", "service"),
+                ("active", "=", True),
+            ],
+            limit=1,
+        )
 
     @api.onchange("southern_service_case_id")
     def _onchange_southern_service_case_id(self):
@@ -306,6 +331,7 @@ class ProjectTask(models.Model):
             labor_items = work_items.filtered(
                 lambda item: item.billable and item.work_type == "labor"
             )
+
             planned_hours = sum(
                 work_items.filtered(
                     lambda item: item.work_type == "labor"
@@ -450,6 +476,21 @@ class ProjectTask(models.Model):
             "res_id": order.id,
         }
 
+    def action_southern_open_equipment_history(self):
+        self.ensure_one()
+        equipment = self.southern_client_equipment_id
+        if not equipment:
+            raise ValidationError(
+                _("Select or save the Client Equipment before opening history.")
+            )
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Equipment Service History"),
+            "res_model": "equipment.details",
+            "view_mode": "form",
+            "res_id": equipment.id,
+        }
+
     def action_southern_send_quotation(self):
         self.ensure_one()
         order = self._southern_get_or_create_sale_order()
@@ -521,6 +562,10 @@ class ProjectTask(models.Model):
                 )
                 if equipment:
                     vals["southern_client_equipment_id"] = equipment.id
+            if is_service_job and not vals.get("southern_labor_product_id"):
+                labor_product = self._southern_default_labor_product()
+                if labor_product:
+                    vals["southern_labor_product_id"] = labor_product.id
             if case:
                 vals.setdefault("partner_id", case.partner_id.id)
                 vals.setdefault(

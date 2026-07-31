@@ -20,3 +20,10 @@ class ResConfigSettings(models.TransientModel):
         config_parameter="southern_service_operations.openai_vector_store_id",
         groups="base.group_system",
     )
+    southern_default_labor_product_id = fields.Many2one(
+        "product.product",
+        string="Default Service Labor Product",
+        domain=[("sale_ok", "=", True), ("type", "=", "service")],
+        config_parameter="southern_service_operations.default_labor_product_id",
+        groups="base.group_system",
+    )

@@ -441,6 +441,19 @@ class TestSouthernServiceFlow(TransactionCase):
         self.assertEqual(order.southern_estimated_hours, 6.25)
         self.assertEqual(case.estimated_hours, 6.25)
 
+    def test_service_job_uses_configured_default_labor_product(self):
+        self.env["ir.config_parameter"].sudo().set_param(
+            "southern_service_operations.default_labor_product_id",
+            self.service_product.id,
+        )
+        case = self._create_customer_case()
+        case.action_route_work()
+        task = case.task_ids
+        self.assertEqual(task.southern_labor_product_id, self.service_product)
+        history_action = task.action_southern_open_equipment_history()
+        self.assertEqual(history_action["res_model"], "equipment.details")
+        self.assertEqual(history_action["res_id"], self.equipment.id)
+
     def test_internal_service_routes_to_maintenance(self):
         internal_equipment = self.env["maintenance.equipment"].create(
             {"name": "Southern Internal Test Equipment"}

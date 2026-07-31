@@ -148,6 +148,13 @@
                         </span>
                     </div>
                 </button>
+                <button name="action_southern_open_equipment_history"
+                        type="object" class="oe_stat_button"
+                        icon="fa-history"
+                        invisible="not southern_client_equipment_id">
+                    <field name="southern_equipment_service_count"
+                           widget="statinfo" string="Equipment History"/>
+                </button>
             </xpath>
             <xpath expr="//field[@name='dmc_equipment']" position="before">
                 <separator string="Equipment &amp; Service Record"
@@ -158,6 +165,17 @@
                 <field name="southern_client_equipment_id"
                        invisible="not is_fsm"
                        domain="[('client', 'child_of', partner_id)]"/>
+            </xpath>
+            <xpath expr="//page[@name='description_page']/field[@name='description']"
+                   position="before">
+                <separator string="Customer Complaint / Requested Work"
+                           invisible="not is_fsm"/>
+                <div class="alert alert-info" role="status"
+                     invisible="not is_fsm or description">
+                    Record the customer's symptoms, when they occur, warning
+                    codes, and operating conditions before requesting an AI
+                    estimate.
+                </div>
             </xpath>
             <xpath expr="//page[@name='description_page']/field[@name='description']"
                    position="after">
@@ -237,6 +255,16 @@
                                    options="{'no_create': True}"/>
                         </group>
                     </group>
+                    <div class="alert alert-warning" role="status"
+                         invisible="description">
+                        Add the customer complaint under Work Details before
+                        requesting an AI estimate.
+                    </div>
+                    <div class="alert alert-warning" role="status"
+                         invisible="southern_labor_product_id">
+                        Select the Labor Sales Product before applying billable
+                        labor suggestions.
+                    </div>
                     <div class="alert alert-warning" role="status">
                         AI suggestions never confirm or send the quotation. A
                         technician must review and apply selected tasks, actual

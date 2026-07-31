@@ -6,6 +6,7 @@ import urllib.request
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
+from odoo.tools import is_html_empty
 
 
 _logger = logging.getLogger(__name__)
@@ -480,7 +481,7 @@ class ProjectTaskAiEstimate(models.Model):
         self.ensure_one()
         if not self.is_fsm:
             raise ValidationError(_("AI estimates are available only for Service Jobs."))
-        if not (self.description or self.name):
+        if is_html_empty(self.description):
             raise ValidationError(
                 _("Record the customer complaint or requested work first.")
             )

@@ -271,6 +271,8 @@ class SouthernServiceOperationsTests(unittest.TestCase):
             "def action_southern_add_other_work(self):",
             "def action_southern_send_quotation(self):",
             "def action_southern_confirm_sale_order(self):",
+            "def action_southern_open_equipment_history(self):",
+            "def _southern_default_labor_product(self):",
         ):
             self.assertIn(marker, source)
 
