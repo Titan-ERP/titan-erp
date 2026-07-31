@@ -78,6 +78,13 @@ class TestSouthernServiceFlow(TransactionCase):
                 "southern_recommendations": "No immediate follow-up required",
             }
         )
+        cls.part_product = cls.env["product.product"].create(
+            {
+                "name": "Southern Service Test Filter",
+                "type": "consu",
+                "list_price": 42.50,
+            }
+        )
         self.assertEqual(case.diagnosis, "Relief valve out of adjustment")
         self.assertEqual(
             case.work_performed,
@@ -246,6 +253,15 @@ class TestSouthernServiceFlow(TransactionCase):
                 "billable": False,
             }
         )
+        part = self.env["southern.service.work.item"].create(
+            {
+                "task_id": task.id,
+                "name": "Replace hydraulic filter",
+                "work_type": "part",
+                "product_id": self.part_product.id,
+                "quantity": 2.0,
+            }
+        )
 
         task.action_southern_create_quotation()
         order = task.southern_sale_order_id
@@ -265,6 +281,18 @@ class TestSouthernServiceFlow(TransactionCase):
         self.assertIn(labor.name, labor_line.name)
         self.assertIn(second_labor.name, labor_line.name)
         self.assertFalse(nonbillable.sale_line_id)
+        self.assertEqual(part.sale_line_id.order_id, order)
+        self.assertEqual(part.sale_line_id.product_id, self.part_product)
+        self.assertEqual(part.sale_line_id.product_uom_qty, 2.0)
+        self.assertEqual(part.sale_line_id.price_unit, 42.50)
+
+        part_action = task.action_southern_add_part()
+        self.assertEqual(
+            part_action["res_model"],
+            "southern.service.work.item",
+        )
+        self.assertEqual(part_action["context"]["default_work_type"], "part")
+        self.assertEqual(part_action["context"]["default_task_id"], task.id)
 
         labor.allocated_hours = 4.25
         self.assertEqual(labor.quote_quantity, 4.25)

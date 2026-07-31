@@ -1,5 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="view_southern_service_work_item_form" model="ir.ui.view">
+        <field name="name">southern.service.work.item.form</field>
+        <field name="model">southern.service.work.item</field>
+        <field name="arch" type="xml">
+            <form string="Service Task / Quote Item">
+                <sheet>
+                    <group>
+                        <group string="Service Work">
+                            <field name="task_id" readonly="1"/>
+                            <field name="work_type"/>
+                            <field name="assigned_user_id"
+                                   invisible="work_type != 'labor'"/>
+                            <field name="allocated_hours"
+                                   invisible="work_type != 'labor'"/>
+                            <field name="state"/>
+                        </group>
+                        <group string="Sales Quotation Product">
+                            <field name="product_id"
+                                   required="billable and work_type != 'labor'"
+                                   invisible="work_type == 'labor'"/>
+                            <field name="name"/>
+                            <field name="quantity"
+                                   invisible="work_type == 'labor'"/>
+                            <field name="product_uom_id"
+                                   readonly="1"
+                                   invisible="work_type == 'labor'"/>
+                            <field name="unit_price"
+                                   invisible="work_type == 'labor'"/>
+                            <field name="billable"/>
+                            <field name="subtotal" readonly="1"/>
+                        </group>
+                    </group>
+                    <div class="alert alert-info" role="status"
+                         invisible="work_type != 'labor'">
+                        This task contributes its Allocated Hours to the single
+                        product-linked Service Labor line on the Sales
+                        quotation.
+                    </div>
+                    <div class="alert alert-info" role="status"
+                         invisible="work_type == 'labor'">
+                        Choose the actual Odoo sales product. Saving creates or
+                        updates its native Sales quotation line.
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
     <record id="industry_fsm.project_task_action_fsm"
             model="ir.actions.act_window">
         <field name="name">Service Jobs</field>
@@ -154,7 +202,8 @@
                     </div>
                     <group>
                         <group string="Labor Quotation">
-                            <field name="southern_labor_product_id"/>
+                            <field name="southern_labor_product_id"
+                                   string="Labor Sales Product"/>
                             <field name="southern_labor_rate"/>
                         </group>
                         <group string="Live Quote">
@@ -164,6 +213,23 @@
                                    invisible="not southern_labor_sale_line_id"/>
                         </group>
                     </group>
+                    <div class="d-flex gap-2 mb-2">
+                        <button name="action_southern_add_labor_task"
+                                type="object"
+                                string="Add Labor Task"
+                                icon="fa-clock-o"
+                                class="btn-primary"/>
+                        <button name="action_southern_add_part"
+                                type="object"
+                                string="Add Part Product"
+                                icon="fa-cube"
+                                class="btn-secondary"/>
+                        <button name="action_southern_add_other_work"
+                                type="object"
+                                string="Add Other Work"
+                                icon="fa-plus"
+                                class="btn-secondary"/>
+                    </div>
                     <field name="southern_service_work_item_ids"
                            readonly="southern_sale_state not in (False, 'draft', 'sent')"
                            context="{'default_task_id': id}">
@@ -196,6 +262,20 @@
                             <field name="subtotal" readonly="1" sum="Quote Total"/>
                             <field name="state"/>
                             <field name="sale_line_id" optional="hide" readonly="1"/>
+                        </list>
+                    </field>
+                    <separator string="Native Sales Quotation Lines"/>
+                    <field name="southern_quote_line_ids"
+                           readonly="1"
+                           nolabel="1">
+                        <list create="0" delete="0" edit="0">
+                            <field name="product_id"/>
+                            <field name="name" string="Sales Description"/>
+                            <field name="product_uom_qty"/>
+                            <field name="product_uom_id"/>
+                            <field name="price_unit"/>
+                            <field name="tax_ids" widget="many2many_tags"/>
+                            <field name="price_subtotal" sum="Quotation Total"/>
                         </list>
                     </field>
                 </page>
