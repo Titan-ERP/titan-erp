@@ -1,3 +1,6 @@
+from datetime import timedelta
+import uuid
+
 from odoo import api, fields, models
 
 
@@ -40,7 +43,11 @@ class SouthernPartsCatalogSync(models.Model):
     @api.model
     def _cron_run_active_syncs(self):
         syncs = self.sudo().search(
-            [("active", "=", True), ("state", "in", ["idle", "running"])],
+            [
+                ("active", "=", True),
+                ("state", "=", "idle"),
+                ("internal_cron_enabled", "=", True),
+            ],
             order="sequence, id",
             limit=3,
         )
@@ -63,6 +70,17 @@ class SouthernPartsCatalogSync(models.Model):
 
     def _run_one_batch(self):
         self.ensure_one()
+        if not self.internal_cron_enabled:
+            self.write(
+                {
+                    "state": "paused",
+                    "last_message": (
+                        "Controlled maintenance is disabled. Review the workflow and enable "
+                        "Internal Cron Enabled before running it."
+                    ),
+                }
+            )
+            return
         if self.mode != "snapshot_refresh":
             self.write(
                 {
@@ -73,38 +91,84 @@ class SouthernPartsCatalogSync(models.Model):
                 }
             )
             return
-        batch_size = max(min(self.batch_size or 500, 2000), 50)
-        Product = self.env["product.template"].sudo()
-        products = Product.search(
-            [("active", "=", True), ("id", ">", self.last_product_id)],
-            order="id",
-            limit=batch_size,
+        batch_size = max(min(self.batch_size or 200, 200), 1)
+        now = fields.Datetime.now()
+        stale_before = now - timedelta(hours=24)
+        run_id = self.env["southern.parts.automation.run"].begin_internal_run(
+            self.id,
+            {
+                "name": "Catalog snapshot maintenance",
+                "idempotency_key": "catalog:%s:%s:%s"
+                % (self.id, self.last_product_id, uuid.uuid4().hex),
+                "mode": "maintenance",
+                "requested_count": batch_size,
+            },
         )
-        if not products:
-            self.write(
-                {
-                    "state": "idle",
-                    "last_product_id": 0,
-                    "last_run_at": fields.Datetime.now(),
-                    "run_count": self.run_count + 1,
-                    "last_message": "Reached the end of the product catalog; cursor reset for the next pass.",
-                }
-            )
-            return
+        run = self.env["southern.parts.automation.run"].browse(run_id)
+        Product = self.env["product.template"].sudo()
         try:
-            products._compute_southern_parts_catalog_snapshot()
-            products.write({"southern_parts_snapshot_refreshed_at": fields.Datetime.now()})
-            self.write(
-                {
-                    "state": "idle",
-                    "last_product_id": products[-1].id,
-                    "last_run_at": fields.Datetime.now(),
-                    "run_count": self.run_count + 1,
-                    "processed_count": self.processed_count + len(products),
-                    "last_message": "Refreshed website parts snapshots for %s products through product ID %s."
-                    % (len(products), products[-1].id),
-                }
-            )
+            with self.env.cr.savepoint():
+                products = Product.search(
+                    [
+                        ("active", "=", True),
+                        ("company_id", "in", [False, self.company_id.id]),
+                        ("id", ">", self.last_product_id),
+                        "|",
+                        ("southern_parts_snapshot_refreshed_at", "=", False),
+                        ("southern_parts_snapshot_refreshed_at", "<", stale_before),
+                    ],
+                    order="id",
+                    limit=batch_size,
+                )
+                if not products:
+                    self.write(
+                        {
+                            "state": "idle",
+                            "last_product_id": 0,
+                            "last_run_at": fields.Datetime.now(),
+                            "run_count": self.run_count + 1,
+                            "last_message": (
+                                "Reached the end of the product catalog; "
+                                "cursor reset for the next pass."
+                            ),
+                        }
+                    )
+                    run.finish_run(
+                        "succeeded",
+                        {
+                            "processed_count": 0,
+                            "evidence_summary": (
+                                "No stale product snapshots were eligible; cursor reset."
+                            ),
+                        },
+                    )
+                    return True
+                products._compute_southern_parts_catalog_snapshot()
+                products.write({"southern_parts_snapshot_refreshed_at": now})
+                self.write(
+                    {
+                        "state": "idle",
+                        "last_product_id": products[-1].id,
+                        "last_run_at": fields.Datetime.now(),
+                        "run_count": self.run_count + 1,
+                        "processed_count": self.processed_count + len(products),
+                        "last_message": (
+                            "Refreshed website parts snapshots for %s products "
+                            "through product ID %s."
+                        )
+                        % (len(products), products[-1].id),
+                    }
+                )
+                run.finish_run(
+                    "succeeded",
+                    {
+                        "processed_count": len(products),
+                        "changed_count": len(products),
+                        "evidence_summary": "Refreshed %s stale product snapshots."
+                        % len(products),
+                    },
+                )
+                return True
         except Exception as error:
             self.write(
                 {
@@ -115,3 +179,11 @@ class SouthernPartsCatalogSync(models.Model):
                     "last_message": str(error),
                 }
             )
+            run.finish_run(
+                "failed",
+                {
+                    "error_count": 1,
+                    "error_message": str(error)[:2000],
+                },
+            )
+            return False

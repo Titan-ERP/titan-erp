@@ -4,6 +4,7 @@
     "category": "Accounting/Accounting",
     "summary": "Odoo-native accounting controls, bank coding approvals, and historical migration audit.",
     "author": "Southern Equipment Company",
+    "website": "https://github.com/Titan-ERP/titan-erp",
     "depends": [
         "account",
         "product",

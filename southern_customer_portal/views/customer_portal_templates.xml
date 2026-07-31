@@ -121,7 +121,7 @@
                             </div>
                             <div class="mt-3 d-flex flex-wrap align-items-center gap-3">
                                 <a class="btn btn-outline-dark" t-att-href="membership_signup_url">Membership Sign Up</a>
-                                <a class="small text-muted" t-att-href="partner_application_url">
+                                <a t-if="partner_application_url" class="small text-muted" t-att-href="partner_application_url">
                                     Shop, fleet, or parts reseller? Apply for partner access.
                                 </a>
                             </div>
@@ -147,7 +147,7 @@
                                 For diesel shops, parts stores, fleets, and volume buyers who need catalog access and approved partner pricing.
                             </p>
 
-                            <div t-if="submitted" class="alert alert-success">
+                            <div t-if="submitted == '1'" class="alert alert-success">
                                 Your partner application was submitted. Southern Equipment will review it and follow up.
                             </div>
                             <div t-if="submitted == 'existing'" class="alert alert-info">
@@ -159,9 +159,19 @@
                             <div t-if="error == 'spend'" class="alert alert-danger">
                                 Please enter a valid expected monthly spend.
                             </div>
+                            <div t-if="error == 'invalid'" class="alert alert-danger">
+                                Please enter a valid email address and business type.
+                            </div>
+                            <div t-if="error == 'rate'" class="alert alert-warning">
+                                Too many applications were submitted from this connection. Please try again later.
+                            </div>
 
                             <form action="/partner-application/submit" method="post" class="bg-white border rounded p-4">
                                 <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                <div aria-hidden="true" style="position:absolute;left:-10000px;">
+                                    <label for="company_fax">Company Fax</label>
+                                    <input id="company_fax" name="company_fax" tabindex="-1" autocomplete="off"/>
+                                </div>
                                 <div class="row g-3">
                                     <div class="col-md-6">
                                         <label class="form-label" for="business_name">Business Name *</label>

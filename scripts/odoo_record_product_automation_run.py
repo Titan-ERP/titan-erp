@@ -13,7 +13,6 @@ from pathlib import Path
 from odoo_runtime import ApplyGate, OdooClient, OdooConfig
 from odoo_runtime.safety import append_audit
 
-
 ROOT = Path(__file__).resolve().parents[1]
 ENV_PATH = ROOT / "odoo_connection.env"
 AUDIT_PATH = ROOT / "outputs" / "write_audit" / "odoo_writes.jsonl"
@@ -25,6 +24,7 @@ def common_values(args: argparse.Namespace) -> dict:
         "name": args.name,
         "external_run_id": args.external_run_id,
         "command_id": args.command_id,
+        "idempotency_key": getattr(args, "idempotency_key", None),
         "worker": args.worker,
         "mode": args.mode,
         "free_gb": args.free_gb,
@@ -38,6 +38,7 @@ def common_values(args: argparse.Namespace) -> dict:
         "artifact_sha256": args.artifact_sha256,
         "artifact_schema_version": args.artifact_schema_version,
         "archive_uri": args.archive_uri,
+        "artifact_archived": args.archive_verified,
         "evidence_summary": args.evidence_summary,
         "error_message": args.error_message,
     }
@@ -58,8 +59,16 @@ def build_parser() -> argparse.ArgumentParser:
     start.add_argument("--name", default="External Product Automation Run")
     start.add_argument("--external-run-id")
     start.add_argument("--command-id")
+    start.add_argument(
+        "--idempotency-key",
+        help="Stable logical run key. Defaults to the shared gate hash of the start payload.",
+    )
     start.add_argument("--worker", choices=("odoo", "aws", "codex", "manual"), default="manual")
-    start.add_argument("--mode", choices=("dry_run", "evidence_only", "apply"), default="dry_run")
+    start.add_argument(
+        "--mode",
+        choices=("dry_run", "evidence_only", "maintenance", "apply"),
+        default="dry_run",
+    )
     start.add_argument("--free-gb", type=float, required=True)
     start.add_argument("--requested-count", type=int, default=0)
     start.add_argument("--processed-count", type=int, default=0)
@@ -71,6 +80,7 @@ def build_parser() -> argparse.ArgumentParser:
     start.add_argument("--artifact-sha256")
     start.add_argument("--artifact-schema-version", default="1.0")
     start.add_argument("--archive-uri")
+    start.add_argument("--archive-verified", action="store_true")
     start.add_argument("--evidence-summary")
     start.add_argument("--error-message")
 
@@ -85,7 +95,7 @@ def build_parser() -> argparse.ArgumentParser:
     finish.add_argument("--external-run-id")
     finish.add_argument("--command-id")
     finish.add_argument("--worker", choices=("odoo", "aws", "codex", "manual"))
-    finish.add_argument("--mode", choices=("dry_run", "evidence_only", "apply"))
+    finish.add_argument("--mode", choices=("dry_run", "evidence_only", "maintenance", "apply"))
     finish.add_argument("--free-gb", type=float)
     finish.add_argument("--requested-count", type=int)
     finish.add_argument("--processed-count", type=int)
@@ -97,6 +107,7 @@ def build_parser() -> argparse.ArgumentParser:
     finish.add_argument("--artifact-sha256")
     finish.add_argument("--artifact-schema-version")
     finish.add_argument("--archive-uri")
+    finish.add_argument("--archive-verified", action="store_true")
     finish.add_argument("--evidence-summary")
     finish.add_argument("--error-message")
     return parser
@@ -128,17 +139,22 @@ def main() -> int:
     )
     gate.authorize(1)
     if args.operation == "start":
-        run_id = client.execute(
+        if not payload["values"].get("idempotency_key"):
+            payload["values"]["idempotency_key"] = gate.idempotency_key(payload)
+        run_id = client.call(
             "southern.parts.automation.run",
             "begin_external_run",
-            [args.sync_id, payload["values"]],
+            sync_id=args.sync_id,
+            values=payload["values"],
         )
         result = {"run_id": run_id, "state": "running"}
     else:
-        client.execute(
+        client.call(
             "southern.parts.automation.run",
             "finish_run",
-            [[args.run_id], args.state, payload["values"]],
+            ids=[args.run_id],
+            state=args.state,
+            values=payload["values"],
         )
         result = {"run_id": args.run_id, "state": args.state}
     append_audit(AUDIT_PATH, gate.audit_row(payload, 1))

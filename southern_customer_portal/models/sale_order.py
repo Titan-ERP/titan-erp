@@ -64,6 +64,11 @@ class SaleOrder(models.Model):
         copy=False,
     )
     southern_customer_last_update_at = fields.Datetime(copy=False)
+    southern_parts_auto_reviewed_at = fields.Datetime(
+        copy=False,
+        index=True,
+        help="Last bounded cron review time; used to prevent the same order starving the queue.",
+    )
 
     def _cart_add(self, *args, **kwargs):
         result = super()._cart_add(*args, **kwargs)
@@ -99,7 +104,7 @@ class SaleOrder(models.Model):
         for order in self:
             if (
                 not order.website_id
-                or order.company_id.id != 2
+                or order.website_id.company_id != order.company_id
                 or not order._southern_is_website_parts_order()
             ):
                 continue
@@ -197,13 +202,25 @@ class SaleOrder(models.Model):
         return True
 
     def _cron_southern_auto_advance_parts_review(self):
+        self.env.cr.execute(
+            "SELECT pg_try_advisory_xact_lock(hashtext(%s))",
+            ["southern.parts.review.auto.advance"],
+        )
+        if not self.env.cr.fetchone()[0]:
+            return True
+        company_ids = self.env["res.company"].sudo().search([]).ids
+        retry_before = fields.Datetime.subtract(fields.Datetime.now(), hours=1)
         orders = self.sudo().search(
             [
                 ("website_id", "!=", False),
-                ("company_id", "=", 2),
+                ("company_id", "in", company_ids),
                 ("southern_parts_review_state", "not in", ["not_parts", "completed"]),
                 ("state", "in", ["sale", "done"]),
+                "|",
+                ("southern_parts_auto_reviewed_at", "=", False),
+                ("southern_parts_auto_reviewed_at", "<", retry_before),
             ],
+            order="southern_parts_auto_reviewed_at, id",
             limit=100,
         )
         for order in orders:
@@ -213,6 +230,7 @@ class SaleOrder(models.Model):
             purchase_orders = order._southern_linked_purchase_orders()
             purchase_orders._southern_advance_linked_parts_orders_from_purchase()
             order.picking_ids._southern_advance_parts_orders_from_picking()
+            order.sudo().write({"southern_parts_auto_reviewed_at": fields.Datetime.now()})
         return True
 
     def _southern_customer_update_body(self, state):
@@ -474,7 +492,7 @@ class SaleOrder(models.Model):
         for order in self:
             if (
                 not order.website_id
-                or order.company_id.id != 2
+                or order.website_id.company_id != order.company_id
                 or order.state not in ("draft", "sent")
                 or not order.carrier_id
             ):
@@ -532,7 +550,7 @@ class SaleOrder(models.Model):
     def _southern_note_website_purchase_orders(self):
         PurchaseOrder = self.env["purchase.order"].sudo()
         for order in self:
-            if not order.website_id or order.company_id.id != 2:
+            if not order.website_id or order.website_id.company_id != order.company_id:
                 continue
 
             purchase_orders = PurchaseOrder.search([("origin", "ilike", order.name)])

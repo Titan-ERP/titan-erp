@@ -19,7 +19,6 @@ METHOD_VERSION = (
     "3-model-years-110pct"
 )
 TERMINAL_STATUSES = ("archived", "sold")
-TARGET_COMPANY_ID = 2
 VALUATION_TRIGGER_FIELDS = frozenset(
     {
         "company_id",
@@ -1155,9 +1154,11 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
     def action_recalculate_all_comp_analysis(self):
         listings = self.search(
             [
-                ("company_id", "=", TARGET_COMPANY_ID),
+                ("company_id", "in", self.env.companies.ids),
                 ("public_status", "not in", list(TERMINAL_STATUSES)),
-            ]
+            ],
+            order="comp_last_calculated_at, id",
+            limit=200,
         )
         listings._recalculate_comp_analysis()
         return {
@@ -1172,11 +1173,24 @@ class SouthernEquipmentListingCompAnalysis(models.Model):
         }
 
     def _cron_recalculate_comp_analysis(self):
+        self.env.cr.execute(
+            "SELECT pg_try_advisory_xact_lock(hashtext(%s))",
+            ["southern.equipment.comp.analysis"],
+        )
+        if not self.env.cr.fetchone()[0]:
+            return True
+        stale_before = fields.Datetime.subtract(fields.Datetime.now(), days=1)
+        company_ids = self.env["res.company"].sudo().search([]).ids
         listings = self.sudo().search(
             [
-                ("company_id", "=", TARGET_COMPANY_ID),
+                ("company_id", "in", company_ids),
                 ("public_status", "not in", list(TERMINAL_STATUSES)),
-            ]
+                "|",
+                ("comp_last_calculated_at", "=", False),
+                ("comp_last_calculated_at", "<", stale_before),
+            ],
+            order="comp_last_calculated_at, id",
+            limit=50,
         )
         listings._recalculate_comp_analysis()
         return True

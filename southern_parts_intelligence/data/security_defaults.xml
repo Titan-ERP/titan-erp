@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <record id="ir_config_parameter_southern_evidence_allowed_hosts" model="ir.config_parameter">
+        <field name="key">southern_parts_intelligence.evidence_allowed_hosts</field>
+        <field name="value">farmingparts.com,loweandyoung.com,sparex.com</field>
+    </record>
+</odoo>

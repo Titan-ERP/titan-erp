@@ -1,13 +1,59 @@
 import html
+import ipaddress
 import json
 import re
+import socket
 import time
 import urllib.error
 import urllib.request
 from datetime import timedelta
+from urllib.parse import urljoin, urlsplit
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError
+
+
+MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
+EVIDENCE_TIMEOUT_SECONDS = 8
+
+
+def _validate_external_url(url, allowed_hosts=()):
+    parsed = urlsplit(url or "")
+    if parsed.scheme.casefold() != "https":
+        raise ValueError("Evidence URLs must use HTTPS.")
+    host = (parsed.hostname or "").strip().casefold().rstrip(".")
+    if not host:
+        raise ValueError("Evidence URL is missing a hostname.")
+    if parsed.username or parsed.password:
+        raise ValueError("Evidence URLs cannot contain embedded credentials.")
+    allowed_hosts = tuple(item.casefold().rstrip(".") for item in allowed_hosts if item)
+    if allowed_hosts and not any(host == item or host.endswith("." + item) for item in allowed_hosts):
+        raise ValueError("Evidence hostname is not in the configured allowlist.")
+    try:
+        addresses = {
+            row[4][0]
+            for row in socket.getaddrinfo(host, parsed.port or 443, type=socket.SOCK_STREAM)
+        }
+    except socket.gaierror as error:
+        raise ValueError("Evidence hostname could not be resolved.") from error
+    if not addresses:
+        raise ValueError("Evidence hostname did not resolve to an address.")
+    for address in addresses:
+        ip = ipaddress.ip_address(address)
+        if not ip.is_global:
+            raise ValueError("Evidence URL resolves to a non-public network address.")
+    return parsed.geturl()
+
+
+class _SafeEvidenceRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def __init__(self, allowed_hosts):
+        super().__init__()
+        self.allowed_hosts = allowed_hosts
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        target = urljoin(req.full_url, newurl)
+        _validate_external_url(target, self.allowed_hosts)
+        return super().redirect_request(req, fp, code, msg, headers, target)
 
 
 class SouthernPartsEvidenceQueue(models.Model):
@@ -299,6 +345,12 @@ class SouthernPartsEvidenceQueue(models.Model):
 
     @api.model
     def _cron_refresh_price_evidence(self):
+        self.env.cr.execute(
+            "SELECT pg_try_advisory_xact_lock(hashtext(%s))",
+            ["southern.parts.evidence.refresh"],
+        )
+        if not self.env.cr.fetchone()[0]:
+            return
         now = fields.Datetime.now()
         domain = [
             ("active", "=", True),
@@ -312,7 +364,7 @@ class SouthernPartsEvidenceQueue(models.Model):
             ("next_check_at", "=", False),
             ("next_check_at", "<=", now),
         ]
-        batch = self.sudo().search(domain, order="priority desc, next_check_at, id", limit=25)
+        batch = self.sudo().search(domain, order="priority desc, next_check_at, id", limit=10)
         batch._refresh_price_observations()
 
     def _refresh_price_observations(self):
@@ -425,15 +477,35 @@ class SouthernPartsEvidenceQueue(models.Model):
     def _fetch_url(self, url):
         if not url:
             raise ValueError("Missing source URL.")
+        configured = self.env["ir.config_parameter"].sudo().get_param(
+            "southern_parts_intelligence.evidence_allowed_hosts",
+            "",
+        )
+        allowed_hosts = tuple(
+            host.strip().casefold()
+            for host in configured.split(",")
+            if host.strip()
+        )
+        if not allowed_hosts:
+            raise ValueError(
+                "Evidence fetch is disabled until an HTTPS host allowlist is configured."
+            )
+        safe_url = _validate_external_url(url, allowed_hosts)
         request = urllib.request.Request(
-            url,
+            safe_url,
             headers={
                 "User-Agent": "Southern Equipment Odoo retail evidence monitor",
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             },
         )
-        with urllib.request.urlopen(request, timeout=15) as response:
-            data = response.read()
+        opener = urllib.request.build_opener(_SafeEvidenceRedirectHandler(allowed_hosts))
+        with opener.open(request, timeout=EVIDENCE_TIMEOUT_SECONDS) as response:
+            content_length = response.headers.get("Content-Length")
+            if content_length and int(content_length) > MAX_EVIDENCE_BYTES:
+                raise ValueError("Evidence response exceeds the 2 MB safety limit.")
+            data = response.read(MAX_EVIDENCE_BYTES + 1)
+            if len(data) > MAX_EVIDENCE_BYTES:
+                raise ValueError("Evidence response exceeds the 2 MB safety limit.")
             charset = response.headers.get_content_charset() or "utf-8"
         return data.decode(charset, errors="replace")
 

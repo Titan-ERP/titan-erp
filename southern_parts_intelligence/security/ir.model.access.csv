@@ -12,3 +12,5 @@ access_southern_parts_evidence_queue_user,southern.parts.evidence.queue user,mod
 access_southern_parts_automation_run_user,southern.parts.automation.run user,model_southern_parts_automation_run,base.group_system,1,1,1,0
 access_southern_product_quality_issue_user,southern.product.quality.issue user,model_southern_product_quality_issue,base.group_user,1,1,1,0
 access_southern_product_quality_issue_manager,southern.product.quality.issue manager,model_southern_product_quality_issue,stock.group_stock_manager,1,1,1,1
+access_southern_sparex_sourcing_user,southern.sparex.sourcing.queue user,model_southern_sparex_sourcing_queue,base.group_user,1,0,0,0
+access_southern_sparex_sourcing_manager,southern.sparex.sourcing.queue manager,model_southern_sparex_sourcing_queue,stock.group_stock_manager,1,1,1,0

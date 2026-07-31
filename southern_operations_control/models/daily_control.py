@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 from odoo import _, api, fields, models
 
@@ -61,6 +61,7 @@ class SouthernOperationsDailyControl(models.Model):
     def action_refresh_counts(self):
         today = fields.Date.context_today(self)
         stale_before = today - timedelta(days=14)
+        failure_since = fields.Datetime.to_string(datetime.combine(today, time.min))
         for control in self:
             company_domain = [("company_id", "=", control.company_id.id)]
             values = {
@@ -86,7 +87,7 @@ class SouthernOperationsDailyControl(models.Model):
                     [
                         ("active", "=", True),
                         ("stage_id.fold", "=", False),
-                        ("company_id", "in", [False, control.company_id.id]),
+                        ("company_id", "=", control.company_id.id),
                     ]
                 ),
                 "actual_open_crm_count": self.env["crm.lead"].with_context(
@@ -94,7 +95,7 @@ class SouthernOperationsDailyControl(models.Model):
                 ).search_count(
                     [
                         ("active", "=", True),
-                        ("company_id", "in", [False, control.company_id.id]),
+                        ("company_id", "=", control.company_id.id),
                         ("southern_record_class", "=", "actual_opportunity"),
                         ("probability", "<", 100),
                     ]
@@ -104,7 +105,7 @@ class SouthernOperationsDailyControl(models.Model):
                 ).search_count(
                     [
                         ("active", "=", True),
-                        ("company_id", "in", [False, control.company_id.id]),
+                        ("company_id", "=", control.company_id.id),
                         ("southern_record_class", "=", "actual_opportunity"),
                         ("probability", "<", 100),
                         ("write_date", "<", fields.Date.to_string(stale_before)),
@@ -115,12 +116,10 @@ class SouthernOperationsDailyControl(models.Model):
                 ).search_count(
                     [
                         ("southern_record_class", "=", "imported_reference"),
-                        ("company_id", "in", [False, control.company_id.id]),
+                        ("company_id", "=", control.company_id.id),
                     ]
                 ),
-                "overdue_activity_count": self.env["mail.activity"].search_count(
-                    [("date_deadline", "<", fields.Date.to_string(today))]
-                ),
+                "overdue_activity_count": control._company_overdue_activity_count(today),
                 "open_product_issue_count": self.env[
                     "southern.product.quality.issue"
                 ].search_count(
@@ -138,7 +137,11 @@ class SouthernOperationsDailyControl(models.Model):
                 "product_automation_failure_count": self.env[
                     "southern.parts.automation.run"
                 ].search_count(
-                    company_domain + [("state", "in", ["failed", "blocked"])]
+                    company_domain
+                    + [
+                        ("state", "in", ["failed", "blocked"]),
+                        ("started_at", ">=", failure_since),
+                    ]
                 ),
                 "equipment_review_count": self.env[
                     "southern.equipment.discovery.candidate"
@@ -158,6 +161,35 @@ class SouthernOperationsDailyControl(models.Model):
             }
             control.write(values)
         return True
+
+    def _company_overdue_activity_count(self, today):
+        self.ensure_one()
+        total = 0
+        Activity = self.env["mail.activity"]
+        model_names = (
+            "account.move",
+            "sale.order",
+            "project.task",
+            "crm.lead",
+            "southern.product.quality.issue",
+            "southern.equipment.discovery.candidate",
+        )
+        for model_name in model_names:
+            if model_name not in self.env.registry.models:
+                continue
+            model = self.env[model_name]
+            if "company_id" not in model._fields:
+                continue
+            record_ids = model.search([("company_id", "=", self.company_id.id)]).ids
+            for offset in range(0, len(record_ids), 1000):
+                total += Activity.search_count(
+                    [
+                        ("date_deadline", "<", fields.Date.to_string(today)),
+                        ("res_model", "=", model_name),
+                        ("res_id", "in", record_ids[offset : offset + 1000]),
+                    ]
+                )
+        return total
 
     @api.model
     def cron_refresh_daily_controls(self):

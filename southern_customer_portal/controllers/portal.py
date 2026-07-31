@@ -1,13 +1,29 @@
+from datetime import timedelta
+import re
 from urllib.parse import urlencode
 
-from odoo import http
+from odoo import fields, http
 from odoo.addons.portal.controllers.portal import CustomerPortal, pager as portal_pager
 from odoo.http import request
 
 
 class SouthernCustomerPortal(CustomerPortal):
+    _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
     def _is_public_user(self):
         return request.env.user._is_public()
+
+    def _partner_application_enabled(self):
+        value = (
+            request.env["ir.config_parameter"]
+            .sudo()
+            .get_param("southern_customer_portal.partner_application_enabled", "false")
+        )
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+    @staticmethod
+    def _clean(value, max_length):
+        return (value or "").strip()[:max_length]
 
     def _partner_domain(self):
         partner = request.env.user.partner_id.commercial_partner_id
@@ -78,7 +94,11 @@ class SouthernCustomerPortal(CustomerPortal):
                 "membership_login_url": self._login_redirect_url("/my/home?premium=1"),
                 "partner_login_url": self._login_redirect_url("/my/home?partner=1"),
                 "membership_signup_url": "/membership-sign-up",
-                "partner_application_url": "/partner-application",
+                "partner_application_url": (
+                    "/partner-application"
+                    if self._partner_application_enabled()
+                    else False
+                ),
             },
         )
 
@@ -108,6 +128,8 @@ class SouthernCustomerPortal(CustomerPortal):
 
     @http.route("/partner-application", type="http", auth="public", website=True)
     def southern_partner_application(self, error=None, submitted=None, **kw):
+        if not self._partner_application_enabled():
+            return request.not_found()
         return request.render(
             "southern_customer_portal.southern_partner_application",
             {
@@ -127,14 +149,35 @@ class SouthernCustomerPortal(CustomerPortal):
         methods=["POST"],
     )
     def southern_partner_application_submit(self, **post):
+        if not self._partner_application_enabled():
+            return request.not_found()
+        if (post.get("company_fax") or "").strip():
+            return request.redirect("/partner-application?submitted=1")
+
+        remote_ip = self._clean(request.httprequest.remote_addr, 64)
+        cutoff = fields.Datetime.now() - timedelta(minutes=10)
+        Application = request.env["southern.partner.application"].sudo()
+        if Application.search_count(
+            [("portal_ip", "=", remote_ip), ("create_date", ">=", cutoff)]
+        ) >= 3:
+            return self.southern_partner_application(error="rate")
+
         required_fields = ["business_name", "contact_name", "email", "phone", "business_type"]
         if any(not (post.get(field) or "").strip() for field in required_fields):
             return self.southern_partner_application(error="missing")
 
-        Application = request.env["southern.partner.application"].sudo()
+        email = self._clean(post.get("email"), 254).lower()
+        business_type = self._clean(post.get("business_type"), 32)
+        valid_business_types = {
+            value
+            for value, _label in Application._fields["business_type"].selection
+        }
+        if not self._EMAIL_RE.fullmatch(email) or business_type not in valid_business_types:
+            return self.southern_partner_application(error="invalid")
+
         existing = Application.search(
             [
-                ("email", "=ilike", post.get("email").strip()),
+                ("email", "=ilike", email),
                 ("state", "in", ["submitted", "approved", "active", "suspended"]),
             ],
             limit=1,
@@ -150,22 +193,24 @@ class SouthernCustomerPortal(CustomerPortal):
                 )
             except ValueError:
                 return self.southern_partner_application(error="spend")
+        if not 0 <= expected_monthly_spend <= 10_000_000:
+            return self.southern_partner_application(error="spend")
 
         Application.create(
             {
-                "business_name": post.get("business_name").strip(),
-                "contact_name": post.get("contact_name").strip(),
-                "email": post.get("email").strip(),
-                "phone": post.get("phone").strip(),
-                "website": post.get("website", "").strip(),
-                "business_type": post.get("business_type"),
+                "business_name": self._clean(post.get("business_name"), 160),
+                "contact_name": self._clean(post.get("contact_name"), 160),
+                "email": email,
+                "phone": self._clean(post.get("phone"), 40),
+                "website": self._clean(post.get("website"), 255),
+                "business_type": business_type,
                 "expected_monthly_spend": expected_monthly_spend,
                 "requested_terms": bool(post.get("requested_terms")),
                 "tax_exempt": bool(post.get("tax_exempt")),
                 "requested_catalog_access": True,
                 "requested_partner_pricing": True,
-                "portal_ip": request.httprequest.remote_addr,
-                "notes": post.get("notes", "").strip(),
+                "portal_ip": remote_ip,
+                "notes": self._clean(post.get("notes"), 2000),
             }
         )
         return request.redirect("/partner-application?submitted=1")
@@ -213,21 +258,27 @@ class SouthernCustomerPortal(CustomerPortal):
                 requested_house_credit = float(post.get("requested_house_credit"))
             except ValueError:
                 return self.portal_my_membership(error="credit")
+        if not 0 <= requested_house_credit <= 100_000:
+            return self.portal_my_membership(error="credit")
+        if not self._EMAIL_RE.fullmatch(self._clean(post.get("email"), 254)):
+            return self.portal_my_membership(error="missing")
+        if not self._EMAIL_RE.fullmatch(self._clean(post.get("billing_email"), 254)):
+            return self.portal_my_membership(error="missing")
 
         request.env["southern.membership.application"].sudo().create(
             {
                 "partner_id": partner.id,
-                "member_name": post.get("member_name").strip(),
-                "phone": post.get("phone").strip(),
-                "email": post.get("email").strip(),
-                "signature": post.get("signature").strip(),
-                "portal_ip": request.httprequest.remote_addr,
+                "member_name": self._clean(post.get("member_name"), 160),
+                "phone": self._clean(post.get("phone"), 40),
+                "email": self._clean(post.get("email"), 254).lower(),
+                "signature": self._clean(post.get("signature"), 160),
+                "portal_ip": self._clean(request.httprequest.remote_addr, 64),
                 "requested_house_credit": requested_house_credit,
-                "cardholder_name": post.get("cardholder_name").strip(),
-                "billing_street": post.get("billing_street").strip(),
-                "billing_zip": post.get("billing_zip").strip(),
-                "billing_email": post.get("billing_email").strip(),
-                "billing_phone": post.get("billing_phone").strip(),
+                "cardholder_name": self._clean(post.get("cardholder_name"), 160),
+                "billing_street": self._clean(post.get("billing_street"), 255),
+                "billing_zip": self._clean(post.get("billing_zip"), 20),
+                "billing_email": self._clean(post.get("billing_email"), 254).lower(),
+                "billing_phone": self._clean(post.get("billing_phone"), 40),
                 "payment_authorized": True,
                 "agreement_accepted": True,
                 "notes": (

@@ -1,3 +1,6 @@
+import re
+import uuid
+
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
@@ -36,6 +39,11 @@ class SouthernPartsCatalogSync(models.Model):
     approved_by_id = fields.Many2one("res.users", readonly=True)
     approved_at = fields.Datetime(readonly=True)
     approval_note = fields.Text(tracking=True)
+    internal_cron_enabled = fields.Boolean(
+        default=False,
+        tracking=True,
+        help="Allows this workflow to run from Odoo cron. New and upgraded workflows remain disabled until reviewed.",
+    )
     last_external_command_id = fields.Char(readonly=True, index=True)
     last_artifact_uri = fields.Char(readonly=True)
     last_artifact_sha256 = fields.Char(readonly=True)
@@ -107,6 +115,17 @@ class SouthernPartsCatalogSync(models.Model):
             raise UserError(_("Another catalog workflow in this mode is already running."))
         return True
 
+    def _lock_run_start(self, mode):
+        """Serialize starts per company/mode inside the current transaction."""
+        self.ensure_one()
+        lock_name = "southern.parts.automation:%s:%s" % (self.company_id.id, mode)
+        self.env.cr.execute(
+            "SELECT pg_try_advisory_xact_lock(hashtext(%s))",
+            [lock_name],
+        )
+        if not self.env.cr.fetchone()[0]:
+            raise UserError(_("Another automation start is already in progress."))
+
 
 class SouthernPartsAutomationRun(models.Model):
     _name = "southern.parts.automation.run"
@@ -126,6 +145,13 @@ class SouthernPartsAutomationRun(models.Model):
     )
     external_run_id = fields.Char(index=True, copy=False)
     command_id = fields.Char(index=True, copy=False)
+    idempotency_key = fields.Char(
+        required=True,
+        copy=False,
+        index=True,
+        default=lambda self: uuid.uuid4().hex,
+        help="Stable key identifying one logical execution across retries.",
+    )
     worker = fields.Selection(
         [("odoo", "Odoo"), ("aws", "AWS / SSM"), ("codex", "Codex"), ("manual", "Manual")],
         default="manual",
@@ -135,6 +161,7 @@ class SouthernPartsAutomationRun(models.Model):
         [
             ("dry_run", "Dry Run"),
             ("evidence_only", "Evidence Only"),
+            ("maintenance", "Controlled Maintenance"),
             ("apply", "Apply"),
         ],
         default="dry_run",
@@ -167,8 +194,56 @@ class SouthernPartsAutomationRun(models.Model):
     artifact_sha256 = fields.Char()
     artifact_schema_version = fields.Char(default="1.0")
     archive_uri = fields.Char()
+    artifact_archived = fields.Boolean(
+        readonly=True,
+        help="Set only when the worker verified the archived object's SHA-256 metadata.",
+    )
     evidence_summary = fields.Text()
     error_message = fields.Text()
+
+    _idempotency_key_unique = models.Constraint(
+        "unique(idempotency_key)",
+        "An automation run already exists for this idempotency key.",
+    )
+    _external_run_id_unique = models.Constraint(
+        "unique(external_run_id)",
+        "An automation run already exists for this external run ID.",
+    )
+    _command_id_unique = models.Constraint(
+        "unique(command_id)",
+        "An automation run already exists for this worker command ID.",
+    )
+
+    @api.constrains(
+        "artifact_sha256",
+        "artifact_schema_version",
+        "free_gb",
+        "requested_count",
+        "processed_count",
+        "changed_count",
+        "error_count",
+        "http_request_count",
+        "slow_page_count",
+    )
+    def _check_run_contract(self):
+        sha_pattern = re.compile(r"^[0-9a-f]{64}$")
+        for run in self:
+            if run.artifact_sha256 and not sha_pattern.fullmatch(run.artifact_sha256.casefold()):
+                raise UserError(_("Artifact SHA-256 must contain exactly 64 hexadecimal characters."))
+            if run.artifact_uri and not run.artifact_schema_version:
+                raise UserError(_("Versioned artifacts require an artifact schema version."))
+            if run.free_gb < 0:
+                raise UserError(_("Reported free disk cannot be negative."))
+            for field_name in (
+                "requested_count",
+                "processed_count",
+                "changed_count",
+                "error_count",
+                "http_request_count",
+                "slow_page_count",
+            ):
+                if run[field_name] < 0:
+                    raise UserError(_("%s cannot be negative.") % run._fields[field_name].string)
 
     @api.model
     def begin_external_run(self, sync_id, values=None):
@@ -176,8 +251,16 @@ class SouthernPartsAutomationRun(models.Model):
         sync = self.env["southern.parts.catalog.sync"].browse(sync_id).exists()
         if not sync:
             raise UserError(_("The catalog sync configuration no longer exists."))
+        mode = values.get("mode") or "dry_run"
+        sync._lock_run_start(mode)
+        idempotency_key = (values.get("idempotency_key") or "").strip()
+        if not idempotency_key:
+            raise UserError(_("External runs require an idempotency key."))
+        existing = self.search([("idempotency_key", "=", idempotency_key)], limit=1)
+        if existing:
+            return existing.id
         sync.assert_external_run_allowed(float(values.get("free_gb") or 0.0))
-        if values.get("mode") == "apply" and sync.approval_state != "approved":
+        if mode == "apply" and sync.approval_state != "approved":
             raise UserError(_("Apply runs require an approved catalog workflow."))
         values.update(
             {
@@ -197,12 +280,78 @@ class SouthernPartsAutomationRun(models.Model):
         )
         return run.id
 
+    @api.model
+    def begin_internal_run(self, sync_id, values=None):
+        values = dict(values or {})
+        sync = self.env["southern.parts.catalog.sync"].browse(sync_id).exists()
+        if not sync:
+            raise UserError(_("The catalog sync configuration no longer exists."))
+        if not sync.internal_cron_enabled:
+            raise UserError(_("Internal cron execution is disabled for this workflow."))
+        mode = values.get("mode") or "maintenance"
+        sync._lock_run_start(mode)
+        idempotency_key = (values.get("idempotency_key") or "").strip()
+        if not idempotency_key:
+            raise UserError(_("Internal runs require an idempotency key."))
+        existing = self.search([("idempotency_key", "=", idempotency_key)], limit=1)
+        if existing:
+            return existing.id
+        if self.search_count(
+            [
+                ("company_id", "=", sync.company_id.id),
+                ("state", "=", "running"),
+                ("mode", "=", mode),
+            ]
+        ):
+            raise UserError(_("Another automation run is already active for this company and mode."))
+        values.update(
+            {
+                "sync_id": sync.id,
+                "name": values.get("name") or _("Internal Catalog Run"),
+                "worker": "odoo",
+                "mode": mode,
+                "state": "running",
+                "started_at": fields.Datetime.now(),
+            }
+        )
+        run = self.create(values)
+        sync.write(
+            {
+                "state": "running",
+                "last_message": _("Internal run %s started.") % run.display_name,
+            }
+        )
+        return run.id
+
     def finish_run(self, state, values=None):
         allowed = {"succeeded", "blocked", "failed", "cancelled"}
         if state not in allowed:
             raise UserError(_("Invalid terminal run state: %s") % state)
         for run in self:
+            if run.state in allowed:
+                raise UserError(_("Automation run %s is already terminal.") % run.display_name)
             update = dict(values or {})
+            final_artifact_uri = update.get("artifact_uri", run.artifact_uri)
+            final_artifact_sha = update.get("artifact_sha256", run.artifact_sha256)
+            final_archive_uri = update.get("archive_uri", run.archive_uri)
+            final_schema = update.get("artifact_schema_version", run.artifact_schema_version)
+            final_archived = update.get("artifact_archived", run.artifact_archived)
+            if state == "succeeded" and run.mode == "apply":
+                if not all(
+                    (
+                        final_artifact_uri,
+                        final_artifact_sha,
+                        final_archive_uri,
+                        final_schema,
+                        final_archived,
+                    )
+                ):
+                    raise UserError(
+                        _(
+                            "Successful apply runs require a versioned, SHA-256 hashed, "
+                            "and verified archived artifact."
+                        )
+                    )
             update.update({"state": state, "finished_at": fields.Datetime.now()})
             run.write(update)
             sync_values = {
@@ -212,7 +361,7 @@ class SouthernPartsAutomationRun(models.Model):
                 "last_artifact_uri": run.artifact_uri,
                 "last_artifact_sha256": run.artifact_sha256,
             }
-            if run.mode == "apply":
+            if run.mode == "apply" and state == "succeeded":
                 sync_values.update(
                     {
                         "approval_state": "not_required",
