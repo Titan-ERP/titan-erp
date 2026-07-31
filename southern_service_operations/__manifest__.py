@@ -1,6 +1,6 @@
 {
     "name": "Southern Service",
-    "version": "19.0.1.19.0",
+    "version": "19.0.1.20.0",
     "author": "Southern Equipment",
     "category": "Services",
     "summary": "One Service workflow across Sales, customer equipment, field work, shop work, maintenance, and purchasing.",
@@ -23,6 +23,7 @@
     "data": [
         "security/service_security.xml",
         "security/ir.model.access.csv",
+        "data/service_products.xml",
         "data/service_sequence.xml",
         "views/res_config_settings_views.xml",
         "views/service_ai_suggestion_views.xml",

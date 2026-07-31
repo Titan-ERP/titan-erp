@@ -38,6 +38,15 @@ class SouthernServiceOperationsTests(unittest.TestCase):
             if path.suffix == ".xml":
                 etree.parse(str(path))
 
+    def test_module_provides_single_native_shop_labor_product(self):
+        product_xml = (MODULE / "data" / "service_products.xml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('model="product.product"', product_xml)
+        self.assertIn('<field name="name">Shop Labor</field>', product_xml)
+        self.assertIn('<field name="type">service</field>', product_xml)
+        self.assertIn('<field name="service_tracking">no</field>', product_xml)
+
     def test_digital_inspection_result_fields_remain_editable(self):
         view_source = (
             MODULE / "views" / "service_inspection_views.xml"
