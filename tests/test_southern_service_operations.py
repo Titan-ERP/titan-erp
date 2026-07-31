@@ -311,6 +311,15 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         self.assertEqual(
             len(
                 document.xpath(
+                    "//button[@name='action_southern_open_sale_order']"
+                    "[@string='Open Full Quotation']"
+                )
+            ),
+            1,
+        )
+        self.assertEqual(
+            len(
+                document.xpath(
                     "//separator[@string='Sales Quotation Lines']"
                 )
             ),

@@ -32,6 +32,13 @@
                             <field name="subtotal" readonly="1"/>
                         </group>
                     </group>
+                    <div class="d-flex gap-2 mb-3"
+                         invisible="not southern_sale_order_id">
+                        <button name="action_southern_open_sale_order"
+                                type="object" string="Open Full Quotation"
+                                icon="fa-external-link"
+                                class="btn-secondary"/>
+                    </div>
                     <div class="alert alert-info" role="status"
                          invisible="work_type != 'labor'">
                         This task contributes its Allocated Hours to the single
