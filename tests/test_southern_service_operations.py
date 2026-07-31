@@ -399,8 +399,37 @@ class SouthernServiceOperationsTests(unittest.TestCase):
             '"display_type": "line_note"',
             '"southern.service.work.item"',
             '"service_history":',
+            '"photo_evidence":',
         ):
             self.assertIn(marker, source)
+
+    def test_service_photos_use_native_job_and_equipment_links(self):
+        source = (MODULE / "models" / "service_inspection.py").read_text(
+            encoding="utf-8"
+        )
+        for marker in (
+            'class SouthernServicePhoto(models.Model):',
+            '_name = "southern.service.photo"',
+            'attachment=True',
+            'southern_service_photo_ids',
+            'def action_southern_add_service_photo(self):',
+        ):
+            self.assertIn(marker, source)
+        document = etree.parse(
+            str(MODULE / "views" / "service_inspection_views.xml")
+        )
+        self.assertEqual(
+            len(
+                document.xpath(
+                    "//button[@name='action_southern_add_service_photo']"
+                )
+            ),
+            1,
+        )
+        self.assertEqual(
+            len(document.xpath("//field[@name='image'][@widget='image']")),
+            2,
+        )
 
         project_view = etree.parse(
             str(MODULE / "views" / "project_task_views.xml")

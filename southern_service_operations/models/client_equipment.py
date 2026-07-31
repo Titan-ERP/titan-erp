@@ -39,9 +39,17 @@ class ClientEquipment(models.Model):
         "southern_client_equipment_id",
         string="Shop Work",
     )
+    southern_service_photo_ids = fields.One2many(
+        "southern.service.photo",
+        "client_equipment_id",
+        string="Service Photos",
+    )
     southern_service_case_count = fields.Integer(compute="_compute_southern_counts")
     southern_task_count = fields.Integer(compute="_compute_southern_counts")
     southern_repair_count = fields.Integer(compute="_compute_southern_counts")
+    southern_service_photo_count = fields.Integer(
+        compute="_compute_southern_counts"
+    )
 
     @api.model
     def _southern_find_or_create_serialized(
@@ -101,6 +109,9 @@ class ClientEquipment(models.Model):
         for case in self.southern_service_case_ids.filtered(
             lambda row: row != current_case
         ):
+            case_photos = case.task_ids.mapped(
+                "southern_service_photo_ids"
+            ).filtered("include_in_ai")
             history.append(
                 {
                     "record_type": "service_case",
@@ -115,6 +126,16 @@ class ClientEquipment(models.Model):
                     "diagnosis": case.diagnosis or "",
                     "work_performed": case.work_performed or "",
                     "recommendations": case.recommendations or "",
+                    "photo_evidence": [
+                        {
+                            "category": photo.category,
+                            "caption": photo.caption,
+                            "taken_at": fields.Datetime.to_string(
+                                photo.captured_at
+                            ),
+                        }
+                        for photo in case_photos[:6]
+                    ],
                 }
             )
         for task in self.southern_task_ids.filtered(
@@ -132,6 +153,18 @@ class ClientEquipment(models.Model):
                     "diagnosis": task.southern_diagnosis or "",
                     "work_performed": task.southern_work_performed or "",
                     "recommendations": task.southern_recommendations or "",
+                    "photo_evidence": [
+                        {
+                            "category": photo.category,
+                            "caption": photo.caption,
+                            "taken_at": fields.Datetime.to_string(
+                                photo.captured_at
+                            ),
+                        }
+                        for photo in task.southern_service_photo_ids.filtered(
+                            "include_in_ai"
+                        )[:6]
+                    ],
                 }
             )
         history.sort(key=lambda row: row["date"] or "", reverse=True)
@@ -141,6 +174,7 @@ class ClientEquipment(models.Model):
         "southern_service_case_ids",
         "southern_task_ids",
         "southern_repair_order_ids",
+        "southern_service_photo_ids",
     )
     def _compute_southern_counts(self):
         for equipment in self:
@@ -150,6 +184,9 @@ class ClientEquipment(models.Model):
             equipment.southern_task_count = len(equipment.southern_task_ids)
             equipment.southern_repair_count = len(
                 equipment.southern_repair_order_ids
+            )
+            equipment.southern_service_photo_count = len(
+                equipment.southern_service_photo_ids
             )
 
     def _southern_validate_service_identity(self):
@@ -196,4 +233,14 @@ class ClientEquipment(models.Model):
             "res_model": "repair.order",
             "view_mode": "list,form",
             "domain": [("southern_client_equipment_id", "=", self.id)],
+        }
+
+    def action_view_southern_service_photos(self):
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Service Photos"),
+            "res_model": "southern.service.photo",
+            "view_mode": "list,form",
+            "domain": [("client_equipment_id", "=", self.id)],
         }

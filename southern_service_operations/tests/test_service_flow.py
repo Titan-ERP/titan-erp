@@ -465,6 +465,34 @@ class TestSouthernServiceFlow(TransactionCase):
         self.assertEqual(task.southern_inspection_state, "in_progress")
         self.assertFalse(task.southern_inspection_completed_at)
 
+    def test_service_photo_stays_with_job_equipment_and_ai_context(self):
+        case = self._create_customer_case()
+        case.action_route_work()
+        task = case.task_ids
+        action = task.action_southern_add_service_photo()
+        self.assertEqual(action["res_model"], "southern.service.photo")
+        self.assertEqual(action["context"]["default_task_id"], task.id)
+
+        photo = self.env["southern.service.photo"].create(
+            {
+                "task_id": task.id,
+                "image": (
+                    b"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwC"
+                    b"AAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+                ),
+                "category": "finding",
+                "caption": "Hydraulic hose abrasion near boom pivot",
+            }
+        )
+        self.assertEqual(photo.task_id, task)
+        self.assertEqual(photo.client_equipment_id, self.equipment)
+        self.assertEqual(task.southern_service_photo_count, 1)
+        photo_context = task._southern_ai_input()[
+            "digital_equipment_inspection"
+        ]["photo_evidence"]
+        self.assertEqual(len(photo_context), 1)
+        self.assertIn("hose abrasion", photo_context[0]["caption"])
+
     def test_reviewed_ai_estimate_creates_native_tasks_parts_and_note(self):
         case = self._create_customer_case()
         case.action_route_work()

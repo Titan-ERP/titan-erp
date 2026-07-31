@@ -93,4 +93,15 @@
         ]</field>
         <field name="groups" eval="[(4, ref('group_southern_service_user'))]"/>
     </record>
+
+    <record id="southern_service_photo_company_rule" model="ir.rule">
+        <field name="name">Service Photos: User companies</field>
+        <field name="model_id" ref="model_southern_service_photo"/>
+        <field name="domain_force">[
+            '|',
+                ('company_id', '=', False),
+                ('company_id', 'in', company_ids)
+        ]</field>
+        <field name="groups" eval="[(4, ref('group_southern_service_user'))]"/>
+    </record>
 </odoo>

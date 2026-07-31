@@ -2,6 +2,76 @@ from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
 
 
+class SouthernServicePhoto(models.Model):
+    _name = "southern.service.photo"
+    _description = "Southern Service Photo"
+    _order = "captured_at desc, id desc"
+
+    task_id = fields.Many2one(
+        "project.task",
+        string="Service Job",
+        required=True,
+        index=True,
+        ondelete="cascade",
+    )
+    company_id = fields.Many2one(
+        related="task_id.company_id",
+        store=True,
+        readonly=True,
+    )
+    client_equipment_id = fields.Many2one(
+        related="task_id.southern_client_equipment_id",
+        string="Client Equipment",
+        store=True,
+        readonly=True,
+    )
+    image = fields.Image(
+        string="Photo",
+        required=True,
+        attachment=True,
+        max_width=1920,
+        max_height=1920,
+    )
+    filename = fields.Char(string="File Name")
+    category = fields.Selection(
+        [
+            ("arrival", "Arrival / Before Work"),
+            ("finding", "Inspection Finding"),
+            ("work", "Work Performed"),
+            ("completion", "Completion / After Work"),
+            ("other", "Other"),
+        ],
+        required=True,
+        default="finding",
+    )
+    caption = fields.Char(
+        string="Description",
+        required=True,
+        help="Describe what the photo shows so it remains searchable later.",
+    )
+    captured_by_id = fields.Many2one(
+        "res.users",
+        string="Taken By",
+        required=True,
+        default=lambda self: self.env.user,
+        readonly=True,
+    )
+    captured_at = fields.Datetime(
+        string="Taken At",
+        required=True,
+        default=fields.Datetime.now,
+        readonly=True,
+    )
+    include_in_ai = fields.Boolean(
+        string="Use for AI Context",
+        default=True,
+        help=(
+            "Include the photo description and category in the Southern Service "
+            "AI estimate context. The image remains stored on this service job."
+        ),
+    )
+
+
 class SouthernServiceInspectionItem(models.Model):
     _name = "southern.service.inspection.item"
     _description = "Southern Equipment Inspection Item"
@@ -122,6 +192,16 @@ class ProjectTaskDigitalEquipmentInspection(models.Model):
         string="Digital Equipment Inspection",
         copy=True,
     )
+    southern_service_photo_ids = fields.One2many(
+        "southern.service.photo",
+        "task_id",
+        string="Service Photos",
+        copy=True,
+    )
+    southern_service_photo_count = fields.Integer(
+        string="Service Photos",
+        compute="_compute_southern_service_photo_count",
+    )
     southern_inspection_attention_count = fields.Integer(
         string="Items Requiring Attention",
         compute="_compute_southern_inspection_counts",
@@ -135,6 +215,32 @@ class ProjectTaskDigitalEquipmentInspection(models.Model):
                     lambda item: item.result in ("monitor", "repair")
                 )
             )
+
+    @api.depends("southern_service_photo_ids")
+    def _compute_southern_service_photo_count(self):
+        for task in self:
+            task.southern_service_photo_count = len(task.southern_service_photo_ids)
+
+    def action_southern_add_service_photo(self):
+        self.ensure_one()
+        if not self.is_fsm:
+            raise ValidationError(
+                _("Service Photos are available only on Service Jobs.")
+            )
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Add Service Photo"),
+            "res_model": "southern.service.photo",
+            "view_mode": "form",
+            "view_id": self.env.ref(
+                "southern_service_operations.view_southern_service_photo_form"
+            ).id,
+            "target": "new",
+            "context": {
+                "default_task_id": self.id,
+                "default_category": "finding",
+            },
+        }
 
     def action_southern_start_inspection(self):
         for task in self:

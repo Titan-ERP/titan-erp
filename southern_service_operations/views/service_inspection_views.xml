@@ -1,5 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="view_southern_service_photo_form" model="ir.ui.view">
+        <field name="name">southern.service.photo.form</field>
+        <field name="model">southern.service.photo</field>
+        <field name="arch" type="xml">
+            <form string="Add Service Photo">
+                <sheet>
+                    <group>
+                        <group string="Photo">
+                            <field name="image" widget="image"
+                                   filename="filename"
+                                   options="{'size': [720, 720]}"/>
+                            <field name="filename" invisible="1"/>
+                        </group>
+                        <group string="Service Record">
+                            <field name="task_id" readonly="1"/>
+                            <field name="client_equipment_id" readonly="1"/>
+                            <field name="category"/>
+                            <field name="caption"
+                                   placeholder="Describe the component, condition, location, or completed work..."/>
+                            <field name="include_in_ai"/>
+                            <field name="captured_by_id" readonly="1"/>
+                            <field name="captured_at" readonly="1"/>
+                        </group>
+                    </group>
+                    <div class="alert alert-info" role="status">
+                        On a phone or tablet, tap the photo control to use the
+                        camera or choose an existing image. Saving keeps the
+                        photo with this job and the client equipment history.
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
     <record id="view_task_form_southern_digital_equipment_inspection"
             model="ir.ui.view">
         <field name="name">project.task.form.southern.digital.equipment.inspection</field>
@@ -42,6 +76,10 @@
                                 type="object" string="Reopen Inspection"
                                 class="btn-secondary"
                                 invisible="southern_inspection_state != 'completed'"/>
+                        <button name="action_southern_add_service_photo"
+                                type="object" string="Add Service Photo"
+                                icon="fa-camera"
+                                class="btn-secondary"/>
                     </div>
                     <div class="alert alert-info" role="status">
                         Record what the technician observed. Written findings marked
@@ -64,6 +102,19 @@
                             <field name="fault_code" optional="show"/>
                             <field name="finding" optional="show"/>
                             <field name="recommended_action" optional="show"/>
+                            <field name="include_in_ai" optional="show"/>
+                        </list>
+                    </field>
+                    <separator string="Service Photos"/>
+                    <field name="southern_service_photo_ids" nolabel="1">
+                        <list>
+                            <field name="image" widget="image"
+                                   options="{'size': [96, 96]}"/>
+                            <field name="category"/>
+                            <field name="caption"/>
+                            <field name="captured_by_id"
+                                   widget="many2one_avatar_user"/>
+                            <field name="captured_at"/>
                             <field name="include_in_ai" optional="show"/>
                         </list>
                     </field>

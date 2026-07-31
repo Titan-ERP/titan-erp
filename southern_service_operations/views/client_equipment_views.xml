@@ -23,6 +23,12 @@
                     <field name="southern_repair_count" widget="statinfo"
                            string="Shop"/>
                 </button>
+                <button name="action_view_southern_service_photos" type="object"
+                        class="oe_stat_button" icon="fa-camera"
+                        invisible="not southern_service_photo_count">
+                    <field name="southern_service_photo_count" widget="statinfo"
+                           string="Photos"/>
+                </button>
             </xpath>
             <xpath expr="//field[@name='client']" position="after">
                 <field name="southern_active"/>
@@ -39,6 +45,21 @@
             <xpath expr="//page[@name='history']" position="inside">
                 <group string="Southern Service">
                     <field name="southern_service_case_ids" readonly="1"/>
+                </group>
+                <group string="Service Photos">
+                    <field name="southern_service_photo_ids" readonly="1"
+                           nolabel="1">
+                        <list>
+                            <field name="image" widget="image"
+                                   options="{'size': [96, 96]}"/>
+                            <field name="task_id"/>
+                            <field name="category"/>
+                            <field name="caption"/>
+                            <field name="captured_by_id"
+                                   widget="many2one_avatar_user"/>
+                            <field name="captured_at"/>
+                        </list>
+                    </field>
                 </group>
             </xpath>
         </field>

@@ -289,6 +289,7 @@ class ProjectTaskAiEstimate(models.Model):
         inspection_items = self.southern_inspection_item_ids.filtered(
             "include_in_ai"
         )
+        service_photos = self.southern_service_photo_ids.filtered("include_in_ai")
         return {
             "customer_complaint": self.description or self.name or "",
             "equipment": self.dmc_equipment or "",
@@ -324,6 +325,14 @@ class ProjectTaskAiEstimate(models.Model):
                         "recommended_action": item.recommended_action or "",
                     }
                     for item in inspection_items
+                ],
+                "photo_evidence": [
+                    {
+                        "category": photo.category,
+                        "caption": photo.caption,
+                        "taken_at": fields.Datetime.to_string(photo.captured_at),
+                    }
+                    for photo in service_photos
                 ],
             },
             "technician_diagnosis": self.southern_diagnosis or "",
