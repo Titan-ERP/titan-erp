@@ -1,10 +1,14 @@
+from typing import ClassVar
+
 from odoo import http
 from odoo.http import request
 from werkzeug.exceptions import NotFound
 
 
 class LokiInternalWebsite(http.Controller):
-    _LOKI_COMPANY_NAMES = {"loki", "loki llc", "loki analytics"}
+    _LOKI_COMPANY_NAMES: ClassVar[frozenset[str]] = frozenset(
+        {"loki", "loki llc", "loki analytics"}
+    )
 
     @http.route(
         "/loki",
