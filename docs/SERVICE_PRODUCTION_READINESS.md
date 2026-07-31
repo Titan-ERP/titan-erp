@@ -4,10 +4,10 @@
 
 - Add-on: `southern_service_operations`
 - User-facing application: **Sales**
-- Candidate code commit: `667457c`
+- Candidate code commit: `46e49ab`
 - Odoo.sh development branch: `codex/service-development-test`
-- Odoo.sh development commit: `3f2e5af`
-- Odoo.sh build: `35713048`
+- Odoo.sh development commit: `a9c4ecc`
+- Odoo.sh build: `35713488`
 - Odoo version: 19.0 Enterprise
 - Production deployment: **not performed**
 
@@ -32,7 +32,7 @@ replacing Odoo's native transaction models:
 
 | Check | Result | Evidence |
 |---|---|---|
-| Odoo.sh module install/upgrade | Pass | Build `35713048` loaded the module, security, Sales/Service views, menus, and all dependencies |
+| Odoo.sh module install/upgrade | Pass | Build `35713488` loaded the module, security, Sales/Service views, menus, and all dependencies |
 | Odoo 19 transaction tests | Pass | 8 Service transaction test methods started; `0 failed, 0 error(s)`; unified Service-job quotation creation, task-fed labor aggregation, Sales scheduling, on-site idempotency, internal Maintenance routing, and Sales task reuse included |
 | Standalone repository tests | Pass | 16 tests |
 | Python compilation | Pass | `compileall` on `southern_service_operations` |
@@ -43,6 +43,7 @@ replacing Odoo's native transaction models:
 | Sales entry actions | Pass | Parts, Equipment Sale, and Rental open native Sales quotations; Service opens Odoo's native Field Service workspace inside Sales |
 | Unified Service Job and quotation | Pass | Live UI shows equipment, serial number, run hours, scheduling, and one **Tasks & Sales Quote** page that creates and updates the Sales quotation automatically |
 | Service tasks feed one labor quote line | Pass | Two billable labor tasks totaling 4.5 allocated hours produce one 4.5-hour Sales line containing both scopes; a 0.5-hour non-billable task remains in the 5.0 planned-hour total but is excluded from the quote |
+| Mechanic product selection creates native quote lines | Pass | In disposable build `35713488`, **Add Part Product** selected `[FURN_6666] Acoustic Bloc Screens (White)` and created a native line on Sales quotation `S00035`: quantity `2.00`, unit price `$295.00`, subtotal and quotation total `$590.00`; the same values are visible in **Native Sales Quotation Lines** |
 | Personnel-facing terminology | Pass | Live UI title is **Service Jobs**, the default filter is **My Service Jobs**, and Sales, equipment, repair, purchase, and Service Case links use Service Job terminology |
 | Refined technician workspace | Pass | Live new-job form uses **Service Job Title**, **Work Details**, **Follow-up Work**, and an **Equipment & Service Record** section; the technical Service Case selector is hidden |
 | Structured service record | Pass | Diagnosis, work performed/resolution, and recommendations are available on the Service Job and synchronized to its Service Case |
