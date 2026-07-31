@@ -159,6 +159,65 @@ class TestSouthernServiceFlow(TransactionCase):
                 }
             )
 
+    def test_ai_uses_completed_equipment_sales_and_excludes_drafts(self):
+        completed_order = self.env["sale.order"].create(
+            {
+                "partner_id": self.partner.id,
+                "southern_quote_type": "service",
+                "southern_service_location": "onsite",
+                "southern_client_equipment_id": self.equipment.id,
+                "southern_service_title": "Completed hydraulic service",
+                "southern_equipment_description": self.equipment.name,
+                "southern_serial_number": self.equipment.serial_no,
+                "southern_service_request": "Replace filters and inspect pump",
+                "southern_estimated_hours": 3.0,
+                "order_line": [
+                    Command.create(
+                        {
+                            "product_id": self.part_product.id,
+                            "product_uom_qty": 2.0,
+                        }
+                    )
+                ],
+            }
+        )
+        completed_order.write({"state": "sale"})
+        draft_order = self.env["sale.order"].create(
+            {
+                "partner_id": self.partner.id,
+                "southern_quote_type": "service",
+                "southern_service_location": "onsite",
+                "southern_client_equipment_id": self.equipment.id,
+                "southern_service_title": "Abandoned estimate",
+                "southern_equipment_description": self.equipment.name,
+                "southern_serial_number": self.equipment.serial_no,
+                "southern_service_request": "Draft only",
+            }
+        )
+
+        commercial_history = self.equipment._southern_ai_commercial_history()
+        self.assertEqual(
+            commercial_history["lifetime_summary"][
+                "completed_service_order_count"
+            ],
+            1,
+        )
+        recent_orders = commercial_history["recent_orders"]
+        self.assertEqual(len(recent_orders), 1)
+        self.assertEqual(
+            recent_orders[0]["sales_order"],
+            completed_order.name,
+        )
+        self.assertEqual(recent_orders[0]["estimated_hours"], 3.0)
+        self.assertEqual(recent_orders[0]["products"][0]["quantity"], 2.0)
+        self.assertEqual(
+            commercial_history["lifetime_summary"]["product_usage"][0][
+                "ordered_quantity"
+            ],
+            2.0,
+        )
+        self.assertNotEqual(recent_orders[0]["sales_order"], draft_order.name)
+
     def test_confirmed_service_sale_reuses_routed_task(self):
         case = self._create_customer_case()
         case.action_route_work()

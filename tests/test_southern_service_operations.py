@@ -384,6 +384,7 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         )
         self.assertIn("_southern_find_or_create_serialized", source)
         self.assertIn("_southern_ai_service_history", source)
+        self.assertIn("_southern_ai_commercial_history", source)
 
     def test_ai_estimate_is_reviewed_before_native_quote_changes(self):
         source = (MODULE / "models" / "service_ai_suggestion.py").read_text(
@@ -400,6 +401,7 @@ class SouthernServiceOperationsTests(unittest.TestCase):
             '"southern.service.work.item"',
             '"service_history":',
             '"photo_evidence":',
+            '"completed_sales_and_invoices":',
         ):
             self.assertIn(marker, source)
 

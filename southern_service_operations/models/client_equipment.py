@@ -170,6 +170,140 @@ class ClientEquipment(models.Model):
         history.sort(key=lambda row: row["date"] or "", reverse=True)
         return history[:limit]
 
+    def _southern_ai_commercial_history(self, current_task=None, limit=20):
+        """Return completed service sales and posted invoice facts for AI context."""
+        self.ensure_one()
+        current_order = current_task.southern_sale_order_id if current_task else False
+        orders = self.env["sale.order"].sudo().search(
+            [
+                ("southern_client_equipment_id", "=", self.id),
+                ("southern_quote_type", "=", "service"),
+                ("state", "in", ("sale", "done")),
+            ],
+            order="date_order desc, id desc",
+        )
+        if current_order:
+            orders = orders.filtered(lambda order: order != current_order)
+
+        history = []
+        product_usage = {}
+        total_actual_hours = 0.0
+        posted_invoice_count = 0
+        for order in orders:
+            order_lines = order.order_line.filtered(
+                lambda line: not line.display_type and line.product_id
+            )
+            tasks = self.sudo().southern_task_ids.filtered(
+                lambda task: (
+                    task.southern_sale_order_id == order
+                    or task.sale_order_id == order
+                )
+            )
+            actual_hours = sum(tasks.mapped("timesheet_ids.unit_amount"))
+            total_actual_hours += actual_hours
+            invoices = order.invoice_ids.filtered(
+                lambda invoice: (
+                    invoice.state == "posted"
+                    and invoice.move_type in ("out_invoice", "out_refund")
+                )
+            )
+            posted_invoice_count += len(invoices)
+            for line in order_lines:
+                usage = product_usage.setdefault(
+                    line.product_id.id,
+                    {
+                        "product_code": line.product_id.default_code or "",
+                        "product": line.product_id.display_name,
+                        "ordered_quantity": 0.0,
+                        "invoiced_quantity": 0.0,
+                        "unit": line.product_uom_id.display_name or "",
+                    },
+                )
+                usage["ordered_quantity"] += line.product_uom_qty
+            for invoice in invoices:
+                invoice_sign = -1.0 if invoice.move_type == "out_refund" else 1.0
+                for invoice_line in invoice.invoice_line_ids.filtered(
+                    lambda line: (
+                        not line.display_type
+                        and line.product_id
+                        and order in line.sale_line_ids.order_id
+                    )
+                ):
+                    usage = product_usage.setdefault(
+                        invoice_line.product_id.id,
+                        {
+                            "product_code": (
+                                invoice_line.product_id.default_code or ""
+                            ),
+                            "product": invoice_line.product_id.display_name,
+                            "ordered_quantity": 0.0,
+                            "invoiced_quantity": 0.0,
+                            "unit": (
+                                invoice_line.product_uom_id.display_name or ""
+                            ),
+                        },
+                    )
+                    usage["invoiced_quantity"] += (
+                        invoice_sign * invoice_line.quantity
+                    )
+            history.append(
+                {
+                    "sales_order": order.name,
+                    "date": fields.Datetime.to_string(order.date_order),
+                    "commercial_basis": order.southern_commercial_basis or "",
+                    "estimated_hours": order.southern_estimated_hours,
+                    "actual_hours": actual_hours,
+                    "products": [
+                        {
+                            "product_code": line.product_id.default_code or "",
+                            "product": line.product_id.display_name,
+                            "quantity": line.product_uom_qty,
+                            "unit": line.product_uom_id.display_name or "",
+                        }
+                        for line in order_lines[:30]
+                    ],
+                    "posted_invoices": [
+                        {
+                            "date": fields.Date.to_string(invoice.invoice_date),
+                            "type": invoice.move_type,
+                            "payment_state": invoice.payment_state,
+                            "products": [
+                                {
+                                    "product_code": (
+                                        invoice_line.product_id.default_code or ""
+                                    ),
+                                    "product": invoice_line.product_id.display_name,
+                                    "quantity": invoice_line.quantity,
+                                    "unit": (
+                                        invoice_line.product_uom_id.display_name or ""
+                                    ),
+                                }
+                                for invoice_line in invoice.invoice_line_ids.filtered(
+                                    lambda line: (
+                                        not line.display_type
+                                        and line.product_id
+                                        and order in line.sale_line_ids.order_id
+                                    )
+                                )[:30]
+                            ],
+                        }
+                        for invoice in invoices[:10]
+                    ],
+                }
+            )
+        return {
+            "lifetime_summary": {
+                "completed_service_order_count": len(orders),
+                "posted_service_invoice_count": posted_invoice_count,
+                "total_estimated_hours": sum(
+                    orders.mapped("southern_estimated_hours")
+                ),
+                "total_actual_hours": total_actual_hours,
+                "product_usage": list(product_usage.values()),
+            },
+            "recent_orders": history[:limit],
+        }
+
     @api.depends(
         "southern_service_case_ids",
         "southern_task_ids",

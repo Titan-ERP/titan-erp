@@ -309,6 +309,14 @@ class ProjectTaskAiEstimate(models.Model):
                     if equipment
                     else []
                 ),
+                "completed_sales_and_invoices": (
+                    equipment._southern_ai_commercial_history(
+                        current_task=self,
+                        limit=20,
+                    )
+                    if equipment
+                    else []
+                ),
             },
             "digital_equipment_inspection": {
                 "status": self.southern_inspection_state,
@@ -404,7 +412,12 @@ class ProjectTaskAiEstimate(models.Model):
                         "Inspection entries as technician-recorded evidence, preserve "
                         "their inspection status, and do not convert a Monitor item into "
                         "a required repair without a stated technical reason. Make the customer_note clear "
-                        "that proposed work is subject to technician inspection and approval."
+                        "that proposed work is subject to technician inspection and approval. "
+                        "Use completed_sales_and_invoices to calibrate recurring scope, "
+                        "parts quantities, and estimated versus actual labor. Historical "
+                        "work is supporting evidence only: do not assume a past failure is "
+                        "the current cause, and never reuse historical pricing in place of "
+                        "the current Odoo product catalog and price list."
                     ),
                 },
                 {
