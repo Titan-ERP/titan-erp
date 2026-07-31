@@ -34,7 +34,7 @@ replacing Odoo's native transaction models:
 |---|---|---|
 | Odoo.sh module install/upgrade | Pass | Build `35738421` completed and the module loaded on a fresh Odoo 19 development database |
 | Odoo 19 transaction tests | Pass | 13 add-on transaction scenarios loaded without a Service-specific test failure |
-| Standalone repository tests | Pass | 24 tests |
+| Standalone repository tests | Pass | 25 tests, including additive/non-destructive installation coverage |
 | Python compilation | Pass | `compileall` on `southern_service_operations` |
 | XML parse and manifest file validation | Pass | Included in standalone suite |
 | Odoo 19 search-view compatibility | Pass | Static regression plus live build load |
@@ -76,11 +76,17 @@ following evidence:
 | Digital equipment inspection | Pass | Completed with one High / Repair Needed hydraulic finding, measurement, fault `H-214`, and AI-context flag |
 | Mobile photo intake | Pass | **Add Service Photo** opens a job- and equipment-linked photo record with camera guidance and AI-context control |
 | Missing-AI-key safeguard | Pass | Estimate request is blocked with an admin-directed configuration message; no partial suggestion is applied |
+| Live AI reviewed estimate | Pass | `gpt-5.6-sol` produced a medium-confidence, Needs Review draft with three diagnostic tasks totaling 5.00 hours, no unverified parts, and an editable customer quotation note |
+| AI transaction safety | Pass | Review was saved without applying it; quotation `S00192` remained unconfirmed, unsent, and unchanged at $404.90 |
 
-The live AI response remains a release gate until the dedicated production
-service-account key is entered in this staging database and one reviewed
-suggestion is generated. The key must not be copied into this dossier, source
-control, chatter, screenshots, or test output.
+The live AI gate passed with the dedicated service-account key in staging. The
+assistant used the complaint, equipment hours, technician findings, and the
+completed high-priority hydraulic inspection. It proposed diagnosis only and
+correctly returned no part suggestion because no component failure or exact
+catalog match was established. Equipment-specific manual and H-214 references
+remain an explicit technician question until an approved manual vector store is
+configured. The key must not be copied into this dossier, source control,
+chatter, screenshots, or test output.
 
 ## Record-preserving deployment guarantees
 
@@ -284,7 +290,7 @@ These are operational approvals, not missing code:
 
 ## Go/no-go position
 
-The isolated code candidate and core workflow have passed a current-production-
-copy staging/UAT cycle. Production remains a **no-go** until the dedicated AI
-key passes one controlled reviewed suggestion and the named operational role,
+The isolated code candidate, core workflow, record-preservation checks, and
+controlled live AI review have passed a current-production-copy staging/UAT
+cycle. Production remains a **no-go** until the named operational role,
 change-window, smoke-test, and rollback approval gates above are signed off.
