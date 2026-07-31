@@ -253,6 +253,10 @@
                            }"
                            nolabel="1">
                         <list editable="bottom">
+                            <field name="southern_service_task_id"
+                                   column_invisible="True"/>
+                            <field name="order_id"
+                                   column_invisible="True"/>
                             <control>
                                 <create string="Add a product"/>
                             </control>

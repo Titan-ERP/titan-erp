@@ -320,6 +320,10 @@ class SouthernServiceOperationsTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("southern_service_task_id", sale_order_source)
         self.assertIn(
+            "_onchange_southern_service_task_id",
+            sale_order_source,
+        )
+        self.assertIn(
             '[("southern_sale_order_id", "=", order.id)]',
             sale_order_source,
         )

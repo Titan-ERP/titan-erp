@@ -339,6 +339,18 @@ class SaleOrderLine(models.Model):
         index=True,
     )
 
+    @api.onchange("southern_service_task_id")
+    def _onchange_southern_service_task_id(self):
+        for line in self:
+            if (
+                line.southern_service_task_id
+                and not line.order_id
+                and line.southern_service_task_id.southern_sale_order_id
+            ):
+                line.order_id = (
+                    line.southern_service_task_id.southern_sale_order_id
+                )
+
     @api.model_create_multi
     def create(self, vals_list):
         Task = self.env["project.task"]
