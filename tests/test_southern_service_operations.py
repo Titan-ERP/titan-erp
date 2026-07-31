@@ -4,7 +4,6 @@ from pathlib import Path
 
 from lxml import etree
 
-
 ROOT = Path(__file__).resolve().parents[1]
 MODULE = ROOT / "southern_service_operations"
 

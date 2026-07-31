@@ -4,9 +4,10 @@
 
 - Add-on: `southern_service_operations`
 - User-facing application: **Sales**
-- Candidate commit: `e2cf2b258515238c865859e479a1daaf7c2147ac`
+- Code candidate commit: `b2e5fd2825e80af7936c4b7bf0e6184a0489ad20`
 - Odoo.sh development branch: `codex/southern-service-production-rc`
-- Odoo.sh build: `35738421`
+- Odoo.sh development build: `35738421`
+- Odoo.sh production-copy staging build: `35740172`
 - Odoo version: 19.0 Enterprise
 - Production deployment: **not performed**
 
@@ -48,6 +49,38 @@ replacing Odoo's native transaction models:
 | Shop Service prerequisite | Pass | Missing equipment-to-product mapping is blocked with a clear validation message |
 | Shop Service routing | Pass | After a development-only product mapping, one native Repair Order was created; repeated routing remained at one |
 | Production isolation | Pass | All runtime writes were limited to disposable Odoo.sh development databases |
+
+## Production-copy staging evidence
+
+Build `35740172` completed successfully after the isolated release candidate was
+promoted to Odoo.sh Staging. Odoo.sh copied the current production database,
+caught outbound email, and disabled scheduled actions for user-acceptance
+testing. The new add-on was then discovered with **Update Apps List** and
+activated explicitly; new add-ons are not installed merely because their code
+is present on a staging or production branch.
+
+The controlled staging scenario created no production records and produced the
+following evidence:
+
+| Check | Result | Evidence |
+|---|---|---|
+| Staging build | Pass | Build `35740172`, Odoo 19.0, `Test: Success` |
+| Existing labor product mapping | Pass | Existing production product `[LABOR-SHOP] Shop Labor Rate`, service type, $150.00/hour, 6% sales tax |
+| Combined Service intake | Pass | Task `118`, `PRE-MERGE UAT - Hydraulic pressure loss`, created from **Sales > Service** |
+| Client equipment ownership | Pass | `Southern UAT Excavator`, serial `PREMERGE-UAT-20260731`, 2,450 hours, owner `Henry Campbell` |
+| Equipment service history | Pass | Equipment record links Southern Service case `SVC26-00001`; no duplicate equipment was created |
+| Native Sales quotation | Pass | `S00192`, status Quotation, customer/equipment/service job linked |
+| Labor-to-quote flow | Pass | One 2.50-hour task generated one `[LABOR-SHOP]` line at $150.00/hour |
+| Production product selection | Pass | Existing product `[07000-B1009] O-Ring - 07000-B1009`, quantity 2.00, $3.49/unit |
+| Quotation totals | Pass | $381.98 untaxed, $22.92 tax, $404.90 total; quotation remained unconfirmed and unsent |
+| Digital equipment inspection | Pass | Completed with one High / Repair Needed hydraulic finding, measurement, fault `H-214`, and AI-context flag |
+| Mobile photo intake | Pass | **Add Service Photo** opens a job- and equipment-linked photo record with camera guidance and AI-context control |
+| Missing-AI-key safeguard | Pass | Estimate request is blocked with an admin-directed configuration message; no partial suggestion is applied |
+
+The live AI response remains a release gate until the dedicated production
+service-account key is entered in this staging database and one reviewed
+suggestion is generated. The key must not be copied into this dossier, source
+control, chatter, screenshots, or test output.
 
 The Odoo.sh build is yellow because the inherited production stack emits
 warnings outside this add-on: legacy Client Equipment access-record creation
@@ -179,7 +212,10 @@ These are operational approvals, not missing code:
 3. Verify production/staging contain compatible installed versions of
    `cs_client_equipment`, `dmc_fieldservice`, Sales, Field Service, Repairs,
    Maintenance, Purchase, and their declared dependencies.
-4. Install or upgrade `southern_service_operations` in staging.
+4. In developer mode, run **Apps > Update Apps List**, locate **Southern
+   Service** (`southern_service_operations`), and activate it in staging. For a
+   later upgrade, upgrade only this add-on. Do not assume a new add-on is
+   installed when its code arrives on the branch.
 5. Run:
    - the 17 standalone repository checks;
    - the 7 Odoo transaction tests;
@@ -223,5 +259,7 @@ These are operational approvals, not missing code:
 
 ## Go/no-go position
 
-The code candidate is ready for a current-production-copy staging/UAT cycle.
-Production remains a **no-go** until the approval gates above are signed off.
+The isolated code candidate and core workflow have passed a current-production-
+copy staging/UAT cycle. Production remains a **no-go** until the dedicated AI
+key passes one controlled reviewed suggestion and the named operational
+approval gates above are signed off.
