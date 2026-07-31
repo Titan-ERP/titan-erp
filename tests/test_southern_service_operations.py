@@ -38,6 +38,15 @@ class SouthernServiceOperationsTests(unittest.TestCase):
             if path.suffix == ".xml":
                 etree.parse(str(path))
 
+    def test_digital_inspection_result_fields_remain_editable(self):
+        view_source = (
+            MODULE / "views" / "service_inspection_views.xml"
+        ).read_text(encoding="utf-8")
+        self.assertIn('name="southern_equipment_inspection"', view_source)
+        self.assertIn('<field name="result"/>', view_source)
+        self.assertIn('<field name="priority" optional="show"/>', view_source)
+        self.assertNotIn('<field name="result" widget="badge"/>', view_source)
+
     def test_sales_shortcuts_use_one_existing_list_header(self):
         document = etree.parse(str(MODULE / "views" / "sale_order_views.xml"))
         targets = document.xpath(

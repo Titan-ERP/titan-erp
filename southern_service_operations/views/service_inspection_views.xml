@@ -58,9 +58,8 @@
                                    placeholder="Hydraulics, Engine, Safety..."/>
                             <field name="name"
                                    placeholder="Component or inspection point..."/>
-                            <field name="result" widget="badge"/>
-                            <field name="priority" widget="badge"
-                                   optional="show"/>
+                            <field name="result"/>
+                            <field name="priority" optional="show"/>
                             <field name="measurement" optional="show"/>
                             <field name="fault_code" optional="show"/>
                             <field name="finding" optional="show"/>
