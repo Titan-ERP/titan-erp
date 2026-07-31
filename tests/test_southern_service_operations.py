@@ -248,6 +248,9 @@ class SouthernServiceOperationsTests(unittest.TestCase):
             "southern_quote_line_ids",
             "southern_service_work_item_ids",
             "def action_southern_create_quotation(self):",
+            "def action_southern_add_labor_task(self):",
+            "def action_southern_add_part(self):",
+            "def action_southern_add_other_work(self):",
             "def action_southern_send_quotation(self):",
             "def action_southern_confirm_sale_order(self):",
         ):
@@ -265,6 +268,30 @@ class SouthernServiceOperationsTests(unittest.TestCase):
                 document.xpath(
                     "//field[@name='southern_service_work_item_ids']"
                     "/list[@editable='bottom']"
+                )
+            ),
+            1,
+        )
+        self.assertEqual(
+            len(
+                document.xpath(
+                    "//record[@id='view_southern_service_work_item_form']"
+                )
+            ),
+            1,
+        )
+        self.assertEqual(
+            len(
+                document.xpath(
+                    "//button[@name='action_southern_add_part']"
+                )
+            ),
+            1,
+        )
+        self.assertEqual(
+            len(
+                document.xpath(
+                    "//separator[@string='Native Sales Quotation Lines']"
                 )
             ),
             1,

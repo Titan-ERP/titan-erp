@@ -1,6 +1,6 @@
 {
     "name": "Southern Service",
-    "version": "19.0.1.7.0",
+    "version": "19.0.1.8.0",
     "author": "Titan Equipment",
     "category": "Services",
     "summary": "One Service workflow across Sales, customer equipment, field work, shop work, maintenance, and purchasing.",

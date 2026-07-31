@@ -355,6 +355,41 @@ class ProjectTask(models.Model):
             task._southern_sync_tasks_to_quotation(order)
         return {"type": "ir.actions.client", "tag": "reload"}
 
+    def _southern_action_new_work_item(self, work_type):
+        self.ensure_one()
+        labels = {
+            "labor": _("Add Labor Task"),
+            "part": _("Add Part Product"),
+            "other": _("Add Other Work"),
+        }
+        return {
+            "type": "ir.actions.act_window",
+            "name": labels[work_type],
+            "res_model": "southern.service.work.item",
+            "view_mode": "form",
+            "view_id": self.env.ref(
+                "southern_service_operations."
+                "view_southern_service_work_item_form"
+            ).id,
+            "target": "new",
+            "context": {
+                "default_task_id": self.id,
+                "default_work_type": work_type,
+                "default_allocated_hours": 0.0 if work_type == "part" else 1.0,
+                "default_quantity": 1.0,
+                "default_billable": True,
+            },
+        }
+
+    def action_southern_add_labor_task(self):
+        return self._southern_action_new_work_item("labor")
+
+    def action_southern_add_part(self):
+        return self._southern_action_new_work_item("part")
+
+    def action_southern_add_other_work(self):
+        return self._southern_action_new_work_item("other")
+
     def action_southern_open_sale_order(self):
         self.ensure_one()
         order = self._southern_get_or_create_sale_order()
