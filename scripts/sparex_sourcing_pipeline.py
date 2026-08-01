@@ -455,23 +455,34 @@ def apply_evidence(args: argparse.Namespace) -> dict[str, Any]:
     append_audit(ARTIFACT_ROOT / "write_audit.jsonl", gate.audit_row({"artifact_sha256": args.input_sha256}, len(records)))
     changed = 0
     for record in records:
+        retrieved_at = record.get("retrieved_at_utc")
+        retrieved_at_odoo = False
+        if retrieved_at:
+            retrieved_at_odoo = odoo_datetime(
+                datetime.fromisoformat(str(retrieved_at).replace("Z", "+00:00"))
+            )
         values = {
             "supplier_id": record.get("supplier_id"),
             "source_run_id": evidence.get("run_id"),
             "source_artifact_uri": str(args.input),
             "source_input_sha256": args.input_sha256,
-            "parser_version": PARSER_VERSION,
+            "parser_version": record.get("parser_version") or evidence.get("parser_version") or PARSER_VERSION,
             "failure_code": record.get("failure_code"),
-            "failure_reason": record.get("failure_reason"),
+            "failure_reason": record.get("failure_reason") or record.get("failure_message"),
         }
+        if record.get("url_verified") and record.get("evidence_url") and record.get("evidence_sha256"):
+            values.update(
+                {
+                    "evidence_url": record.get("evidence_url"),
+                    "evidence_sha256": record.get("evidence_sha256"),
+                    "evidence_schema_version": record.get("evidence_schema_version") or SCHEMA_VERSION,
+                    "evidence_retrieved_at": retrieved_at_odoo or odoo_datetime(datetime.now(timezone.utc)),
+                }
+            )
         if record.get("status") == "accepted":
             values.update(
                 {
                     "supplier_price": money(record.get("price")),
-                    "evidence_url": record.get("evidence_url"),
-                    "evidence_sha256": record.get("evidence_sha256"),
-                    "evidence_schema_version": SCHEMA_VERSION,
-                    "evidence_retrieved_at": odoo_datetime(datetime.now(timezone.utc)),
                 }
             )
         client.call(
