@@ -11,6 +11,8 @@
                 <field name="discovery_agent_id"/>
                 <field name="match_agent_id"/>
                 <field name="page_count"/>
+                <field name="queued_url_count"/>
+                <field name="visited_url_count"/>
                 <field name="observed_count"/>
                 <field name="matched_count"/>
                 <field name="missing_count"/>
@@ -43,7 +45,10 @@
                             <field name="throttle_seconds"/>
                             <field name="max_pages_per_checkpoint"/>
                             <field name="max_items_per_page"/>
+                            <field name="max_pages_total"/>
                             <field name="page_count"/>
+                            <field name="queued_url_count"/>
+                            <field name="visited_url_count"/>
                             <field name="observed_count"/>
                             <field name="completed_at"/>
                         </group>
@@ -61,6 +66,8 @@
                                 <field name="seed_url_sha256"/>
                                 <field name="cursor_url" password="1"/>
                                 <field name="cursor_url_sha256"/>
+                                <field name="frontier_urls" password="1"/>
+                                <field name="visited_url_sha256s"/>
                                 <field name="plan_artifact_uri"/>
                                 <field name="plan_sha256"/>
                             </group>

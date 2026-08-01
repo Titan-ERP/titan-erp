@@ -74,3 +74,63 @@ class TestSparexDiscovery(TransactionCase):
         self.assertEqual(by_sku["S.999999"].odoo_match_state, "missing")
         self.assertEqual(by_sku["S.999999"].creation_state, "not_authorized")
         self.assertEqual(self.env["product.template"].with_context(active_test=False).search_count([]), product_count)
+
+    def test_listing_frontier_advances_without_opening_product_pages(self):
+        seed_url = "https://us.sparex.com/"
+        category_url = "https://us.sparex.com/engine-filters.html"
+        run = self.env["southern.sparex.discovery.run"].start_discovery_run(
+            {
+                "idempotency_key": "test-frontier-v2",
+                "seed_url": seed_url,
+                "seed_url_sha256": hashlib.sha256(seed_url.encode()).hexdigest(),
+                "plan_artifact_uri": "s3://test-bucket/discovery/frontier-plan.json",
+                "plan_sha256": "d" * 64,
+                "parser_version": "test-listing-frontier-v2",
+                "throttle_seconds": 3,
+                "max_pages_total": 10,
+            }
+        )
+        first_claim = self.env["southern.sparex.discovery.run"].claim_discovery_checkpoint(
+            run["id"], "test-frontier-worker", 180
+        )
+        self.assertEqual(first_claim["cursor_url"], seed_url)
+        first_result = self.env["southern.sparex.discovery.run"].record_discovery_page(
+            run["id"],
+            "test-frontier-worker",
+            {
+                "page_url": seed_url,
+                "page_sha256": "e" * 64,
+                "artifact_uri": "s3://test-bucket/discovery/frontier-page-1.json",
+                "artifact_sha256": "f" * 64,
+                "items": [],
+                "next_url": "",
+                "listing_urls": [category_url],
+            },
+        )
+        self.assertEqual(first_result["state"], "ready")
+        active_run = self.env["southern.sparex.discovery.run"].browse(run["id"])
+        self.assertEqual(active_run.cursor_url, category_url)
+        self.assertEqual(active_run.queued_url_count, 1)
+        self.assertEqual(active_run.visited_url_count, 1)
+
+        second_claim = self.env["southern.sparex.discovery.run"].claim_discovery_checkpoint(
+            run["id"], "test-frontier-worker", 180
+        )
+        self.assertEqual(second_claim["cursor_url"], category_url)
+        second_result = self.env["southern.sparex.discovery.run"].record_discovery_page(
+            run["id"],
+            "test-frontier-worker",
+            {
+                "page_url": category_url,
+                "page_sha256": "1" * 64,
+                "artifact_uri": "s3://test-bucket/discovery/frontier-page-2.json",
+                "artifact_sha256": "2" * 64,
+                "items": [],
+                "next_url": "",
+                "listing_urls": [seed_url, category_url],
+            },
+        )
+        self.assertEqual(second_result["state"], "completed")
+        self.assertEqual(active_run.page_count, 2)
+        self.assertEqual(active_run.visited_url_count, 2)
+        self.assertEqual(active_run.queued_url_count, 0)

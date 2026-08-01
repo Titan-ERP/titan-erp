@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 from html import unescape
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urljoin, urlsplit
+from urllib.parse import parse_qs, urljoin, urlsplit, urlunsplit
 
 import requests
 from lxml import html as lxml_html
@@ -32,13 +32,31 @@ DEFAULT_ODOO_ENV = ROOT / "odoo_connection.env"
 DEFAULT_ARTIFACT_ROOT = ROOT / "outputs" / "sparex-catalog-discovery"
 WORKFLOW = "sparex-discovery-queue"
 CONFIRMATION = "sparex-discovery-queue"
-PARSER_VERSION = "sparex-listing-v1"
-SCHEMA_VERSION = "1.0"
+PARSER_VERSION = "sparex-listing-frontier-v2"
+SCHEMA_VERSION = "1.1"
 SPAREX_HOST = "us.sparex.com"
 MAX_PAGE_ITEMS = 100
 PORTAL_COOLDOWN_STATUSES = {429, 500, 502, 503, 504}
 SKU_FROM_URL = re.compile(r"-(?P<digits>\d+)\.html(?:$|[?#])", re.IGNORECASE)
 SKU_IN_TEXT = re.compile(r"(?<![A-Z0-9])S[.\s-]?0*(?P<digits>\d+)(?!\d)", re.IGNORECASE)
+PRODUCT_DETAIL_PATH = re.compile(r"(?:^|[-/])\d+\.html$", re.IGNORECASE)
+LISTING_PATH_DENY_PREFIXES = (
+    "/about",
+    "/account",
+    "/catalogue",
+    "/checkout",
+    "/contact",
+    "/cookie",
+    "/customer",
+    "/help",
+    "/login",
+    "/media",
+    "/privacy",
+    "/sales",
+    "/search",
+    "/wishlist",
+)
+MAX_LISTING_LINKS_PER_PAGE = 500
 
 
 class PortalCooldownError(RuntimeError):
@@ -93,7 +111,8 @@ def _listing_container(anchor):
         ):
             return current
         current = current.getparent()
-    return anchor.getparent() or anchor
+    parent = anchor.getparent()
+    return parent if parent is not None else anchor
 
 
 def _image_url(container, page_url: str) -> str:
@@ -158,7 +177,39 @@ def parse_listing_page(content: bytes | str, page_url: str) -> dict[str, Any]:
         items.append(selected)
     if len(items) > MAX_PAGE_ITEMS:
         raise RuntimeError(f"listing_page_exceeded_{MAX_PAGE_ITEMS}_items")
-    return {"items": items, "next_url": find_next_listing_url(document, page_url)}
+    return {
+        "items": items,
+        "next_url": find_next_listing_url(document, page_url),
+        "listing_urls": find_listing_frontier_urls(document, page_url),
+    }
+
+
+def canonical_listing_url(value: str, page_url: str) -> str:
+    candidate = urljoin(page_url, unescape((value or "").strip()))
+    parsed = urlsplit(candidate)
+    if parsed.scheme.casefold() != "https" or (parsed.hostname or "").casefold().rstrip(".") != SPAREX_HOST:
+        return ""
+    path = parsed.path.rstrip("/") or "/"
+    if PRODUCT_DETAIL_PATH.search(path) or path.casefold().startswith(LISTING_PATH_DENY_PREFIXES):
+        return ""
+    query = parsed.query if {"p", "page"} & set(parse_qs(parsed.query)) else ""
+    category_shape = path.endswith(".html") or path == "/" or bool(query)
+    if not category_shape:
+        return ""
+    return urlunsplit(("https", SPAREX_HOST, path, query, ""))
+
+
+def find_listing_frontier_urls(document, page_url: str) -> list[str]:
+    current = canonical_listing_url(page_url, page_url) or page_url
+    candidates = []
+    for value in document.xpath("//a[@href]/@href"):
+        candidate = canonical_listing_url(str(value), page_url)
+        if candidate and candidate != current:
+            candidates.append(candidate)
+    unique = list(dict.fromkeys(candidates))
+    if len(unique) > MAX_LISTING_LINKS_PER_PAGE:
+        raise RuntimeError(f"listing_frontier_exceeded_{MAX_LISTING_LINKS_PER_PAGE}_links")
+    return unique
 
 
 def find_next_listing_url(document, page_url: str) -> str:
@@ -301,6 +352,7 @@ def main() -> int:
                     "page_url_sha256": sha256_text(seed_url),
                     "item_count": len(parsed["items"]),
                     "next_cursor_present": bool(parsed["next_url"]),
+                    "frontier_url_count": len(parsed["listing_urls"]),
                 },
                 sort_keys=True,
             )
@@ -323,6 +375,7 @@ def main() -> int:
             "parser_version": PARSER_VERSION,
             "throttle_seconds": throttle_seconds,
             "max_pages_per_checkpoint": 1,
+            "max_pages_total": 5000,
             "product_creation_authorized": False,
         }
         plan_record = _archive(store, "plan.json", plan, args.s3_bucket, archive_prefix)
@@ -340,6 +393,7 @@ def main() -> int:
                 "throttle_seconds": throttle_seconds,
                 "max_pages_per_checkpoint": 1,
                 "max_items_per_page": MAX_PAGE_ITEMS,
+                "max_pages_total": 5000,
             },
         )
     claim = client.call(
@@ -360,8 +414,6 @@ def main() -> int:
         if "customer/account/login" in response.url.casefold():
             raise PortalCooldownError("dealer_session_lost")
         parsed = parse_listing_page(response.content, cursor_url)
-        if not parsed["items"]:
-            raise RuntimeError("empty_or_unrecognized_listing_page")
         page_payload = {
             "schema_version": SCHEMA_VERSION,
             "workflow": WORKFLOW,
@@ -375,6 +427,7 @@ def main() -> int:
             "parser_version": PARSER_VERSION,
             "items": parsed["items"],
             "next_url": parsed["next_url"],
+            "listing_urls": parsed["listing_urls"],
         }
         page_record = _archive(store, "listing-page.json", page_payload, args.s3_bucket, archive_prefix)
         recorded = client.call(
@@ -389,6 +442,7 @@ def main() -> int:
                 "artifact_sha256": page_record["sha256"],
                 "items": parsed["items"],
                 "next_url": parsed["next_url"],
+                "listing_urls": parsed["listing_urls"],
             },
         )
         result = {

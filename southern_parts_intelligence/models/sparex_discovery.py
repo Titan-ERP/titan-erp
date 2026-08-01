@@ -1,4 +1,5 @@
 import hashlib
+import re
 from datetime import timedelta
 from urllib.parse import urlsplit
 
@@ -10,6 +11,26 @@ from .catalog_agents import SHA256_PATTERN, exact_sparex_url, normalized_sparex_
 SPAREX_DISCOVERY_HOSTS = {"us.sparex.com"}
 MAX_DISCOVERY_PAGE_ITEMS = 100
 MAX_DISCOVERY_CHECKPOINT_PAGES = 5
+MAX_DISCOVERY_FRONTIER_URLS = 10000
+MAX_DISCOVERY_LINKS_PER_PAGE = 500
+MAX_DISCOVERY_TOTAL_PAGES = 10000
+PRODUCT_DETAIL_PATH = re.compile(r"(?:^|[-/])\d+\.html$", re.IGNORECASE)
+LISTING_PATH_DENY_PREFIXES = (
+    "/about",
+    "/account",
+    "/catalogue",
+    "/checkout",
+    "/contact",
+    "/cookie",
+    "/customer",
+    "/help",
+    "/login",
+    "/media",
+    "/privacy",
+    "/sales",
+    "/search",
+    "/wishlist",
+)
 
 
 def _https_sparex_url(value):
@@ -22,6 +43,16 @@ def _https_sparex_url(value):
 def _https_url(value):
     parsed = urlsplit((value or "").strip())
     return parsed.scheme.casefold() == "https" and bool(parsed.hostname)
+
+
+def _sparex_listing_url(value):
+    parsed = urlsplit((value or "").strip())
+    path = parsed.path.rstrip("/") or "/"
+    return (
+        _https_sparex_url(value)
+        and not PRODUCT_DETAIL_PATH.search(path)
+        and not path.casefold().startswith(LISTING_PATH_DENY_PREFIXES)
+    )
 
 
 def _sha256_text(value):
@@ -65,6 +96,11 @@ class SouthernSparexDiscoveryRun(models.Model):
     throttle_seconds = fields.Float(default=3.0, required=True)
     max_pages_per_checkpoint = fields.Integer(default=1, required=True)
     max_items_per_page = fields.Integer(default=MAX_DISCOVERY_PAGE_ITEMS, required=True)
+    max_pages_total = fields.Integer(default=5000, required=True)
+    frontier_urls = fields.Text(readonly=True, copy=False)
+    visited_url_sha256s = fields.Text(readonly=True, copy=False)
+    queued_url_count = fields.Integer(default=0, readonly=True)
+    visited_url_count = fields.Integer(default=0, readonly=True)
     page_count = fields.Integer(default=0, readonly=True)
     observed_count = fields.Integer(default=0, readonly=True)
     matched_count = fields.Integer(default=0, readonly=True)
@@ -98,6 +134,7 @@ class SouthernSparexDiscoveryRun(models.Model):
         "throttle_seconds",
         "max_pages_per_checkpoint",
         "max_items_per_page",
+        "max_pages_total",
     )
     def _check_contract(self):
         for run in self:
@@ -110,6 +147,8 @@ class SouthernSparexDiscoveryRun(models.Model):
                 raise ValidationError(_("A discovery checkpoint must contain between 1 and 5 listing pages."))
             if not 1 <= run.max_items_per_page <= MAX_DISCOVERY_PAGE_ITEMS:
                 raise ValidationError(_("A discovery listing page must contain between 1 and 100 observations."))
+            if not 1 <= run.max_pages_total <= MAX_DISCOVERY_TOTAL_PAGES:
+                raise ValidationError(_("A discovery run must contain between 1 and 10,000 listing pages."))
 
     @api.model
     def start_discovery_run(self, values):
@@ -151,8 +190,8 @@ class SouthernSparexDiscoveryRun(models.Model):
                 "seed_url_sha256": seed_sha,
                 "cursor_url": seed_url,
                 "cursor_url_sha256": seed_sha,
-                "parser_version": (values.get("parser_version") or "sparex-listing-v1").strip(),
-                "schema_version": (values.get("schema_version") or "1.0").strip(),
+                "parser_version": (values.get("parser_version") or "sparex-listing-frontier-v2").strip(),
+                "schema_version": (values.get("schema_version") or "1.1").strip(),
                 "plan_artifact_uri": plan_uri,
                 "plan_sha256": plan_sha,
                 "throttle_seconds": max(3.0, float(values.get("throttle_seconds") or 3.0)),
@@ -161,6 +200,9 @@ class SouthernSparexDiscoveryRun(models.Model):
                 ),
                 "max_items_per_page": max(
                     1, min(int(values.get("max_items_per_page") or MAX_DISCOVERY_PAGE_ITEMS), MAX_DISCOVERY_PAGE_ITEMS)
+                ),
+                "max_pages_total": max(
+                    1, min(int(values.get("max_pages_total") or 5000), MAX_DISCOVERY_TOTAL_PAGES)
                 ),
             }
         )
@@ -183,6 +225,9 @@ class SouthernSparexDiscoveryRun(models.Model):
             "throttle_seconds",
             "max_pages_per_checkpoint",
             "max_items_per_page",
+            "max_pages_total",
+            "queued_url_count",
+            "visited_url_count",
             "page_count",
             "observed_count",
             "matched_count",
@@ -233,12 +278,15 @@ class SouthernSparexDiscoveryRun(models.Model):
         artifact_sha = (page.get("artifact_sha256") or "").casefold()
         artifact_uri = (page.get("artifact_uri") or "").strip()
         items = list(page.get("items") or [])
+        listing_urls = list(page.get("listing_urls") or [])
         if page_url != run.cursor_url or not _https_sparex_url(page_url):
             raise UserError(_("The listing page does not match the explicit discovery cursor."))
         if not SHA256_PATTERN.fullmatch(page_sha) or not SHA256_PATTERN.fullmatch(artifact_sha) or not artifact_uri:
             raise UserError(_("The listing checkpoint requires checksum-verified evidence."))
         if len(items) > run.max_items_per_page:
             raise UserError(_("The listing page exceeds the bounded discovery item limit."))
+        if len(listing_urls) > MAX_DISCOVERY_LINKS_PER_PAGE:
+            raise UserError(_("The listing page exceeds the bounded discovery frontier limit."))
         page_url_sha = _sha256_text(page_url)
         existing_page = self.env["southern.sparex.discovery.page"].search(
             [("run_id", "=", run.id), ("page_url_sha256", "=", page_url_sha)], limit=1
@@ -391,14 +439,38 @@ class SouthernSparexDiscoveryRun(models.Model):
             }
         )
         next_url = (page.get("next_url") or "").strip()
-        if next_url and not _https_sparex_url(next_url):
+        if next_url and not _sparex_listing_url(next_url):
             raise UserError(_("The next listing cursor is not an HTTPS Sparex URL."))
-        completed = not next_url
+        frontier = [value.strip() for value in (run.frontier_urls or "").splitlines() if value.strip()]
+        visited = {value.strip().casefold() for value in (run.visited_url_sha256s or "").splitlines() if value.strip()}
+        visited.add(page_url_sha)
+        frontier = [value for value in frontier if _sha256_text(value) not in visited and value != page_url]
+        queued_hashes = {_sha256_text(value) for value in frontier}
+        for candidate in [next_url, *listing_urls]:
+            candidate = (candidate or "").strip()
+            if not candidate:
+                continue
+            if not _sparex_listing_url(candidate):
+                raise UserError(_("A discovered frontier URL is not an HTTPS Sparex listing URL."))
+            candidate_sha = _sha256_text(candidate)
+            if candidate_sha in visited or candidate_sha in queued_hashes:
+                continue
+            if len(frontier) >= MAX_DISCOVERY_FRONTIER_URLS:
+                raise UserError(_("The bounded discovery frontier is full."))
+            frontier.append(candidate)
+            queued_hashes.add(candidate_sha)
+        page_limit_reached = run.page_count + 1 >= run.max_pages_total
+        cursor_url = frontier.pop(0) if frontier and not page_limit_reached else ""
+        completed = not cursor_url
         run.write(
             {
                 "state": "completed" if completed else "ready",
-                "cursor_url": next_url or page_url,
-                "cursor_url_sha256": _sha256_text(next_url or page_url),
+                "cursor_url": cursor_url or page_url,
+                "cursor_url_sha256": _sha256_text(cursor_url or page_url),
+                "frontier_urls": "\n".join(frontier) or False,
+                "visited_url_sha256s": "\n".join(sorted(visited)),
+                "queued_url_count": len(frontier) + (1 if cursor_url else 0),
+                "visited_url_count": len(visited),
                 "page_count": run.page_count + 1,
                 "observed_count": run.observed_count + len(items),
                 "matched_count": run.matched_count + page_counts["matched"],
@@ -408,6 +480,7 @@ class SouthernSparexDiscoveryRun(models.Model):
                 "last_request_at": now,
                 "next_request_at": False if completed else now + timedelta(seconds=run.throttle_seconds),
                 "completed_at": now if completed else False,
+                "error_code": "max_pages_total_reached" if page_limit_reached and frontier else False,
                 "lease_owner": False,
                 "lease_expires_at": False,
             }
