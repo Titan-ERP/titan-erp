@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="southern_catalog_agent_list" model="ir.ui.view">
+        <field name="name">southern.catalog.agent.list</field>
+        <field name="model">southern.catalog.agent</field>
+        <field name="arch" type="xml">
+            <list decoration-success="ai_enabled" decoration-muted="not active">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="code"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="model_name"/>
+                <field name="batch_size"/>
+                <field name="throttle_seconds"/>
+                <field name="ai_enabled"/>
+                <field name="internal_cron_enabled"/>
+                <field name="task_count"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="southern_catalog_agent_form" model="ir.ui.view">
+        <field name="name">southern.catalog.agent.form</field>
+        <field name="model">southern.catalog.agent</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_view_tasks" string="View Tasks" type="object" class="btn-primary"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_tasks" type="object" class="oe_stat_button" icon="fa-tasks">
+                            <field name="task_count" widget="statinfo" string="Tasks"/>
+                        </button>
+                    </div>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group>
+                            <field name="code"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="model_name"/>
+                            <field name="active"/>
+                        </group>
+                        <group>
+                            <field name="batch_size"/>
+                            <field name="throttle_seconds"/>
+                            <field name="ai_enabled"/>
+                            <field name="internal_cron_enabled"/>
+                        </group>
+                    </group>
+                    <group string="Agent Instructions">
+                        <field name="instructions" nolabel="1"/>
+                    </group>
+                    <group string="Security Boundary">
+                        <div class="alert alert-info" role="alert">
+                            OpenAI credentials are read from the external worker environment and are never stored in Odoo. Agent results cannot create products, change prices, or publish products.
+                        </div>
+                    </group>
+                    <chatter/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="southern_catalog_agent_task_list" model="ir.ui.view">
+        <field name="name">southern.catalog.agent.task.list</field>
+        <field name="model">southern.catalog.agent.task</field>
+        <field name="arch" type="xml">
+            <list decoration-success="ready_to_publish" decoration-danger="state == 'failed'" decoration-warning="state == 'blocked'">
+                <field name="priority"/>
+                <field name="state"/>
+                <field name="agent_id"/>
+                <field name="external_sku"/>
+                <field name="odoo_match_state"/>
+                <field name="product_tmpl_id"/>
+                <field name="has_positive_supplier_cost"/>
+                <field name="has_positive_sales_price"/>
+                <field name="has_exact_sparex_url"/>
+                <field name="has_image"/>
+                <field name="ready_to_publish"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="southern_catalog_agent_task_form" model="ir.ui.view">
+        <field name="name">southern.catalog.agent.task.form</field>
+        <field name="model">southern.catalog.agent.task</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_prepare_snapshot" string="Refresh Readiness" type="object" class="btn-primary" invisible="state not in ['queued', 'blocked']"/>
+                    <button name="action_cancel" string="Cancel" type="object" invisible="state not in ['queued', 'claimed']"/>
+                    <field name="state" widget="statusbar" statusbar_visible="queued,claimed,completed,blocked,failed,cancelled"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group>
+                            <field name="agent_id"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="external_sku"/>
+                            <field name="normalized_sku"/>
+                            <field name="product_tmpl_id"/>
+                            <field name="odoo_match_state"/>
+                        </group>
+                        <group>
+                            <field name="priority"/>
+                            <field name="idempotency_key"/>
+                            <field name="worker_id"/>
+                            <field name="claimed_at"/>
+                            <field name="finished_at"/>
+                        </group>
+                    </group>
+                    <group string="Required Publication Facts">
+                        <group>
+                            <field name="has_positive_supplier_cost"/>
+                            <field name="has_positive_sales_price"/>
+                            <field name="has_exact_sparex_url"/>
+                            <field name="has_image"/>
+                        </group>
+                        <group>
+                            <field name="product_is_hidden"/>
+                            <field name="ready_to_publish"/>
+                            <field name="readiness_blockers"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Agent Input"><field name="input_json" nolabel="1" widget="text"/></page>
+                        <page string="Agent Result"><field name="output_json" nolabel="1" widget="text"/></page>
+                        <page string="Evidence and Audit">
+                            <group>
+                                <field name="dealer_cost_url_sha256"/>
+                                <field name="retail_price_url_sha256"/>
+                                <field name="source_artifact_uri"/>
+                                <field name="source_artifact_sha256"/>
+                                <field name="result_sha256"/>
+                                <field name="error_message"/>
+                            </group>
+                        </page>
+                    </notebook>
+                    <chatter/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="southern_catalog_agent_task_search" model="ir.ui.view">
+        <field name="name">southern.catalog.agent.task.search</field>
+        <field name="model">southern.catalog.agent.task</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="external_sku"/>
+                <field name="product_tmpl_id"/>
+                <field name="agent_id"/>
+                <filter name="queued" string="Queued" domain="[('state','=','queued')]"/>
+                <filter name="missing" string="Missing in Odoo" domain="[('odoo_match_state','=','missing')]"/>
+                <filter name="ready" string="Ready to Publish" domain="[('ready_to_publish','=',True)]"/>
+                <separator/>
+                <filter name="group_agent" string="Agent" context="{'group_by':'agent_id'}"/>
+                <filter name="group_state" string="Status" context="{'group_by':'state'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_southern_catalog_agents" model="ir.actions.act_window">
+        <field name="name">Catalog Agents</field>
+        <field name="res_model">southern.catalog.agent</field>
+        <field name="view_mode">list,form</field>
+    </record>
+    <record id="action_southern_catalog_agent_tasks" model="ir.actions.act_window">
+        <field name="name">Catalog Agent Tasks</field>
+        <field name="res_model">southern.catalog.agent.task</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="southern_catalog_agent_task_search"/>
+    </record>
+
+    <menuitem id="menu_southern_catalog_agents"
+              name="Catalog Agents"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_catalog_agents"
+              sequence="3"
+              groups="base.group_system"/>
+    <menuitem id="menu_southern_catalog_agent_tasks"
+              name="Agent Tasks"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_catalog_agent_tasks"
+              sequence="4"
+              groups="base.group_system"/>
+</odoo>

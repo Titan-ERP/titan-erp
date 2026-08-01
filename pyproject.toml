@@ -11,6 +11,7 @@ dependencies = ["requests>=2.32,<3"]
 
 [project.optional-dependencies]
 aws = ["boto3>=1.35,<2"]
+agents = ["openai-agents>=0.19.2,<0.20"]
 dev = ["lxml>=5.3,<7", "pytest>=8,<9", "ruff>=0.9,<1"]
 
 [tool.pytest.ini_options]
