@@ -22,7 +22,7 @@ jobs:
           python-version: "3.13"
           cache: pip
       - name: Install validation dependencies
-        run: python -m pip install -e ".[dev,aws]"
+        run: python -m pip install -e ".[dev,aws,agents]"
       - name: Compile Python
         run: python -m compileall -q scripts southern_* l10n_us_hr_payroll_ms_status
       - name: Run standalone regression tests

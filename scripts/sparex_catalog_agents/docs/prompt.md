@@ -5,6 +5,11 @@ They must not invent or retrieve additional facts. Deterministic code owns SKU
 normalization, Odoo matching, supplier-cost presence, sales-price presence,
 Sparex URL validation, image presence, hidden/public state, and readiness.
 
+Every agent must call its one assigned read-only function tool before returning
+a decision. The tool reads the snapshot from SDK run context, so the model
+cannot substitute arbitrary arguments. No hosted web, file, MCP, shell,
+computer-use, or write-capable tool is exposed.
+
 The four business requirements for release readiness are:
 
 - positive existing matching Sparex supplier cost;

@@ -10,6 +10,7 @@
                 <field name="code"/>
                 <field name="company_id" groups="base.group_multi_company"/>
                 <field name="model_name"/>
+                <field name="tool_name"/>
                 <field name="batch_size"/>
                 <field name="throttle_seconds"/>
                 <field name="ai_enabled"/>
@@ -39,6 +40,7 @@
                             <field name="code"/>
                             <field name="company_id" groups="base.group_multi_company"/>
                             <field name="model_name"/>
+                            <field name="tool_name" readonly="1"/>
                             <field name="active"/>
                         </group>
                         <group>
