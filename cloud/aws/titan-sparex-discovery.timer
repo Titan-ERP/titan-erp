@@ -1,0 +1,13 @@
+[Unit]
+Description=Resume one Sparex listing discovery page after each completed interval
+
+[Timer]
+OnBootSec=4min
+OnUnitInactiveSec=2min
+RandomizedDelaySec=15s
+AccuracySec=1s
+Persistent=false
+Unit=titan-sparex-discovery.service
+
+[Install]
+WantedBy=timers.target

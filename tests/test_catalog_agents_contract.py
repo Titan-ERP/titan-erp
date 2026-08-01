@@ -13,6 +13,18 @@ class CatalogAgentsContractTests(unittest.TestCase):
         )
         self.assertIn("data/catalog_agent_defaults.xml", manifest["data"])
         self.assertIn("views/catalog_agent_views.xml", manifest["data"])
+        self.assertIn("views/sparex_discovery_views.xml", manifest["data"])
+
+    def test_discovery_queue_is_inventory_only(self):
+        model_source = (ROOT / "southern_parts_intelligence" / "models" / "sparex_discovery.py").read_text(
+            encoding="utf-8"
+        )
+        worker_source = (ROOT / "scripts" / "sparex_catalog_discovery.py").read_text(encoding="utf-8")
+        self.assertIn('_name = "southern.sparex.discovery.run"', model_source)
+        self.assertIn('_name = "southern.sparex.discovery.item"', model_source)
+        self.assertIn('(\"not_authorized\", \"Product Creation Not Authorized\")', model_source)
+        self.assertNotIn('self.env["product.template"].create', model_source)
+        self.assertNotIn('client.call("product.template", "create"', worker_source)
 
     def test_five_named_agents_are_seeded(self):
         root = ET.parse(ROOT / "southern_parts_intelligence" / "data" / "catalog_agent_defaults.xml").getroot()

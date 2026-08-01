@@ -74,3 +74,9 @@ Production scheduling uses `cloud/aws/titan-catalog-agent.service` and
 `cloud/aws/titan-catalog-agent.timer`. The oneshot service plus `flock` prevents
 overlap; the timer waits two minutes after a completed run before scheduling
 the next batch of at most five products.
+
+Whole-catalog coverage is handled separately by
+`scripts/sparex_catalog_discovery.py`. It reuses the Discovery and Match agent
+ownership, walks only authenticated listing pages, stores a resumable Odoo
+cursor and match queue, and never creates products. See
+`docs/SPAREX_CATALOG_DISCOVERY.md`.
