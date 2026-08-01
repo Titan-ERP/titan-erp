@@ -7,7 +7,7 @@ name = "titan-odoo-automation"
 version = "0.2.0"
 description = "Shared runtime and controlled workflows for Titan ERP Odoo automation."
 requires-python = ">=3.12"
-dependencies = ["requests>=2.32,<3"]
+dependencies = ["lxml>=5.3,<7", "requests>=2.32,<3"]
 
 [project.optional-dependencies]
 aws = ["boto3>=1.35,<2"]

@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="southern_sparex_discovery_run_list" model="ir.ui.view">
+        <field name="name">southern.sparex.discovery.run.list</field>
+        <field name="model">southern.sparex.discovery.run</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'completed'" decoration-warning="state == 'cooldown'" decoration-danger="state == 'failed'">
+                <field name="idempotency_key"/>
+                <field name="state"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="discovery_agent_id"/>
+                <field name="match_agent_id"/>
+                <field name="page_count"/>
+                <field name="observed_count"/>
+                <field name="matched_count"/>
+                <field name="missing_count"/>
+                <field name="duplicate_count"/>
+                <field name="review_count"/>
+                <field name="next_request_at"/>
+                <field name="cooldown_until"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="southern_sparex_discovery_run_form" model="ir.ui.view">
+        <field name="name">southern.sparex.discovery.run.form</field>
+        <field name="model">southern.sparex.discovery.run</field>
+        <field name="arch" type="xml">
+            <form create="0" delete="0">
+                <header><field name="state" widget="statusbar"/></header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group>
+                            <field name="idempotency_key"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="discovery_agent_id"/>
+                            <field name="match_agent_id"/>
+                            <field name="parser_version"/>
+                            <field name="schema_version"/>
+                        </group>
+                        <group>
+                            <field name="throttle_seconds"/>
+                            <field name="max_pages_per_checkpoint"/>
+                            <field name="max_items_per_page"/>
+                            <field name="page_count"/>
+                            <field name="observed_count"/>
+                            <field name="completed_at"/>
+                        </group>
+                    </group>
+                    <group string="Match Totals">
+                        <field name="matched_count"/>
+                        <field name="missing_count"/>
+                        <field name="duplicate_count"/>
+                        <field name="review_count"/>
+                    </group>
+                    <notebook>
+                        <page string="Cursor and Evidence">
+                            <group>
+                                <field name="seed_url" password="1"/>
+                                <field name="seed_url_sha256"/>
+                                <field name="cursor_url" password="1"/>
+                                <field name="cursor_url_sha256"/>
+                                <field name="plan_artifact_uri"/>
+                                <field name="plan_sha256"/>
+                            </group>
+                        </page>
+                        <page string="Worker State">
+                            <group>
+                                <field name="lease_owner"/>
+                                <field name="lease_expires_at"/>
+                                <field name="last_request_at"/>
+                                <field name="next_request_at"/>
+                                <field name="cooldown_until"/>
+                                <field name="error_code"/>
+                                <field name="error_message"/>
+                            </group>
+                        </page>
+                        <page string="Archived Pages"><field name="page_ids" readonly="1"/></page>
+                    </notebook>
+                    <chatter/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="southern_sparex_discovery_item_list" model="ir.ui.view">
+        <field name="name">southern.sparex.discovery.item.list</field>
+        <field name="model">southern.sparex.discovery.item</field>
+        <field name="arch" type="xml">
+            <list decoration-success="odoo_match_state == 'matched_active' and state == 'verified'" decoration-warning="odoo_match_state == 'missing'" decoration-danger="odoo_match_state == 'duplicate'">
+                <field name="normalized_sku"/>
+                <field name="state"/>
+                <field name="source_state"/>
+                <field name="odoo_match_state"/>
+                <field name="matched_product_id"/>
+                <field name="has_positive_supplier_cost"/>
+                <field name="has_positive_sales_price"/>
+                <field name="has_exact_sparex_url"/>
+                <field name="has_image"/>
+                <field name="source_enrichment_candidate"/>
+                <field name="publication_candidate"/>
+                <field name="observation_count"/>
+                <field name="last_seen_at"/>
+                <field name="creation_state"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="southern_sparex_discovery_item_form" model="ir.ui.view">
+        <field name="name">southern.sparex.discovery.item.form</field>
+        <field name="model">southern.sparex.discovery.item</field>
+        <field name="arch" type="xml">
+            <form create="0" edit="0" delete="0">
+                <sheet>
+                    <div class="oe_title"><h1><field name="normalized_sku"/></h1></div>
+                    <group>
+                        <group>
+                            <field name="state"/>
+                            <field name="source_state"/>
+                            <field name="odoo_match_state"/>
+                            <field name="matched_product_id"/>
+                            <field name="duplicate_product_ids" widget="many2many_tags"/>
+                            <field name="creation_state"/>
+                            <field name="currently_published"/>
+                            <field name="source_enrichment_candidate"/>
+                            <field name="publication_candidate"/>
+                        </group>
+                        <group>
+                            <field name="first_seen_at"/>
+                            <field name="last_seen_at"/>
+                            <field name="observation_count"/>
+                            <field name="first_seen_run_id"/>
+                            <field name="last_seen_run_id"/>
+                            <field name="last_seen_page_id"/>
+                        </group>
+                    </group>
+                    <group string="Publication Essentials">
+                        <field name="has_positive_supplier_cost"/>
+                        <field name="has_positive_sales_price"/>
+                        <field name="has_exact_sparex_url"/>
+                        <field name="has_image"/>
+                        <field name="product_has_exact_sparex_url"/>
+                        <field name="product_has_image"/>
+                    </group>
+                    <group string="Internal Source Evidence">
+                        <field name="source_url" password="1"/>
+                        <field name="source_url_sha256"/>
+                        <field name="image_url" password="1"/>
+                        <field name="image_url_sha256"/>
+                        <field name="source_artifact_uri"/>
+                        <field name="source_artifact_sha256"/>
+                    </group>
+                    <div class="alert alert-info" role="alert">
+                        Discovery is inventory-only. Missing products are classified here but cannot be created by this queue.
+                    </div>
+                    <chatter/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="southern_sparex_discovery_item_search" model="ir.ui.view">
+        <field name="name">southern.sparex.discovery.item.search</field>
+        <field name="model">southern.sparex.discovery.item</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="normalized_sku"/>
+                <field name="matched_product_id"/>
+                <filter name="missing" string="Missing in Odoo" domain="[('odoo_match_state','=','missing')]"/>
+                <filter name="existing" string="Existing in Odoo" domain="[('odoo_match_state','in',['matched_active','matched_archived'])]"/>
+                <filter name="duplicate" string="Duplicate SKU" domain="[('odoo_match_state','=','duplicate')]"/>
+                <filter name="source_review" string="Source Review" domain="[('state','=','review')]"/>
+                <filter name="enrichment_candidates" string="Ready to Link Source" domain="[('source_enrichment_candidate','=',True)]"/>
+                <filter name="publication_candidates" string="Publication Candidates" domain="[('publication_candidate','=',True)]"/>
+                <separator/>
+                <filter name="group_match" string="Odoo Match" context="{'group_by':'odoo_match_state'}"/>
+                <filter name="group_source" string="Source Status" context="{'group_by':'source_state'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_southern_sparex_discovery_runs" model="ir.actions.act_window">
+        <field name="name">Sparex Discovery Runs</field>
+        <field name="res_model">southern.sparex.discovery.run</field>
+        <field name="view_mode">list,form</field>
+    </record>
+    <record id="action_southern_sparex_discovery_items" model="ir.actions.act_window">
+        <field name="name">Sparex Discovery Queue</field>
+        <field name="res_model">southern.sparex.discovery.item</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="southern_sparex_discovery_item_search"/>
+    </record>
+
+    <menuitem id="menu_southern_sparex_discovery_runs"
+              name="Sparex Discovery Runs"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_sparex_discovery_runs"
+              sequence="5"
+              groups="base.group_system"/>
+    <menuitem id="menu_southern_sparex_discovery_items"
+              name="Sparex Discovery Queue"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_sparex_discovery_items"
+              sequence="6"
+              groups="base.group_system"/>
+</odoo>

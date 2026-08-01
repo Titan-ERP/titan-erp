@@ -25,3 +25,7 @@ See [Odoo-native ownership](docs/ODOO_NATIVE_SYSTEMS.md) and the
 See [Sparex sourcing control](docs/SPAREX_SOURCING_CONTROL.md) for the
 supplier-cost queue, evidence contract, retry policy, publication gate, and
 supervised ten-product recovery workflow.
+
+See [Sparex catalog discovery](docs/SPAREX_CATALOG_DISCOVERY.md) for the
+throttled listing-page inventory, resumable cursor, Odoo match queue, and the
+intentional prohibition on automatic product creation.
