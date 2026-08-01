@@ -134,3 +134,40 @@ class TestSparexDiscovery(TransactionCase):
         self.assertEqual(active_run.page_count, 2)
         self.assertEqual(active_run.visited_url_count, 2)
         self.assertEqual(active_run.queued_url_count, 0)
+
+    def test_large_listing_frontier_remains_bounded_and_resumable(self):
+        seed_url = "https://us.sparex.com/"
+        listing_urls = [f"https://us.sparex.com/category-{index}-parts.html" for index in range(501)]
+        run = self.env["southern.sparex.discovery.run"].start_discovery_run(
+            {
+                "idempotency_key": "test-large-frontier-v2",
+                "seed_url": seed_url,
+                "seed_url_sha256": hashlib.sha256(seed_url.encode()).hexdigest(),
+                "plan_artifact_uri": "s3://test-bucket/discovery/large-frontier-plan.json",
+                "plan_sha256": "3" * 64,
+                "parser_version": "test-listing-frontier-v2",
+                "throttle_seconds": 3,
+                "max_pages_total": 600,
+            }
+        )
+        claim = self.env["southern.sparex.discovery.run"].claim_discovery_checkpoint(
+            run["id"], "test-large-frontier-worker", 180
+        )
+        self.assertTrue(claim["claimed"])
+        result = self.env["southern.sparex.discovery.run"].record_discovery_page(
+            run["id"],
+            "test-large-frontier-worker",
+            {
+                "page_url": seed_url,
+                "page_sha256": "4" * 64,
+                "artifact_uri": "s3://test-bucket/discovery/large-frontier-page.json",
+                "artifact_sha256": "5" * 64,
+                "items": [],
+                "next_url": "",
+                "listing_urls": listing_urls,
+            },
+        )
+        active_run = self.env["southern.sparex.discovery.run"].browse(run["id"])
+        self.assertEqual(result["state"], "ready")
+        self.assertEqual(active_run.queued_url_count, 501)
+        self.assertEqual(active_run.visited_url_count, 1)
