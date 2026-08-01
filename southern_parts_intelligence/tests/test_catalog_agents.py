@@ -1,4 +1,6 @@
 import base64
+import hashlib
+import json
 
 from odoo.exceptions import ValidationError
 from odoo.tests import tagged
@@ -38,9 +40,7 @@ class TestCatalogAgents(TransactionCase):
                 "website_published": False,
             }
         )
-        supplier = self.env["res.partner"].create(
-            {"name": "Sparex Test Supplier", "supplier_rank": 1}
-        )
+        supplier = self.env["res.partner"].create({"name": "Sparex", "supplier_rank": 1})
         self.env["product.supplierinfo"].create(
             {
                 "partner_id": supplier.id,
@@ -87,3 +87,74 @@ class TestCatalogAgents(TransactionCase):
             self.agent.batch_size = 6
         with self.assertRaises(ValidationError):
             self.agent.throttle_seconds = 2.9
+
+    def test_fixed_chain_publishes_only_flags_and_can_rollback(self):
+        product = self.env["product.template"].create(
+            {
+                "name": "Release-ready Sparex part",
+                "default_code": "S.880001",
+                "active": True,
+                "list_price": 40.0,
+                "standard_price": 11.0,
+                "southern_source_url": "https://us.sparex.com/example-880001.html",
+                "image_1920": base64.b64encode(b"release-image"),
+                "website_published": False,
+            }
+        )
+        supplier = self.env["res.partner"].create({"name": "Sparex", "supplier_rank": 1})
+        self.env["product.supplierinfo"].create(
+            {"partner_id": supplier.id, "product_tmpl_id": product.id, "price": 15.0, "min_qty": 1.0}
+        )
+        agents = self.env["southern.catalog.agent"].search(
+            [("company_id", "=", self.env.company.id), ("active", "=", True)]
+        )
+        agents.write({"ai_enabled": True})
+        seeded = self.env["southern.catalog.agent.task"].seed_ready_candidates("test-worker", limit=1)
+        self.assertEqual(len(seeded), 1)
+
+        decisions = {
+            "coordinator": ("continue", "sparex_discovery"),
+            "sparex_discovery": ("continue", "odoo_match"),
+            "odoo_match": ("continue", "product_verification"),
+            "product_verification": ("ready_for_release", "website_release"),
+            "website_release": ("ready_for_release", None),
+        }
+        for agent_code, (decision, next_agent) in decisions.items():
+            claimed = self.env["southern.catalog.agent.task"].claim_tasks(agent_code, "test-worker", limit=1)
+            self.assertEqual(len(claimed), 1)
+            output = json.dumps(
+                {
+                    "decision": decision,
+                    "summary": "Deterministic test decision",
+                    "confidence": 1.0,
+                    "blocking_reasons": [],
+                    "next_agent": next_agent,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            self.env["southern.catalog.agent.task"].record_external_result(
+                claimed[0]["id"], output, hashlib.sha256(output.encode()).hexdigest(), state="completed"
+            )
+
+        prepared = self.env["southern.catalog.agent.task"].prepare_publication_plan("test-worker", limit=1)
+        self.assertEqual(len(prepared), 1)
+        list_price = product.list_price
+        standard_price = product.standard_price
+        published = self.env["southern.catalog.agent.task"].publish_prepared_tasks(
+            prepared,
+            "test-worker",
+            "catalog-agent-publication",
+            "Test exact publication transaction",
+        )
+        self.assertEqual(len(published), 1)
+        self.assertTrue(product.website_published)
+        self.assertEqual(product.list_price, list_price)
+        self.assertEqual(product.standard_price, standard_price)
+        release_task = self.env["southern.catalog.agent.task"].browse(published[0]["task_id"])
+        self.env["southern.catalog.agent.task"].rollback_publications(
+            [release_task.id], "Synthetic verification rollback"
+        )
+        self.assertFalse(product.website_published)
+        self.assertEqual(product.list_price, list_price)
+        self.assertEqual(product.standard_price, standard_price)

@@ -26,9 +26,9 @@ def test_agents_receive_exactly_one_role_specific_function_tool():
         assert agent.model_settings.parallel_tool_calls is False
 
 
-def test_coordinator_routes_ready_product_to_release_agent():
+def test_coordinator_starts_fixed_specialist_chain():
     result = evaluate_agent_tool("coordinator", READY_SNAPSHOT)
-    assert result["next_agent"] == "website_release"
+    assert result["next_agent"] == "sparex_discovery"
     assert result["ready_to_publish"] is True
 
 

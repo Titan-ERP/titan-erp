@@ -14,12 +14,20 @@ CATALOG_AGENT_CODES = [
     ("product_verification", "Product Verification Agent"),
     ("website_release", "Website Release Agent"),
 ]
+CATALOG_AGENT_SEQUENCE = [code for code, _name in CATALOG_AGENT_CODES]
 CATALOG_AGENT_TOOLS = {
     "coordinator": "route_catalog_task",
     "sparex_discovery": "verify_sparex_listing",
     "odoo_match": "inspect_odoo_match",
     "product_verification": "evaluate_product_readiness",
     "website_release": "evaluate_release_gate",
+}
+EXPECTED_DECISIONS = {
+    "coordinator": "continue",
+    "sparex_discovery": "continue",
+    "odoo_match": "continue",
+    "product_verification": "ready_for_release",
+    "website_release": "ready_for_release",
 }
 MAX_AGENT_BATCH = 5
 SPAREX_HOSTS = {"us.sparex.com"}
@@ -31,7 +39,7 @@ def normalized_sparex_sku(value):
     match = SPAREX_SKU_PATTERN.fullmatch((value or "").strip())
     if not match:
         return ""
-    return "S.%s" % int(match.group(1))
+    return f"S.{int(match.group(1))}"
 
 
 def exact_sparex_url(value, normalized_sku):
@@ -47,50 +55,46 @@ def exact_sparex_url(value, normalized_sku):
     return bool(re.search(rf"(?<!\d)0*{re.escape(digits)}(?!\d)", unquote(parsed.path), re.IGNORECASE))
 
 
+def canonical_sha256(value):
+    canonical = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 class SouthernCatalogAgent(models.Model):
     _name = "southern.catalog.agent"
     _description = "Southern Catalog Agent"
-    _inherit = ["mail.thread"]
+    _inherit = ["mail.thread"]  # noqa: RUF012 - Odoo model metadata
     _order = "sequence, id"
 
     name = fields.Char(required=True, tracking=True)
     code = fields.Selection(CATALOG_AGENT_CODES, required=True, index=True, tracking=True)
     sequence = fields.Integer(default=10)
     active = fields.Boolean(default=True)
-    company_id = fields.Many2one(
-        "res.company",
-        required=True,
-        default=lambda self: self.env.company,
-        index=True,
-    )
+    company_id = fields.Many2one("res.company", required=True, default=lambda self: self.env.company, index=True)
     model_name = fields.Char(
         default="gpt-5.6",
         required=True,
         help="OpenAI model used by the external Agents SDK worker. API credentials are never stored in Odoo.",
     )
-    tool_name = fields.Char(
-        compute="_compute_tool_name",
-        help="Read-only Agents SDK function tool assigned to this profile.",
-    )
+    tool_name = fields.Char(compute="_compute_tool_name")
     instructions = fields.Text(required=True)
     batch_size = fields.Integer(default=MAX_AGENT_BATCH, required=True)
     throttle_seconds = fields.Float(default=3.0, required=True)
     ai_enabled = fields.Boolean(
         default=False,
         tracking=True,
-        help="Enables the external OpenAI worker for this profile. This does not enable product writes.",
+        help="Enables the external OpenAI worker. Agents remain unable to write products.",
     )
     internal_cron_enabled = fields.Boolean(
         default=False,
         tracking=True,
-        help="Catalog agents install with internal scheduling disabled.",
+        help="The external non-overlapping system service owns scheduling.",
     )
     task_ids = fields.One2many("southern.catalog.agent.task", "agent_id")
     task_count = fields.Integer(compute="_compute_task_count")
 
     _code_company_unique = models.Constraint(
-        "unique(code, company_id)",
-        "Each company can have only one profile for each catalog agent.",
+        "unique(code, company_id)", "Each company can have only one profile for each catalog agent."
     )
 
     @api.depends("task_ids")
@@ -126,25 +130,16 @@ class SouthernCatalogAgent(models.Model):
 class SouthernCatalogAgentTask(models.Model):
     _name = "southern.catalog.agent.task"
     _description = "Southern Catalog Agent Task"
-    _inherit = ["mail.thread", "mail.activity.mixin"]
+    _inherit = ["mail.thread", "mail.activity.mixin"]  # noqa: RUF012 - Odoo model metadata
     _order = "priority desc, create_date, id"
 
     name = fields.Char(compute="_compute_name", store=True)
     active = fields.Boolean(default=True)
-    company_id = fields.Many2one(
-        "res.company",
-        required=True,
-        default=lambda self: self.env.company,
-        index=True,
-    )
-    agent_id = fields.Many2one(
-        "southern.catalog.agent",
-        required=True,
-        ondelete="restrict",
-        index=True,
-        tracking=True,
-    )
+    company_id = fields.Many2one("res.company", required=True, default=lambda self: self.env.company, index=True)
+    agent_id = fields.Many2one("southern.catalog.agent", required=True, ondelete="restrict", index=True, tracking=True)
     agent_code = fields.Selection(related="agent_id.code", store=True, index=True)
+    parent_task_id = fields.Many2one("southern.catalog.agent.task", readonly=True, index=True, ondelete="restrict")
+    root_task_id = fields.Many2one("southern.catalog.agent.task", readonly=True, index=True, ondelete="restrict")
     priority = fields.Selection(
         [("0", "Low"), ("1", "Normal"), ("2", "High"), ("3", "Urgent")],
         default="1",
@@ -165,12 +160,7 @@ class SouthernCatalogAgentTask(models.Model):
         tracking=True,
         index=True,
     )
-    idempotency_key = fields.Char(
-        required=True,
-        copy=False,
-        index=True,
-        default=lambda self: uuid.uuid4().hex,
-    )
+    idempotency_key = fields.Char(required=True, copy=False, index=True, default=lambda self: uuid.uuid4().hex)
     external_sku = fields.Char(required=True, index=True, tracking=True)
     normalized_sku = fields.Char(readonly=True, index=True)
     product_tmpl_id = fields.Many2one("product.template", readonly=True, index=True)
@@ -188,6 +178,7 @@ class SouthernCatalogAgentTask(models.Model):
     product_is_hidden = fields.Boolean(readonly=True)
     ready_to_publish = fields.Boolean(readonly=True, index=True)
     readiness_blockers = fields.Text(readonly=True)
+    snapshot_sha256 = fields.Char(readonly=True, copy=False, index=True)
     dealer_cost_url_sha256 = fields.Char(readonly=True, copy=False)
     retail_price_url_sha256 = fields.Char(readonly=True, copy=False)
     source_artifact_uri = fields.Char(readonly=True, copy=False)
@@ -199,30 +190,53 @@ class SouthernCatalogAgentTask(models.Model):
     claimed_at = fields.Datetime(readonly=True)
     finished_at = fields.Datetime(readonly=True)
     error_message = fields.Text(readonly=True)
+    publication_state = fields.Selection(
+        [
+            ("not_applicable", "Not Applicable"),
+            ("ready", "Ready"),
+            ("published", "Published"),
+            ("verified", "Publicly Verified"),
+            ("rolled_back", "Rolled Back"),
+            ("failed", "Failed"),
+        ],
+        default="not_applicable",
+        required=True,
+        readonly=True,
+        index=True,
+    )
+    publication_fields_before_json = fields.Text(readonly=True, copy=False)
+    publication_fields_after_json = fields.Text(readonly=True, copy=False)
+    publication_public_url = fields.Char(readonly=True, copy=False)
+    publication_verification_sha256 = fields.Char(readonly=True, copy=False)
+    published_at = fields.Datetime(readonly=True)
+    publication_verified_at = fields.Datetime(readonly=True)
 
     _idempotency_unique = models.Constraint(
-        "unique(idempotency_key)",
-        "A catalog agent task already exists for this idempotency key.",
+        "unique(idempotency_key)", "A catalog agent task already exists for this idempotency key."
     )
 
     @api.depends("external_sku", "agent_id")
     def _compute_name(self):
         for task in self:
-            task.name = "%s / %s" % (task.external_sku or _("No SKU"), task.agent_id.name or _("No Agent"))
+            task.name = "{} / {}".format(task.external_sku or _("No SKU"), task.agent_id.name or _("No Agent"))
 
     @api.constrains(
+        "snapshot_sha256",
         "dealer_cost_url_sha256",
         "retail_price_url_sha256",
         "source_artifact_sha256",
         "result_sha256",
+        "publication_verification_sha256",
     )
     def _check_hashes(self):
         for task in self:
             for value in (
+                task.snapshot_sha256,
                 task.dealer_cost_url_sha256,
                 task.retail_price_url_sha256,
                 task.source_artifact_sha256,
                 task.result_sha256,
+                task.publication_verification_sha256,
             ):
                 if value and not SHA256_PATTERN.fullmatch(value.casefold()):
                     raise ValidationError(_("Catalog agent evidence hashes must be SHA-256 hexadecimal values."))
@@ -233,14 +247,49 @@ class SouthernCatalogAgentTask(models.Model):
         if not normalized:
             return normalized, self.env["product.template"]
         digits = normalized.split(".", 1)[1]
-        candidates = self.env["product.template"].with_context(active_test=False).search(
-            ["|", ("default_code", "ilike", "S.%s" % digits), ("default_code", "ilike", "S%s" % digits)]
+        candidates = (
+            self.env["product.template"]
+            .with_context(active_test=False)
+            .search(["|", ("default_code", "ilike", f"S.{digits}"), ("default_code", "ilike", f"S{digits}")])
         )
         exact = candidates.filtered(lambda product: normalized_sparex_sku(product.default_code) == normalized)
         return normalized, exact
 
+    @api.model
+    def _positive_sparex_supplier(self, product):
+        return (
+            self.env["product.supplierinfo"]
+            .sudo()
+            .search(
+                [
+                    ("product_tmpl_id", "=", product.id),
+                    ("partner_id.name", "=ilike", "Sparex"),
+                    ("price", ">", 0),
+                ],
+                order="id",
+                limit=1,
+            )
+        )
+
+    @api.model
+    def _product_invariants(self, product):
+        supplier = self._positive_sparex_supplier(product)
+        image = product.image_1920 or b""
+        if isinstance(image, str):
+            image = image.encode("ascii", errors="ignore")
+        return {
+            "product_id": product.id,
+            "sku": normalized_sparex_sku(product.default_code),
+            "list_price": product.list_price,
+            "standard_price": product.standard_price,
+            "source_url_sha256": hashlib.sha256((product.southern_source_url or "").encode("utf-8")).hexdigest(),
+            "image_sha256": hashlib.sha256(image).hexdigest(),
+            "supplier_cost_sha256": canonical_sha256(
+                {"supplierinfo_id": supplier.id if supplier else None, "price": supplier.price if supplier else None}
+            ),
+        }
+
     def action_prepare_snapshot(self):
-        SupplierInfo = self.env["product.supplierinfo"].sudo()
         for task in self:
             normalized, products = task._find_exact_product()
             blockers = []
@@ -257,21 +306,9 @@ class SouthernCatalogAgentTask(models.Model):
             else:
                 blockers.append("missing_in_odoo")
 
-            has_cost = False
-            has_sales_price = False
-            has_url = False
-            has_image = False
-            is_hidden = False
+            has_cost = has_sales_price = has_url = has_image = is_hidden = False
             if product:
-                supplierinfo = SupplierInfo.search(
-                    [
-                        ("product_tmpl_id", "=", product.id),
-                        ("partner_id.name", "=ilike", "Sparex"),
-                        ("price", ">", 0),
-                    ],
-                    limit=1,
-                )
-                has_cost = bool(supplierinfo)
+                has_cost = bool(task._positive_sparex_supplier(product))
                 has_sales_price = product.list_price > 0
                 has_url = exact_sparex_url(product.southern_source_url, normalized)
                 has_image = bool(product.image_1920)
@@ -289,11 +326,14 @@ class SouthernCatalogAgentTask(models.Model):
                 if not has_image:
                     blockers.append("missing_image")
 
-            ready = bool(product and product.active and is_hidden and has_cost and has_sales_price and has_url and has_image)
+            ready = bool(
+                product and product.active and is_hidden and has_cost and has_sales_price and has_url and has_image
+            )
             snapshot = {
-                "schema_version": "1.0",
+                "schema_version": "1.1",
                 "agent": task.agent_code,
                 "task_id": task.id,
+                "root_task_id": task.root_task_id.id or task.id,
                 "sku": normalized or task.external_sku,
                 "odoo_match_state": match_state,
                 "product_id": product.id if product else None,
@@ -305,6 +345,7 @@ class SouthernCatalogAgentTask(models.Model):
                 "ready_to_publish": ready,
                 "blockers": blockers,
             }
+            snapshot_sha = canonical_sha256(snapshot)
             task.write(
                 {
                     "normalized_sku": normalized,
@@ -318,6 +359,7 @@ class SouthernCatalogAgentTask(models.Model):
                     "ready_to_publish": ready,
                     "readiness_blockers": ",".join(blockers),
                     "input_json": json.dumps(snapshot, sort_keys=True, separators=(",", ":")),
+                    "snapshot_sha256": snapshot_sha,
                 }
             )
         return True
@@ -343,6 +385,8 @@ class SouthernCatalogAgentTask(models.Model):
             "retail_price_url_sha256",
             "source_artifact_uri",
             "source_artifact_sha256",
+            "parent_task_id",
+            "root_task_id",
         }
         task_values = {key: value for key, value in values.items() if key in allowed}
         task_values.update(
@@ -354,8 +398,86 @@ class SouthernCatalogAgentTask(models.Model):
             }
         )
         task = self.create(task_values)
+        if not task.root_task_id:
+            task.root_task_id = task.id
         task.action_prepare_snapshot()
         return task.id
+
+    @api.model
+    def _ready_products(self, limit=MAX_AGENT_BATCH):
+        bounded = max(1, min(int(limit or MAX_AGENT_BATCH), MAX_AGENT_BATCH))
+        products = (
+            self.env["product.template"]
+            .sudo()
+            .search(
+                [
+                    ("active", "=", True),
+                    ("website_published", "=", False),
+                    ("default_code", "ilike", "S.%"),
+                    ("list_price", ">", 0),
+                    ("southern_source_url", "!=", False),
+                    ("image_1920", "!=", False),
+                ],
+                order="id",
+                limit=2000,
+            )
+        )
+        ready = self.env["product.template"]
+        for product in products:
+            normalized = normalized_sparex_sku(product.default_code)
+            if not normalized or not exact_sparex_url(product.southern_source_url, normalized):
+                continue
+            if not self._positive_sparex_supplier(product):
+                continue
+            active_pipeline = self.search_count(
+                [
+                    ("product_tmpl_id", "=", product.id),
+                    ("publication_state", "in", ["ready", "published", "verified"]),
+                ]
+            )
+            if active_pipeline:
+                continue
+            ready |= product
+            if len(ready) >= bounded:
+                break
+        return ready
+
+    @api.model
+    def preview_ready_candidates(self, limit=MAX_AGENT_BATCH):
+        return [
+            {"product_id": product.id, "sku": normalized_sparex_sku(product.default_code)}
+            for product in self._ready_products(limit)
+        ]
+
+    @api.model
+    def seed_ready_candidates(self, worker_id, limit=MAX_AGENT_BATCH):
+        agents = self.env["southern.catalog.agent"].search(
+            [("company_id", "=", self.env.company.id), ("active", "=", True)]
+        )
+        enabled = set(agents.filtered("ai_enabled").mapped("code"))
+        missing = [code for code in CATALOG_AGENT_SEQUENCE if code not in enabled]
+        if missing:
+            raise UserError(_("Enable all catalog agents before seeding: %s") % ", ".join(missing))
+        task_ids = []
+        for product in self._ready_products(limit):
+            identity = {
+                "schema_version": "1.1",
+                "product_id": product.id,
+                "sku": normalized_sparex_sku(product.default_code),
+                "write_date": str(product.write_date or ""),
+            }
+            key = f"catalog-pipeline:{canonical_sha256(identity)}"
+            task_id = self.queue_candidate(
+                "coordinator",
+                product.default_code,
+                {"idempotency_key": key, "priority": "1"},
+            )
+            task = self.browse(task_id)
+            task.worker_id = worker_id
+            task_ids.append(task.id)
+        return self.browse(task_ids).read(
+            ["id", "root_task_id", "agent_code", "external_sku", "product_tmpl_id", "snapshot_sha256"]
+        )
 
     @api.model
     def claim_tasks(self, agent_code, worker_id, limit=MAX_AGENT_BATCH):
@@ -368,21 +490,41 @@ class SouthernCatalogAgentTask(models.Model):
         bounded_limit = max(1, min(int(limit or agent.batch_size), agent.batch_size, MAX_AGENT_BATCH))
         self.env.cr.execute(
             """
-            SELECT id
-              FROM southern_catalog_agent_task
-             WHERE company_id = %s
-               AND agent_id = %s
-               AND state = 'queued'
+            SELECT id FROM southern_catalog_agent_task
+             WHERE company_id = %s AND agent_id = %s AND state = 'queued'
              ORDER BY priority DESC, create_date, id
-             FOR UPDATE SKIP LOCKED
-             LIMIT %s
+             FOR UPDATE SKIP LOCKED LIMIT %s
             """,
             [self.env.company.id, agent.id, bounded_limit],
         )
-        task_ids = [row[0] for row in self.env.cr.fetchall()]
-        tasks = self.browse(task_ids)
+        tasks = self.browse([row[0] for row in self.env.cr.fetchall()])
         tasks.write({"state": "claimed", "worker_id": worker_id, "claimed_at": fields.Datetime.now()})
-        return tasks.read(["id", "agent_code", "external_sku", "input_json", "idempotency_key"])
+        return tasks.read(["id", "root_task_id", "agent_code", "external_sku", "input_json", "idempotency_key"])
+
+    def _next_agent_code(self):
+        self.ensure_one()
+        index = CATALOG_AGENT_SEQUENCE.index(self.agent_code)
+        return CATALOG_AGENT_SEQUENCE[index + 1] if index + 1 < len(CATALOG_AGENT_SEQUENCE) else None
+
+    def _queue_handoff(self):
+        self.ensure_one()
+        next_code = self._next_agent_code()
+        if not next_code:
+            self.publication_state = "ready"
+            return False
+        handoff_key = f"catalog-handoff:{self.root_task_id.id}:{next_code}:{self.snapshot_sha256}"
+        return self.queue_candidate(
+            next_code,
+            self.external_sku,
+            {
+                "idempotency_key": handoff_key,
+                "priority": self.priority,
+                "parent_task_id": self.id,
+                "root_task_id": self.root_task_id.id,
+                "source_artifact_uri": self.source_artifact_uri,
+                "source_artifact_sha256": self.source_artifact_sha256,
+            },
+        )
 
     @api.model
     def record_external_result(self, task_id, output_json, result_sha256, state="completed"):
@@ -398,19 +540,173 @@ class SouthernCatalogAgentTask(models.Model):
         if not result_sha256 or actual_sha != result_sha256.casefold():
             raise UserError(_("Catalog agent result hash does not match the submitted output."))
         try:
-            json.loads(canonical_output)
+            payload = json.loads(canonical_output)
         except (TypeError, ValueError) as exc:
             raise UserError(_("Catalog agent results must be valid JSON.")) from exc
+        expected = EXPECTED_DECISIONS[task.agent_code]
+        terminal_state = state
+        error_message = False
+        if state == "completed" and payload.get("decision") != expected:
+            terminal_state = "blocked"
+            error_message = _("Agent decision did not satisfy the deterministic stage contract.")
         task.write(
             {
-                "state": state,
+                "state": terminal_state,
                 "output_json": canonical_output,
                 "result_sha256": actual_sha,
                 "finished_at": fields.Datetime.now(),
-                "error_message": False if state != "failed" else _("The external catalog agent reported failure."),
+                "error_message": error_message or (False if state != "failed" else _("External agent failed.")),
             }
         )
+        if terminal_state == "completed":
+            task.action_prepare_snapshot()
+            if not task.ready_to_publish:
+                task.write({"state": "blocked", "error_message": _("Readiness changed before handoff.")})
+            else:
+                task._queue_handoff()
         return task.id
+
+    @api.model
+    def prepare_publication_plan(self, worker_id, limit=MAX_AGENT_BATCH):
+        bounded = max(1, min(int(limit or MAX_AGENT_BATCH), MAX_AGENT_BATCH))
+        tasks = self.search(
+            [
+                ("agent_code", "=", "website_release"),
+                ("state", "=", "completed"),
+                ("publication_state", "=", "ready"),
+            ],
+            order="id",
+            limit=bounded,
+        )
+        records = []
+        for task in tasks:
+            task.action_prepare_snapshot()
+            if not task.ready_to_publish or not task.product_tmpl_id:
+                task.write({"state": "blocked", "error_message": _("Readiness changed before release.")})
+                continue
+            product = task.product_tmpl_id.sudo()
+            publication_fields = self._publication_fields()
+            before_flags = {name: bool(product[name]) for name in publication_fields}
+            records.append(
+                {
+                    "task_id": task.id,
+                    "root_task_id": task.root_task_id.id,
+                    "product_id": product.id,
+                    "sku": task.normalized_sku,
+                    "snapshot_sha256": task.snapshot_sha256,
+                    "publication_fields_before": before_flags,
+                    "invariants": self._product_invariants(product),
+                    "worker_id": worker_id,
+                }
+            )
+        return records
+
+    @api.model
+    def _publication_fields(self):
+        details = self.env["product.template"].fields_get(
+            ["is_published", "website_published"], attributes=["readonly"]
+        )
+        names = [
+            name
+            for name in ("is_published", "website_published")
+            if name in details and not details[name].get("readonly")
+        ]
+        if not names:
+            raise UserError(_("No writable website publication field is available."))
+        return names
+
+    @api.model
+    def publish_prepared_tasks(self, records, worker_id, confirmation, reason):
+        if confirmation != "catalog-agent-publication" or not (reason or "").strip():
+            raise UserError(_("Publication requires the exact workflow confirmation and business reason."))
+        if not records or len(records) > MAX_AGENT_BATCH:
+            raise UserError(_("Publication batches must contain between 1 and 5 records."))
+        results = []
+        publication_fields = self._publication_fields()
+        for prepared in records:
+            task = self.browse(int(prepared["task_id"])).exists()
+            if not task or task.agent_code != "website_release" or task.publication_state != "ready":
+                raise UserError(_("Publication task is missing or no longer ready."))
+            self.env.cr.execute("SELECT id FROM southern_catalog_agent_task WHERE id = %s FOR UPDATE NOWAIT", [task.id])
+            task.action_prepare_snapshot()
+            product = task.product_tmpl_id.sudo()
+            if (
+                not task.ready_to_publish
+                or task.snapshot_sha256 != prepared.get("snapshot_sha256")
+                or product.id != int(prepared.get("product_id") or 0)
+                or task.normalized_sku != normalized_sparex_sku(prepared.get("sku"))
+            ):
+                raise UserError(_("Publication snapshot changed; create a fresh plan."))
+            invariants = self._product_invariants(product)
+            if invariants != prepared.get("invariants"):
+                raise UserError(_("Price, cost, URL, image, or identity changed after planning."))
+            before_flags = {name: bool(product[name]) for name in publication_fields}
+            if before_flags != prepared.get("publication_fields_before"):
+                raise UserError(_("Publication flags changed after planning."))
+            product.write({name: True for name in publication_fields})
+            product.invalidate_recordset(publication_fields)
+            after_flags = {name: bool(product[name]) for name in publication_fields}
+            if not all(after_flags.values()) or self._product_invariants(product) != invariants:
+                product.write(before_flags)
+                raise UserError(_("Publication verification failed and flags were restored."))
+            public_path = product.website_url or f"/shop/product/{product.id}"
+            task.write(
+                {
+                    "publication_state": "published",
+                    "publication_fields_before_json": json.dumps(before_flags, sort_keys=True),
+                    "publication_fields_after_json": json.dumps(after_flags, sort_keys=True),
+                    "publication_public_url": public_path,
+                    "published_at": fields.Datetime.now(),
+                    "worker_id": worker_id,
+                }
+            )
+            results.append(
+                {"task_id": task.id, "product_id": product.id, "sku": task.normalized_sku, "public_path": public_path}
+            )
+        return results
+
+    @api.model
+    def confirm_publications(self, task_ids, verification_sha256):
+        if not SHA256_PATTERN.fullmatch((verification_sha256 or "").casefold()):
+            raise UserError(_("A valid public verification SHA-256 is required."))
+        tasks = self.browse([int(value) for value in task_ids]).exists()
+        if any(task.publication_state != "published" for task in tasks):
+            raise UserError(_("Only newly published tasks can be confirmed."))
+        tasks.write(
+            {
+                "publication_state": "verified",
+                "publication_verification_sha256": verification_sha256.casefold(),
+                "publication_verified_at": fields.Datetime.now(),
+            }
+        )
+        return True
+
+    @api.model
+    def rollback_publications(self, task_ids, reason):
+        if not (reason or "").strip():
+            raise UserError(_("Rollback requires a reason."))
+        tasks = self.browse([int(value) for value in task_ids]).exists()
+        for task in tasks:
+            if task.publication_state not in {"published", "failed"} or not task.product_tmpl_id:
+                continue
+            try:
+                before = json.loads(task.publication_fields_before_json or "{}")
+            except (TypeError, ValueError) as exc:
+                raise UserError(_("Rollback snapshot is invalid.")) from exc
+            allowed = set(self._publication_fields())
+            values = {name: bool(value) for name, value in before.items() if name in allowed}
+            if not values:
+                raise UserError(_("Rollback snapshot contains no publication fields."))
+            task.product_tmpl_id.sudo().write(values)
+            task.write(
+                {
+                    "publication_state": "rolled_back",
+                    "state": "failed",
+                    "error_message": (reason or "")[:2000],
+                    "finished_at": fields.Datetime.now(),
+                }
+            )
+        return True
 
     def action_cancel(self):
         active = self.filtered(lambda task: task.state in {"queued", "claimed"})
