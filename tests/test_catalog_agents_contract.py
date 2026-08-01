@@ -53,6 +53,24 @@ class CatalogAgentsContractTests(unittest.TestCase):
         self.assertIn("MAX_BATCH = 5", source)
         self.assertIn("if args.apply and not args.run_ai", source)
 
+    def test_each_agent_has_one_read_only_function_tool(self):
+        source = (
+            ROOT / "scripts" / "sparex_catalog_agents" / "agent.py"
+        ).read_text(encoding="utf-8")
+        for tool_name in (
+            "route_catalog_task",
+            "verify_sparex_listing",
+            "inspect_odoo_match",
+            "evaluate_product_readiness",
+            "evaluate_release_gate",
+        ):
+            self.assertIn(f'def {tool_name}(', source)
+        self.assertIn('tool_choice="required"', source)
+        self.assertIn("parallel_tool_calls=False", source)
+        self.assertNotIn("WebSearchTool", source)
+        self.assertNotIn("FileSearchTool", source)
+        self.assertNotIn("MCPServer", source)
+
     def test_agent_sdk_dependency_is_optional(self):
         pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
         requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")

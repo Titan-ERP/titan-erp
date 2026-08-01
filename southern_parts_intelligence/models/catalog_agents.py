@@ -14,6 +14,13 @@ CATALOG_AGENT_CODES = [
     ("product_verification", "Product Verification Agent"),
     ("website_release", "Website Release Agent"),
 ]
+CATALOG_AGENT_TOOLS = {
+    "coordinator": "route_catalog_task",
+    "sparex_discovery": "verify_sparex_listing",
+    "odoo_match": "inspect_odoo_match",
+    "product_verification": "evaluate_product_readiness",
+    "website_release": "evaluate_release_gate",
+}
 MAX_AGENT_BATCH = 5
 SPAREX_HOSTS = {"us.sparex.com"}
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -61,6 +68,10 @@ class SouthernCatalogAgent(models.Model):
         required=True,
         help="OpenAI model used by the external Agents SDK worker. API credentials are never stored in Odoo.",
     )
+    tool_name = fields.Char(
+        compute="_compute_tool_name",
+        help="Read-only Agents SDK function tool assigned to this profile.",
+    )
     instructions = fields.Text(required=True)
     batch_size = fields.Integer(default=MAX_AGENT_BATCH, required=True)
     throttle_seconds = fields.Float(default=3.0, required=True)
@@ -86,6 +97,11 @@ class SouthernCatalogAgent(models.Model):
     def _compute_task_count(self):
         for agent in self:
             agent.task_count = len(agent.task_ids)
+
+    @api.depends("code")
+    def _compute_tool_name(self):
+        for agent in self:
+            agent.tool_name = CATALOG_AGENT_TOOLS.get(agent.code, "")
 
     @api.constrains("batch_size", "throttle_seconds")
     def _check_limits(self):
