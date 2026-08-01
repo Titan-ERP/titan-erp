@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -78,15 +78,53 @@ class OdooRuntimeTests(unittest.TestCase):
             },
         )
 
+    def test_json2_request_can_pin_an_explicit_company_context(self):
+        config = OdooConfig(
+            url="https://example.odoo.com",
+            database="production",
+            api_key="secret-key",
+            attempts=1,
+            company_id=1,
+        )
+        with mock.patch("urllib.request.urlopen", return_value=_Response([])) as opened:
+            OdooClient(config).call(
+                "southern.catalog.agent.task",
+                "preview_ready_candidates",
+                limit=5,
+            )
+        self.assertEqual(
+            json.loads(opened.call_args.args[0].data)["context"],
+            {"allowed_company_ids": [1]},
+        )
+
+    def test_json2_request_preserves_an_explicit_caller_company_context(self):
+        config = OdooConfig(
+            url="https://example.odoo.com",
+            database="production",
+            api_key="secret-key",
+            attempts=1,
+            company_id=1,
+        )
+        with mock.patch("urllib.request.urlopen", return_value=_Response([])) as opened:
+            OdooClient(config).call(
+                "res.partner",
+                "search_read",
+                domain=[],
+                context={"allowed_company_ids": [2], "lang": "en_US"},
+            )
+        self.assertEqual(
+            json.loads(opened.call_args.args[0].data)["context"],
+            {"allowed_company_ids": [2], "lang": "en_US"},
+        )
+
     def test_apply_gate_requires_explicit_supervision_and_bounds(self):
         gate = ApplyGate("catalog_sync", True, "catalog_sync", "approved", 2)
         with mock.patch.dict(os.environ, {"ODOO_WRITE_ENABLED": "true"}):
             gate.authorize(2)
             with self.assertRaises(WriteBlocked):
                 gate.authorize(3)
-        with mock.patch.dict(os.environ, {}, clear=True):
-            with self.assertRaises(WriteBlocked):
-                gate.authorize(1)
+        with mock.patch.dict(os.environ, {}, clear=True), self.assertRaises(WriteBlocked):
+            gate.authorize(1)
 
     def test_contact_match_requires_review_when_top_score_is_ambiguous(self):
         decision = choose_contact_match(
@@ -113,7 +151,7 @@ class OdooRuntimeTests(unittest.TestCase):
             self.assertTrue(archived["archive_verified"])
             self.assertTrue(archived["artifact_uri"].startswith("s3://"))
 
-            old = datetime.now(timezone.utc) - timedelta(days=100)
+            old = datetime.now(UTC) - timedelta(days=100)
             manifest = Path(temp) / "manifest.jsonl"
             row = json.loads(manifest.read_text(encoding="utf-8").strip())
             row["created_at_utc"] = old.isoformat()
