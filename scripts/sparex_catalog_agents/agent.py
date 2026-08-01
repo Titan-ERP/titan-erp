@@ -43,24 +43,27 @@ structured decision for the Odoo task record.
 
 AGENT_INSTRUCTIONS: dict[AgentCode, str] = {
     "coordinator": (
-        "Coordinate one bounded catalog task and select the next specialist. "
-        "Respect the deterministic blockers and never override a safety gate."
+        "Confirm the bounded catalog task is ready for the fixed specialist chain. "
+        "Return continue with sparex_discovery as next_agent when there are no blockers."
     ),
     "sparex_discovery": (
         "Review facts captured from an authenticated Sparex search or listing page. "
-        "Accept identity only when the listing SKU is exact; product-detail navigation is forbidden."
+        "Accept identity only when the listing SKU is exact; product-detail navigation is forbidden. "
+        "Return continue with odoo_match as next_agent when URL and image facts are complete."
     ),
     "odoo_match": (
         "Interpret the deterministic Odoo match state. Matched, missing, and duplicate are distinct. "
-        "Never create a missing product and never choose between duplicates."
+        "Never create a missing product and never choose between duplicates. Return continue with "
+        "product_verification as next_agent only for one exact match."
     ),
     "product_verification": (
         "Assess exactly four required facts: positive existing Sparex supplier cost, positive existing "
-        "sales price, exact Sparex URL, and image presence. No other business gate may be added."
+        "sales price, exact Sparex URL, and image presence. No other business gate may be added. "
+        "Return ready_for_release with website_release as next_agent only when all four are true."
     ),
     "website_release": (
         "Recommend supervised release only when ready_to_publish is true and the product is hidden. "
-        "Do not perform or claim any publication write."
+        "Return ready_for_release with no next_agent only when eligible. Do not perform or claim a write."
     ),
 }
 
@@ -110,17 +113,7 @@ def evaluate_agent_tool(agent_code: AgentCode, snapshot: dict[str, Any]) -> dict
     }
 
     if agent_code == "coordinator":
-        if match_state in {"missing", "duplicate"}:
-            next_agent: AgentCode = "odoo_match"
-        elif not has_url or not has_image:
-            next_agent = "sparex_discovery"
-        elif not has_cost or not has_sales_price:
-            next_agent = "product_verification"
-        elif ready and is_hidden:
-            next_agent = "website_release"
-        else:
-            next_agent = "product_verification"
-        return {**common, "next_agent": next_agent, "ready_to_publish": ready}
+        return {**common, "next_agent": "sparex_discovery", "ready_to_publish": ready}
 
     if agent_code == "sparex_discovery":
         return {
@@ -128,6 +121,7 @@ def evaluate_agent_tool(agent_code: AgentCode, snapshot: dict[str, Any]) -> dict
             "exact_same_sku_url_present": has_url,
             "listing_image_present": has_image,
             "discovery_evidence_complete": has_url and has_image,
+            "next_agent": "odoo_match",
         }
 
     if agent_code == "odoo_match":
@@ -136,6 +130,7 @@ def evaluate_agent_tool(agent_code: AgentCode, snapshot: dict[str, Any]) -> dict
             "odoo_match_state": match_state,
             "product_id": snapshot.get("product_id"),
             "exact_single_match": matched,
+            "next_agent": "product_verification" if matched else None,
         }
 
     if agent_code == "product_verification":
@@ -150,6 +145,7 @@ def evaluate_agent_tool(agent_code: AgentCode, snapshot: dict[str, Any]) -> dict
             "requirements": requirements,
             "all_four_requirements_met": all(requirements.values()),
             "ready_to_publish": ready,
+            "next_agent": "website_release" if ready else None,
         }
 
     if agent_code == "website_release":
@@ -160,6 +156,7 @@ def evaluate_agent_tool(agent_code: AgentCode, snapshot: dict[str, Any]) -> dict
             "ready_to_publish": ready,
             "supervised_release_eligible": matched and is_hidden and ready,
             "publication_write_available": False,
+            "next_agent": None,
         }
 
     raise ValueError(f"Unknown catalog agent: {agent_code}")
@@ -214,8 +211,7 @@ def build_agent(agent_code: AgentCode, *, model_name: str | None = None) -> Agen
         raise ValueError(f"Unknown catalog agent: {agent_code}")
     model = model_name or os.environ.get("OPENAI_CATALOG_AGENT_MODEL", "gpt-5.6").strip()
     instructions = (
-        f"{COMMON_BOUNDARY}\n\n{AGENT_INSTRUCTIONS[agent_code]}\n\n"
-        f"Your only tool is {AGENT_TOOL_NAMES[agent_code]}."
+        f"{COMMON_BOUNDARY}\n\n{AGENT_INSTRUCTIONS[agent_code]}\n\nYour only tool is {AGENT_TOOL_NAMES[agent_code]}."
     )
     return Agent(
         name=AGENT_NAMES[agent_code],

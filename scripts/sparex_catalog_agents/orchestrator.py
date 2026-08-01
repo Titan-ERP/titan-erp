@@ -1,0 +1,311 @@
+"""Run the bounded Odoo catalog-agent chain and verified website release.
+
+The OpenAI agents can only interpret Odoo-owned snapshots. Product publication
+is a separate deterministic Odoo transaction protected by a plan, rollback
+snapshot, explicit write gate, public verification, and scoped rollback.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import socket
+import time
+import urllib.error
+import urllib.request
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+from scripts.odoo_runtime import ApplyGate, ArtifactStore, OdooClient, OdooConfig
+from scripts.odoo_runtime.client import load_env_file
+
+from .agent import AGENT_NAMES, AgentCode, run_agent
+from .worker import canonical_result
+
+ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_ODOO_ENV = ROOT / "odoo_connection.env"
+DEFAULT_OPENAI_ENV = ROOT / ".env.local"
+DEFAULT_ARTIFACT_ROOT = ROOT / "outputs" / "catalog-agent-automation"
+WORKFLOW = "catalog-agent-automation"
+PUBLICATION_CONFIRMATION = "catalog-agent-publication"
+MAX_BATCH = 5
+AGENT_SEQUENCE: tuple[AgentCode, ...] = (
+    "coordinator",
+    "sparex_discovery",
+    "odoo_match",
+    "product_verification",
+    "website_release",
+)
+
+
+def utc_stamp() -> str:
+    return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--odoo-env-file", type=Path, default=DEFAULT_ODOO_ENV)
+    parser.add_argument("--openai-env-file", type=Path, default=DEFAULT_OPENAI_ENV)
+    parser.add_argument("--artifact-root", type=Path, default=DEFAULT_ARTIFACT_ROOT)
+    parser.add_argument("--s3-bucket", default=os.environ.get("SOUTHERN_PRODUCT_ARTIFACT_BUCKET", ""))
+    parser.add_argument(
+        "--s3-prefix",
+        default="sparex-product-catalog/catalog-agent-automation/production",
+    )
+    parser.add_argument("--limit", type=int, default=MAX_BATCH)
+    parser.add_argument("--throttle-seconds", type=float, default=3.0)
+    parser.add_argument("--worker-id", default=socket.gethostname())
+    parser.add_argument("--run-ai", action="store_true")
+    parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--publish", action="store_true")
+    parser.add_argument("--confirm", default="")
+    parser.add_argument("--reason", default="")
+    return parser
+
+
+def _archive(store: ArtifactStore, name: str, payload: Any, bucket: str, prefix: str) -> dict[str, Any]:
+    record_count = len(payload) if isinstance(payload, list) else 1
+    record = store.write_json(name, payload, record_count=record_count)
+    if not bucket:
+        raise RuntimeError("SOUTHERN_PRODUCT_ARTIFACT_BUCKET or --s3-bucket is required.")
+    return store.archive_s3(record, bucket=bucket, prefix=prefix)
+
+
+def _run_agent_tasks(
+    client: OdooClient,
+    agent_code: AgentCode,
+    *,
+    worker_id: str,
+    limit: int,
+    throttle_seconds: float,
+    throttle_state: dict[str, float],
+) -> dict[str, Any]:
+    tasks = client.call(
+        "southern.catalog.agent.task",
+        "claim_tasks",
+        agent_code=agent_code,
+        worker_id=worker_id,
+        limit=limit,
+    )
+    completed = 0
+    failed = 0
+    task_ids: list[int] = []
+    for task in tasks:
+        wait_seconds = throttle_seconds - (time.monotonic() - throttle_state.get("last_call", 0.0))
+        if wait_seconds > 0:
+            time.sleep(wait_seconds)
+        throttle_state["last_call"] = time.monotonic()
+        task_ids.append(int(task["id"]))
+        try:
+            snapshot = json.loads(task.get("input_json") or "{}")
+            output = canonical_result(run_agent(agent_code, snapshot))
+            state = "completed"
+            completed += 1
+        except Exception as exc:  # noqa: BLE001 - never persist provider detail or secrets
+            output = json.dumps(
+                {
+                    "decision": "needs_review",
+                    "summary": f"Agent execution failed: {type(exc).__name__}",
+                    "confidence": 0.0,
+                    "blocking_reasons": ["agent_execution_failed"],
+                    "next_agent": None,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            state = "failed"
+            failed += 1
+        client.call(
+            "southern.catalog.agent.task",
+            "record_external_result",
+            task_id=task["id"],
+            output_json=output,
+            result_sha256=hashlib.sha256(output.encode("utf-8")).hexdigest(),
+            state=state,
+        )
+    return {
+        "agent": agent_code,
+        "agent_name": AGENT_NAMES[agent_code],
+        "claimed": len(tasks),
+        "completed": completed,
+        "failed": failed,
+        "task_ids": task_ids,
+    }
+
+
+def _public_url(base_url: str, path: str) -> str:
+    if path.startswith(("http://", "https://")):
+        return path
+    return f"{base_url.rstrip('/')}/{path.lstrip('/')}"
+
+
+def verify_public_pages(base_url: str, published: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    verification = []
+    for row in published:
+        url = _public_url(base_url, row["public_path"])
+        request = urllib.request.Request(url, headers={"User-Agent": "Titan-Catalog-Release-Verifier/1.0"})
+        try:
+            with urllib.request.urlopen(request, timeout=45) as response:
+                body = response.read().decode("utf-8", errors="replace")
+                status = int(response.status)
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            raise RuntimeError(
+                f"Public verification failed for product {row['product_id']}: {type(exc).__name__}"
+            ) from exc
+        sku = str(row["sku"])
+        if status != 200 or sku.casefold() not in body.casefold():
+            raise RuntimeError(f"Public verification failed for product {row['product_id']}: status_or_sku")
+        verification.append(
+            {
+                "task_id": row["task_id"],
+                "product_id": row["product_id"],
+                "sku": sku,
+                "public_url": url,
+                "http_status": status,
+                "exact_sku_present": True,
+            }
+        )
+    return verification
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    limit = max(1, min(int(args.limit), MAX_BATCH))
+    throttle = max(3.0, float(args.throttle_seconds))
+    if args.publish and not (args.apply and args.run_ai):
+        raise RuntimeError("--publish requires --apply and --run-ai.")
+    config = OdooConfig.from_env(args.odoo_env_file)
+    client = OdooClient(config).connect()
+    preview = client.call("southern.catalog.agent.task", "preview_ready_candidates", limit=limit)
+    safe_preview = {
+        "mode": "apply" if args.apply else "read_only",
+        "candidate_count": len(preview),
+        "candidates": preview,
+        "limit": limit,
+    }
+    if not args.apply:
+        print(json.dumps(safe_preview, sort_keys=True))
+        return 0
+
+    gate = ApplyGate(WORKFLOW, True, args.confirm, args.reason, MAX_BATCH)
+    gate.authorize(len(preview))
+    if args.openai_env_file.exists():
+        load_env_file(args.openai_env_file)
+    if not os.environ.get("OPENAI_API_KEY", "").strip():
+        raise RuntimeError("OPENAI_API_KEY is required for the catalog-agent chain.")
+
+    run_stamp = utc_stamp()
+    store = ArtifactStore(args.artifact_root / run_stamp, schema_version="1.1")
+    seeded = client.call(
+        "southern.catalog.agent.task",
+        "seed_ready_candidates",
+        worker_id=args.worker_id,
+        limit=limit,
+    )
+    plan = {
+        "schema_version": "1.1",
+        "workflow": WORKFLOW,
+        "run_stamp": run_stamp,
+        "worker_id": args.worker_id,
+        "reason": args.reason,
+        "seeded": seeded,
+        "idempotency_key": gate.idempotency_key(seeded),
+    }
+    plan_record = _archive(store, "plan.json", plan, args.s3_bucket, args.s3_prefix)
+
+    stages = []
+    throttle_state: dict[str, float] = {}
+    for agent_code in AGENT_SEQUENCE:
+        stages.append(
+            _run_agent_tasks(
+                client,
+                agent_code,
+                worker_id=args.worker_id,
+                limit=limit,
+                throttle_seconds=throttle,
+                throttle_state=throttle_state,
+            )
+        )
+
+    prepared = client.call(
+        "southern.catalog.agent.task",
+        "prepare_publication_plan",
+        worker_id=args.worker_id,
+        limit=limit,
+    )
+    rollback_payload = {
+        "schema_version": "1.1",
+        "workflow": WORKFLOW,
+        "run_stamp": run_stamp,
+        "records": prepared,
+    }
+    rollback_record = _archive(store, "rollback.json", rollback_payload, args.s3_bucket, args.s3_prefix)
+    published: list[dict[str, Any]] = []
+    verification: list[dict[str, Any]] = []
+    error = ""
+    try:
+        if args.publish and prepared:
+            published = client.call(
+                "southern.catalog.agent.task",
+                "publish_prepared_tasks",
+                records=prepared,
+                worker_id=args.worker_id,
+                confirmation=PUBLICATION_CONFIRMATION,
+                reason=args.reason,
+            )
+            verification = verify_public_pages(config.url, published)
+            verification_sha = hashlib.sha256(
+                json.dumps(verification, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            ).hexdigest()
+            client.call(
+                "southern.catalog.agent.task",
+                "confirm_publications",
+                task_ids=[row["task_id"] for row in published],
+                verification_sha256=verification_sha,
+            )
+    except Exception as exc:  # noqa: BLE001 - rollback must run for every verification failure
+        error = f"{type(exc).__name__}: publication_or_verification_failed"
+        if published:
+            client.call(
+                "southern.catalog.agent.task",
+                "rollback_publications",
+                task_ids=[row["task_id"] for row in published],
+                reason=error,
+            )
+
+    result = {
+        "schema_version": "1.1",
+        "workflow": WORKFLOW,
+        "run_stamp": run_stamp,
+        "plan_sha256": plan_record["sha256"],
+        "plan_uri": plan_record["artifact_uri"],
+        "rollback_sha256": rollback_record["sha256"],
+        "rollback_uri": rollback_record["artifact_uri"],
+        "stages": stages,
+        "prepared_count": len(prepared),
+        "published_count": len(verification) if not error else 0,
+        "published": verification if not error else [],
+        "error": error or None,
+        "terminal_state": "failed" if error else "succeeded",
+    }
+    result_record = _archive(store, "result.json", result, args.s3_bucket, args.s3_prefix)
+    summary = {
+        **safe_preview,
+        "seeded": len(seeded),
+        "prepared": len(prepared),
+        "published": len(verification) if not error else 0,
+        "failed": bool(error),
+        "plan_sha256": plan_record["sha256"],
+        "rollback_sha256": rollback_record["sha256"],
+        "result_sha256": result_record["sha256"],
+        "result_uri": result_record["artifact_uri"],
+    }
+    print(json.dumps(summary, sort_keys=True))
+    return 1 if error else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

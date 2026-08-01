@@ -15,13 +15,8 @@ class CatalogAgentsContractTests(unittest.TestCase):
         self.assertIn("views/catalog_agent_views.xml", manifest["data"])
 
     def test_five_named_agents_are_seeded(self):
-        root = ET.parse(
-            ROOT / "southern_parts_intelligence" / "data" / "catalog_agent_defaults.xml"
-        ).getroot()
-        names = {
-            field.text
-            for field in root.findall(".//record[@model='southern.catalog.agent']/field[@name='name']")
-        }
+        root = ET.parse(ROOT / "southern_parts_intelligence" / "data" / "catalog_agent_defaults.xml").getroot()
+        names = {field.text for field in root.findall(".//record[@model='southern.catalog.agent']/field[@name='name']")}
         self.assertEqual(
             names,
             {
@@ -33,30 +28,25 @@ class CatalogAgentsContractTests(unittest.TestCase):
             },
         )
 
-    def test_odoo_agent_model_never_writes_products_or_standard_cost(self):
-        source = (
-            ROOT / "southern_parts_intelligence" / "models" / "catalog_agents.py"
-        ).read_text(encoding="utf-8")
-        self.assertNotIn("standard_price", source)
-        self.assertNotIn('product.write(', source)
-        self.assertNotIn('"website_published":', source)
+    def test_odoo_release_writes_only_dynamic_publication_flags(self):
+        source = (ROOT / "southern_parts_intelligence" / "models" / "catalog_agents.py").read_text(encoding="utf-8")
+        self.assertIn("product.write({name: True for name in publication_fields})", source)
+        self.assertNotIn('product.write({"standard_price"', source)
+        self.assertNotIn('product.write({"list_price"', source)
+        self.assertNotIn('product.write({"image_1920"', source)
         self.assertIn("MAX_AGENT_BATCH = 5", source)
         self.assertIn("throttle_seconds < 3.0", source)
         self.assertIn("exact_sparex_url(product.southern_source_url, normalized)", source)
 
     def test_external_worker_is_read_only_by_default(self):
-        source = (
-            ROOT / "scripts" / "sparex_catalog_agents" / "worker.py"
-        ).read_text(encoding="utf-8")
+        source = (ROOT / "scripts" / "sparex_catalog_agents" / "worker.py").read_text(encoding="utf-8")
         self.assertIn("ApplyGate", source)
         self.assertIn('WORKFLOW = "catalog-agent-results"', source)
         self.assertIn("MAX_BATCH = 5", source)
         self.assertIn("if args.apply and not args.run_ai", source)
 
     def test_each_agent_has_one_read_only_function_tool(self):
-        source = (
-            ROOT / "scripts" / "sparex_catalog_agents" / "agent.py"
-        ).read_text(encoding="utf-8")
+        source = (ROOT / "scripts" / "sparex_catalog_agents" / "agent.py").read_text(encoding="utf-8")
         for tool_name in (
             "route_catalog_task",
             "verify_sparex_listing",
@@ -64,7 +54,7 @@ class CatalogAgentsContractTests(unittest.TestCase):
             "evaluate_product_readiness",
             "evaluate_release_gate",
         ):
-            self.assertIn(f'def {tool_name}(', source)
+            self.assertIn(f"def {tool_name}(", source)
         self.assertIn('tool_choice="required"', source)
         self.assertIn("parallel_tool_calls=False", source)
         self.assertNotIn("WebSearchTool", source)

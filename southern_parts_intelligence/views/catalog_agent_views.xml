@@ -80,6 +80,7 @@
                 <field name="has_exact_sparex_url"/>
                 <field name="has_image"/>
                 <field name="ready_to_publish"/>
+                <field name="publication_state"/>
             </list>
         </field>
     </record>
@@ -111,6 +112,8 @@
                             <field name="worker_id"/>
                             <field name="claimed_at"/>
                             <field name="finished_at"/>
+                            <field name="parent_task_id"/>
+                            <field name="root_task_id"/>
                         </group>
                     </group>
                     <group string="Required Publication Facts">
@@ -124,6 +127,7 @@
                             <field name="product_is_hidden"/>
                             <field name="ready_to_publish"/>
                             <field name="readiness_blockers"/>
+                            <field name="snapshot_sha256"/>
                         </group>
                     </group>
                     <notebook>
@@ -137,6 +141,15 @@
                                 <field name="source_artifact_sha256"/>
                                 <field name="result_sha256"/>
                                 <field name="error_message"/>
+                                <field name="publication_state"/>
+                                <field name="publication_public_url"/>
+                                <field name="published_at"/>
+                                <field name="publication_verified_at"/>
+                                <field name="publication_verification_sha256"/>
+                            </group>
+                            <group string="Publication Rollback Snapshot">
+                                <field name="publication_fields_before_json" widget="text"/>
+                                <field name="publication_fields_after_json" widget="text"/>
                             </group>
                         </page>
                     </notebook>
@@ -157,6 +170,7 @@
                 <filter name="queued" string="Queued" domain="[('state','=','queued')]"/>
                 <filter name="missing" string="Missing in Odoo" domain="[('odoo_match_state','=','missing')]"/>
                 <filter name="ready" string="Ready to Publish" domain="[('ready_to_publish','=',True)]"/>
+                <filter name="verified" string="Publicly Verified" domain="[('publication_state','=','verified')]"/>
                 <separator/>
                 <filter name="group_agent" string="Agent" context="{'group_by':'agent_id'}"/>
                 <filter name="group_state" string="Status" context="{'group_by':'state'}"/>

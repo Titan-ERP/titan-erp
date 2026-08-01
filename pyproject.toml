@@ -24,4 +24,4 @@ line-length = 120
 target-version = "py312"
 
 [tool.setuptools.packages.find]
-include = ["scripts.odoo_runtime*"]
+include = ["scripts.odoo_runtime*", "scripts.sparex_catalog_agents*"]
