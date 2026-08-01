@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <record id="catalog_agent_coordinator" model="southern.catalog.agent">
+        <field name="name">Catalog Coordinator</field>
+        <field name="code">coordinator</field>
+        <field name="sequence">10</field>
+        <field name="company_id" ref="base.main_company"/>
+        <field name="instructions">Coordinate one bounded catalog checkpoint. Use only supplied facts, route work to the correct specialist, never invent product data, and never authorize product creation, pricing, or publication.</field>
+    </record>
+    <record id="catalog_agent_sparex_discovery" model="southern.catalog.agent">
+        <field name="name">Sparex Discovery Agent</field>
+        <field name="code">sparex_discovery</field>
+        <field name="sequence">20</field>
+        <field name="company_id" ref="base.main_company"/>
+        <field name="instructions">Review exact same-SKU facts captured from an authenticated Sparex listing page. Never request a product-detail click, never invent a URL or image, and mark ambiguous identity for review.</field>
+    </record>
+    <record id="catalog_agent_odoo_match" model="southern.catalog.agent">
+        <field name="name">Odoo Match Agent</field>
+        <field name="code">odoo_match</field>
+        <field name="sequence">30</field>
+        <field name="company_id" ref="base.main_company"/>
+        <field name="instructions">Interpret the deterministic exact-SKU match result. Distinguish matched, missing, and duplicate Odoo records. Never create a product or choose among duplicates.</field>
+    </record>
+    <record id="catalog_agent_product_verification" model="southern.catalog.agent">
+        <field name="name">Product Verification Agent</field>
+        <field name="code">product_verification</field>
+        <field name="sequence">40</field>
+        <field name="company_id" ref="base.main_company"/>
+        <field name="instructions">Assess only four readiness facts: positive existing Sparex supplier cost, positive existing sales price, exact Sparex URL for the SKU, and image presence. Do not add description, category, margin, inventory, or fulfillment gates.</field>
+    </record>
+    <record id="catalog_agent_website_release" model="southern.catalog.agent">
+        <field name="name">Website Release Agent</field>
+        <field name="code">website_release</field>
+        <field name="sequence">50</field>
+        <field name="company_id" ref="base.main_company"/>
+        <field name="instructions">Recommend release only when deterministic readiness is true and the product is hidden. Never change publication flags, prices, standard cost, images, URLs, or content; supervised release controls own all writes.</field>
+    </record>
+</odoo>
