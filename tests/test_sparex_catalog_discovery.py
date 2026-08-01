@@ -28,6 +28,29 @@ class SparexCatalogDiscoveryParserTests(unittest.TestCase):
         self.assertEqual(parsed["items"][1]["source_state"], "missing_image")
         self.assertEqual(parsed["next_url"], "https://us.sparex.com/products?p=2")
 
+    def test_builds_category_frontier_without_product_detail_or_cms_links(self):
+        page = b"""
+        <html><body>
+          <nav>
+            <a href="/engine-filters.html">Engine Filters</a>
+            <a href="/hydraulics/couplings.html">Hydraulic Couplings</a>
+            <a href="/help-page">Help</a>
+            <a href="/search.html?q=filters">Search</a>
+            <a href="https://example.com/external.html">External</a>
+          </nav>
+          <a href="/oil-filter-spin-on-165551.html">S.165551</a>
+          <a href="/8530.html">S.8530</a>
+        </body></html>
+        """
+        parsed = parse_listing_page(page, "https://us.sparex.com/")
+        self.assertEqual(
+            parsed["listing_urls"],
+            [
+                "https://us.sparex.com/engine-filters.html",
+                "https://us.sparex.com/hydraulics/couplings.html",
+            ],
+        )
+
     def test_conflicting_explicit_card_sku_is_reviewed(self):
         page = b"""
         <div class="product-item" data-product-sku="S.999999">

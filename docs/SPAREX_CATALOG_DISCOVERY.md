@@ -22,7 +22,7 @@ pipeline; it does not replace the five Odoo catalog agents.
 Each checkpoint:
 
 1. Acquires a short Odoo lease so duplicate workers cannot overlap.
-2. Resumes the one explicit cursor bound to an immutable plan.
+2. Resumes one explicit cursor from a bounded, deduplicated listing/category frontier bound to an immutable plan.
 3. Authenticates to Sparex and opens only the listing page. It never requests a
    discovered product-detail URL.
 4. Waits at least three seconds between every portal request and performs no
@@ -38,7 +38,8 @@ Each checkpoint:
    image presence.
 9. Separates products ready for source/image enrichment from products whose
    source URL and image are already stored in Odoo and ready for publication.
-10. Advances the cursor only after the archived page is recorded successfully.
+10. Adds same-host category/listing links, never product-detail links, to a 10,000-URL bounded frontier.
+11. Advances the cursor only after the archived page is recorded successfully.
 
 A transport or parser failure preserves the cursor. A true portal warning,
 login failure, HTTP 429, or qualifying 5xx response starts a 60-minute cooldown.
