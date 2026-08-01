@@ -24,6 +24,7 @@ fi
 
 export OPENAI_API_KEY
 export ODOO_WRITE_ENABLED=true
+export ODOO_API_MODE=json2
 export PYTHONPATH="${runtime_root}"
 export SOUTHERN_PRODUCT_ARTIFACT_BUCKET="southern-parts-catalog-artifacts-475369996980-us-east-1"
 

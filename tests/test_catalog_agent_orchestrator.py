@@ -27,6 +27,7 @@ def test_service_uses_non_overlapping_secure_runtime():
     timer = (ROOT / "cloud" / "aws" / "titan-catalog-agent.timer").read_text(encoding="utf-8")
     assert "flock -n" in launcher
     assert "aws ssm get-parameter" in launcher
+    assert "export ODOO_API_MODE=json2" in launcher
     assert "--limit 5" in launcher
     assert "--publish" in launcher
     assert "OPENAI_API_KEY=" not in service
