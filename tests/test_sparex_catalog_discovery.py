@@ -51,6 +51,16 @@ class SparexCatalogDiscoveryParserTests(unittest.TestCase):
             ],
         )
 
+    def test_accepts_large_bounded_category_frontier(self):
+        links = "".join(
+            f'<a href="/category-{index}-parts.html">Category {index}</a>' for index in range(501)
+        )
+        parsed = parse_listing_page(
+            f"<html><body>{links}</body></html>".encode(),
+            "https://us.sparex.com/",
+        )
+        self.assertEqual(len(parsed["listing_urls"]), 501)
+
     def test_conflicting_explicit_card_sku_is_reviewed(self):
         page = b"""
         <div class="product-item" data-product-sku="S.999999">

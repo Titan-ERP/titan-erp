@@ -56,7 +56,7 @@ LISTING_PATH_DENY_PREFIXES = (
     "/search",
     "/wishlist",
 )
-MAX_LISTING_LINKS_PER_PAGE = 500
+MAX_LISTING_LINKS_PER_PAGE = 5_000
 
 
 class PortalCooldownError(RuntimeError):
