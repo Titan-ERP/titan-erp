@@ -7,9 +7,10 @@ import time
 import urllib.error
 import urllib.request
 import xmlrpc.client
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator, Sequence
+from typing import Any
 
 DEFAULT_TIMEOUT_SECONDS = 90
 DEFAULT_ATTEMPTS = 3
@@ -60,9 +61,10 @@ class OdooConfig:
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS
     attempts: int = DEFAULT_ATTEMPTS
     allow_legacy_xmlrpc: bool = False
+    company_id: int | None = None
 
     @classmethod
-    def from_env(cls, env_path: Path | None = None) -> "OdooConfig":
+    def from_env(cls, env_path: Path | None = None) -> OdooConfig:
         if env_path is not None:
             load_env_file(env_path)
         mode = os.environ.get("ODOO_API_MODE", "json2").strip().casefold()
@@ -82,6 +84,11 @@ class OdooConfig:
             timeout_seconds=max(1, int(os.environ.get("ODOO_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS))),
             attempts=max(1, int(os.environ.get("ODOO_RPC_ATTEMPTS", DEFAULT_ATTEMPTS))),
             allow_legacy_xmlrpc=allow_legacy,
+            company_id=(
+                int(os.environ["ODOO_COMPANY_ID"])
+                if os.environ.get("ODOO_COMPANY_ID", "").strip()
+                else None
+            ),
         )
 
 
@@ -93,7 +100,7 @@ class OdooClient:
         self.uid: int | None = None
         self.models: _RetryingLegacyModels | xmlrpc.client.ServerProxy | None = None
 
-    def connect(self) -> "OdooClient":
+    def connect(self) -> OdooClient:
         if self.config.api_mode == "json2":
             self.call("res.users", "context_get")
             return self
@@ -119,6 +126,10 @@ class OdooClient:
         if self.config.api_mode == "xmlrpc":
             return self._legacy_named_call(model, method, ids=ids, **params)
         body = dict(params)
+        if self.config.company_id is not None:
+            context = dict(body.get("context") or {})
+            context.setdefault("allowed_company_ids", [self.config.company_id])
+            body["context"] = context
         if ids is not None:
             body["ids"] = list(ids)
         payload = json.dumps(body, separators=(",", ":"), default=str).encode("utf-8")
@@ -157,7 +168,7 @@ class OdooClient:
             name = str(data.get("name") or "OdooError").split(".")[-1]
             message = str(data.get("message") or "request rejected")
             return f"Odoo JSON-2 {exc.code} {name}: {message[:500]}"
-        except Exception:
+        except (AttributeError, json.JSONDecodeError, OSError, TypeError, UnicodeError, ValueError):
             return f"Odoo JSON-2 request failed with HTTP {exc.code}."
 
     def _legacy_named_call(

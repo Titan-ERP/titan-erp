@@ -31,5 +31,6 @@ def test_service_uses_non_overlapping_secure_runtime():
     assert "--limit 5" in launcher
     assert "--publish" in launcher
     assert "OPENAI_API_KEY=" not in service
+    assert "Environment=ODOO_COMPANY_ID=1" in service
     assert "OnUnitInactiveSec=2min" in timer
     assert "Persistent=false" in timer

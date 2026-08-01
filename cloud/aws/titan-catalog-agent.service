@@ -12,6 +12,7 @@ ExecStart=/opt/southern-parts/catalog-agent/current/scripts/run_catalog_agent_au
 Environment=CATALOG_AGENT_INSTALL_ROOT=/opt/southern-parts/catalog-agent
 Environment=ODOO_ENV_FILE=/opt/southern-parts/Odoo/odoo_connection.env
 Environment=OPENAI_KEY_PARAMETER=/southern-parts/sparex-odoo/OPENAI_API_KEY
+Environment=ODOO_COMPANY_ID=1
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
