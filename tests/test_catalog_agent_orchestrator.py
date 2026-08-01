@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from scripts.sparex_catalog_agents.orchestrator import AGENT_SEQUENCE, MAX_BATCH, _public_url
+from scripts.sparex_catalog_agents.orchestrator import AGENT_SEQUENCE, MAX_BATCH, _public_url, run_s3_prefix
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -19,6 +19,13 @@ def test_fixed_chain_and_batch_limit():
 def test_public_url_is_scoped_to_odoo_base():
     assert _public_url("https://example.odoo.com/", "/shop/example") == "https://example.odoo.com/shop/example"
     assert _public_url("https://example.odoo.com", "https://public.example/item") == "https://public.example/item"
+
+
+def test_each_run_gets_an_immutable_s3_prefix():
+    assert (
+        run_s3_prefix("sparex-product-catalog/catalog-agent-automation/production/", "20260801T043236Z")
+        == "sparex-product-catalog/catalog-agent-automation/production/20260801T043236Z"
+    )
 
 
 def test_service_uses_non_overlapping_secure_runtime():

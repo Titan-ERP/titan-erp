@@ -45,6 +45,10 @@ def utc_stamp() -> str:
     return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
+def run_s3_prefix(base_prefix: str, run_stamp: str) -> str:
+    return f"{base_prefix.rstrip('/')}/{run_stamp}"
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--odoo-env-file", type=Path, default=DEFAULT_ODOO_ENV)
@@ -199,6 +203,7 @@ def main() -> int:
 
     run_stamp = utc_stamp()
     store = ArtifactStore(args.artifact_root / run_stamp, schema_version="1.1")
+    archive_prefix = run_s3_prefix(args.s3_prefix, run_stamp)
     seeded = client.call(
         "southern.catalog.agent.task",
         "seed_ready_candidates",
@@ -214,7 +219,7 @@ def main() -> int:
         "seeded": seeded,
         "idempotency_key": gate.idempotency_key(seeded),
     }
-    plan_record = _archive(store, "plan.json", plan, args.s3_bucket, args.s3_prefix)
+    plan_record = _archive(store, "plan.json", plan, args.s3_bucket, archive_prefix)
 
     stages = []
     throttle_state: dict[str, float] = {}
@@ -242,7 +247,7 @@ def main() -> int:
         "run_stamp": run_stamp,
         "records": prepared,
     }
-    rollback_record = _archive(store, "rollback.json", rollback_payload, args.s3_bucket, args.s3_prefix)
+    rollback_record = _archive(store, "rollback.json", rollback_payload, args.s3_bucket, archive_prefix)
     published: list[dict[str, Any]] = []
     verification: list[dict[str, Any]] = []
     error = ""
@@ -291,7 +296,7 @@ def main() -> int:
         "error": error or None,
         "terminal_state": "failed" if error else "succeeded",
     }
-    result_record = _archive(store, "result.json", result, args.s3_bucket, args.s3_prefix)
+    result_record = _archive(store, "result.json", result, args.s3_bucket, archive_prefix)
     summary = {
         **safe_preview,
         "seeded": len(seeded),
