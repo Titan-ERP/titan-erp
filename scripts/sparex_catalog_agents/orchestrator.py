@@ -25,6 +25,7 @@ from scripts.odoo_runtime import ApplyGate, ArtifactStore, OdooClient, OdooConfi
 from scripts.odoo_runtime.client import load_env_file
 
 from .agent import AGENT_NAMES, AgentCode, deterministic_agent_decision, requires_ai_review, run_agent
+from .cost_recovery import PortalCooldownError, recover_dealer_costs
 from .worker import canonical_result
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -37,6 +38,7 @@ SOURCE_LINK_CONFIRMATION = "sparex-discovery-source-link"
 MAX_BATCH = 50
 MAX_AI_CALLS = 5
 MAX_SOURCE_IMAGE_BYTES = 10 * 1024 * 1024
+DEFAULT_COST_RECOVERY_LIMIT = 25
 AGENT_SEQUENCE: tuple[AgentCode, ...] = (
     "coordinator",
     "sparex_discovery",
@@ -57,6 +59,7 @@ def run_s3_prefix(base_prefix: str, run_stamp: str) -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--odoo-env-file", type=Path, default=DEFAULT_ODOO_ENV)
+    parser.add_argument("--dealer-env-file", type=Path)
     parser.add_argument("--openai-env-file", type=Path, default=DEFAULT_OPENAI_ENV)
     parser.add_argument("--artifact-root", type=Path, default=DEFAULT_ARTIFACT_ROOT)
     parser.add_argument("--s3-bucket", default=os.environ.get("SOUTHERN_PRODUCT_ARTIFACT_BUCKET", ""))
@@ -65,6 +68,8 @@ def build_parser() -> argparse.ArgumentParser:
         default="sparex-product-catalog/catalog-agent-automation/production",
     )
     parser.add_argument("--limit", type=int, default=MAX_BATCH)
+    parser.add_argument("--cost-recovery-limit", type=int, default=DEFAULT_COST_RECOVERY_LIMIT)
+    parser.add_argument("--skip-cost-recovery", action="store_true")
     parser.add_argument("--throttle-seconds", type=float, default=3.0)
     parser.add_argument("--worker-id", default=socket.gethostname())
     parser.add_argument("--run-ai", action="store_true")
@@ -262,6 +267,43 @@ def main() -> int:
     ai_max_calls = max(0, min(int(args.ai_max_calls), MAX_AI_CALLS))
     config = OdooConfig.from_env(args.odoo_env_file)
     client = OdooClient(config).connect()
+    run_stamp = utc_stamp()
+    store = ArtifactStore(args.artifact_root / run_stamp, schema_version="1.1")
+    archive_prefix = run_s3_prefix(args.s3_prefix, run_stamp)
+    cost_recovery: dict[str, Any] = {"state": "skipped", "claimed": 0, "accepted": 0, "applied": 0}
+    if args.apply and not args.skip_cost_recovery:
+        ApplyGate(WORKFLOW, True, args.confirm, args.reason, MAX_BATCH).authorize(
+            min(max(1, int(args.cost_recovery_limit)), MAX_BATCH)
+        )
+        try:
+            cost_recovery = recover_dealer_costs(
+                client,
+                worker_id=args.worker_id,
+                limit=args.cost_recovery_limit,
+                dealer_env_file=(args.dealer_env_file or args.odoo_env_file),
+                throttle_seconds=throttle,
+                store=store,
+                artifact_root=args.artifact_root,
+                s3_bucket=args.s3_bucket,
+                s3_prefix=archive_prefix,
+                reason=args.reason,
+            )
+        except PortalCooldownError:
+            print(
+                json.dumps(
+                    {
+                        "mode": "apply",
+                        "cost_recovery": {"state": "portal_cooldown", "write_blocked": True},
+                        "published": 0,
+                        "failed": True,
+                    },
+                    sort_keys=True,
+                )
+            )
+            return 1
+        if cost_recovery.get("write_blocked"):
+            print(json.dumps({"mode": "apply", "cost_recovery": cost_recovery, "published": 0, "failed": True}, sort_keys=True))
+            return 1
     readiness_refresh = client.call(
         "southern.sparex.discovery.item",
         "refresh_readiness_batch",
@@ -280,6 +322,7 @@ def main() -> int:
         "candidate_count": len(preview),
         "candidates": preview,
         "limit": limit,
+        "cost_recovery": cost_recovery,
     }
     if not args.apply:
         print(json.dumps(safe_preview, sort_keys=True))
@@ -293,9 +336,6 @@ def main() -> int:
         if not os.environ.get("OPENAI_API_KEY", "").strip():
             raise RuntimeError("OPENAI_API_KEY is required only for explicit ambiguous AI review.")
 
-    run_stamp = utc_stamp()
-    store = ArtifactStore(args.artifact_root / run_stamp, schema_version="1.1")
-    archive_prefix = run_s3_prefix(args.s3_prefix, run_stamp)
     source_plan = {
         "schema_version": "1.1",
         "workflow": WORKFLOW,

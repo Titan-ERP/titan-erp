@@ -261,6 +261,10 @@
                             <field name="cost_recovery_attempt_count"/>
                             <field name="cost_recovery_next_at"/>
                             <field name="cost_recovery_last_error"/>
+                            <field name="cost_evidence_url_sha256"/>
+                            <field name="cost_evidence_sha256"/>
+                            <field name="cost_recovery_parser_version"/>
+                            <field name="cost_recovered_at"/>
                             <field name="blocker_summary"/>
                         </group>
                         <group>

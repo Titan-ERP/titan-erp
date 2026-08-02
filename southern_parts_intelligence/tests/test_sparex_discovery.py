@@ -400,3 +400,81 @@ class TestSparexDiscovery(TransactionCase):
         self.assertEqual(item.cost_recovery_state, "retry_wait")
         self.assertTrue(item.cost_recovery_next_at)
         self.assertEqual(item.cost_recovery_last_error, "verified_cost_absent")
+
+    def test_exact_dealer_cost_apply_and_scoped_rollback(self):
+        product = self.env["product.template"].create(
+            {
+                "name": "Recoverable dealer cost",
+                "default_code": "S.720002",
+                "active": True,
+                "list_price": 45.0,
+                "southern_source_url": "https://us.sparex.com/part-720002.html",
+                "image_1920": base64.b64encode(b"cost-recovery-image"),
+                "website_published": False,
+            }
+        )
+        supplier = self.env["res.partner"].create({"name": "Sparex", "supplier_rank": 1})
+        supplierinfo = self.env["product.supplierinfo"].create(
+            {"partner_id": supplier.id, "product_tmpl_id": product.id, "price": 0.0}
+        )
+        seed = "https://us.sparex.com/cost-recovery-listing-2.html"
+        Run = self.env["southern.sparex.discovery.run"]
+        run = Run.start_discovery_run(
+            {
+                "idempotency_key": "test-cost-recovery-apply-v1",
+                "seed_url": seed,
+                "seed_url_sha256": hashlib.sha256(seed.encode()).hexdigest(),
+                "plan_artifact_uri": "s3://test-bucket/discovery/cost-recovery-apply-plan.json",
+                "plan_sha256": "a" * 64,
+                "parser_version": "test-v3",
+                "throttle_seconds": 3,
+            }
+        )
+        Run.prepare_reconciliation_run(run["id"])
+        Run.claim_discovery_checkpoint(run["id"], "cost-recovery-apply-discovery", 180)
+        Run.record_discovery_page(
+            run["id"],
+            "cost-recovery-apply-discovery",
+            {
+                "page_url": seed,
+                "page_sha256": "b" * 64,
+                "artifact_uri": "s3://test-bucket/discovery/cost-recovery-apply-page.json",
+                "artifact_sha256": "c" * 64,
+                "items": [
+                    {
+                        "sku": "S.720002",
+                        "source_url": "https://us.sparex.com/part-720002.html",
+                        "image_url": "https://cdn.example.com/720002.jpg",
+                        "source_state": "verified",
+                    }
+                ],
+                "next_url": "",
+                "listing_urls": [],
+            },
+        )
+        Item = self.env["southern.sparex.discovery.item"]
+        item = Item.search([("normalized_sku", "=", "S.720002")])
+        item._refresh_readiness()
+        claim = Item.claim_cost_recovery_batch("cost-apply-worker", limit=1)[0]
+        claim.update(
+            {
+                "dealer_price": 14.99,
+                "currency": "USD",
+                "evidence_url": claim["source_url"],
+                "evidence_url_sha256": claim["source_url_sha256"],
+                "evidence_sha256": "d" * 64,
+                "parser_version": "sparex-exact-priceb-v1",
+            }
+        )
+        applied = Item.apply_cost_recovery_plan(
+            [claim],
+            "cost-apply-worker",
+            "sparex-dealer-cost-recovery",
+            "Test exact dealer cost recovery",
+        )
+        self.assertEqual(supplierinfo.price, 14.99)
+        self.assertTrue(item.publication_candidate)
+        self.assertEqual(item.cost_evidence_sha256, "d" * 64)
+        Item.rollback_cost_recovery(applied, "Test scoped rollback")
+        self.assertEqual(supplierinfo.price, 0.0)
+        self.assertEqual(item.cost_recovery_state, "manual_review")
