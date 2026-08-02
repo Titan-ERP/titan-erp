@@ -20,6 +20,7 @@ MAX_SOURCE_LINK_BATCH = 50
 MAX_COST_RECOVERY_BATCH = 50
 MAX_COST_RECOVERY_ATTEMPTS = 5
 SOURCE_LINK_CONFIRMATION = "sparex-discovery-source-link"
+COST_RECOVERY_CONFIRMATION = "sparex-dealer-cost-recovery"
 PRODUCT_DETAIL_PATH = re.compile(r"(?:^|[-/])\d+\.html$", re.IGNORECASE)
 LISTING_PATH_DENY_PREFIXES = (
     "/about",
@@ -983,6 +984,10 @@ class SouthernSparexDiscoveryItem(models.Model):
     cost_recovery_claimed_at = fields.Datetime(readonly=True)
     cost_recovery_worker_id = fields.Char(readonly=True, copy=False, index=True)
     cost_recovery_last_error = fields.Char(readonly=True, copy=False)
+    cost_evidence_sha256 = fields.Char(readonly=True, copy=False)
+    cost_evidence_url_sha256 = fields.Char(readonly=True, copy=False)
+    cost_recovery_parser_version = fields.Char(readonly=True, copy=False)
+    cost_recovered_at = fields.Datetime(readonly=True)
     reconciliation_state = fields.Selection(
         [("pending", "Awaiting Current Run"), ("current", "Current Run Verified"), ("stale", "Not Seen")],
         default="pending",
@@ -1215,7 +1220,9 @@ class SouthernSparexDiscoveryItem(models.Model):
                     if item.cost_recovery_claimed_at
                     else False
                 )
-                if item.cost_recovery_state == "claimed" and claimed_until and claimed_until > now:
+                if item.cost_recovery_state == "manual_review":
+                    next_state = "manual_review"
+                elif item.cost_recovery_state == "claimed" and claimed_until and claimed_until > now:
                     next_state = "claimed"
                 elif item.cost_recovery_attempt_count >= MAX_COST_RECOVERY_ATTEMPTS:
                     next_state = "manual_review"
@@ -1316,11 +1323,22 @@ class SouthernSparexDiscoveryItem(models.Model):
         )
         for item in items:
             item.cost_recovery_attempt_count += 1
-        return [
-            {
+        claimed = []
+        for item in items:
+            product = item.matched_product_id.sudo()
+            supplier_lines = self.env["product.supplierinfo"].sudo().search(
+                [
+                    ("product_tmpl_id", "=", product.id),
+                    ("partner_id.name", "=ilike", "Sparex"),
+                ],
+                limit=2,
+            )
+            supplier = supplier_lines if len(supplier_lines) == 1 else self.env["product.supplierinfo"]
+            snapshot = {
                 "item_id": item.id,
-                "product_id": item.matched_product_id.id,
+                "product_id": product.id,
                 "sku": item.normalized_sku,
+                "source_url": item.source_url,
                 "source_url_sha256": item.source_url_sha256,
                 "source_artifact_sha256": item.source_artifact_sha256,
                 "priority": item.cost_recovery_priority,
@@ -1328,9 +1346,138 @@ class SouthernSparexDiscoveryItem(models.Model):
                 "has_sales_price": item.has_positive_sales_price,
                 "has_exact_product_url": item.product_has_exact_sparex_url,
                 "has_image": item.product_has_image,
+                "supplierinfo_count": len(supplier_lines),
+                "supplierinfo_id": supplier.id if supplier else None,
+                "supplier_price_before": supplier.price if supplier else None,
+                "supplier_write_date": str(supplier.write_date or "") if supplier else "",
+                "product_write_date": str(product.write_date or ""),
             }
-            for item in items
-        ]
+            snapshot["snapshot_sha256"] = _canonical_sha256(snapshot)
+            claimed.append(snapshot)
+        return claimed
+
+    @api.model
+    def apply_cost_recovery_plan(self, records, worker_id, confirmation, reason):
+        worker = (worker_id or "").strip()
+        if confirmation != COST_RECOVERY_CONFIRMATION or not (reason or "").strip():
+            raise UserError(_("Dealer-cost recovery requires explicit confirmation and a business reason."))
+        if not worker or len(records or []) > MAX_COST_RECOVERY_BATCH:
+            raise UserError(_("Dealer-cost recovery worker or batch limit is invalid."))
+        applied = []
+        for record in records or []:
+            item = self.browse(int(record.get("item_id") or 0)).exists()
+            if not item or item.company_id != self.env.company:
+                raise UserError(_("The dealer-cost recovery item is unavailable."))
+            self.env.cr.execute(
+                "SELECT id FROM southern_sparex_discovery_item WHERE id = %s FOR UPDATE NOWAIT",
+                [item.id],
+            )
+            item.invalidate_recordset()
+            if item.cost_recovery_state != "claimed" or item.cost_recovery_worker_id != worker:
+                raise UserError(_("The dealer-cost recovery claim is no longer owned by this worker."))
+            product = item.matched_product_id.sudo()
+            if (
+                not product
+                or not product.active
+                or product.id != int(record.get("product_id") or 0)
+                or item.normalized_sku != normalized_sparex_sku(record.get("sku"))
+                or not exact_sparex_url(item.source_url, item.normalized_sku)
+                or item.source_url != (record.get("evidence_url") or "").strip()
+                or item.source_url_sha256 != (record.get("evidence_url_sha256") or "").casefold()
+            ):
+                raise UserError(_("Dealer-cost evidence does not match the exact active product and SKU."))
+            supplier_lines = self.env["product.supplierinfo"].sudo().search(
+                [
+                    ("product_tmpl_id", "=", product.id),
+                    ("partner_id.name", "=ilike", "Sparex"),
+                ],
+                limit=2,
+            )
+            if len(supplier_lines) != 1 or supplier_lines.id != int(record.get("supplierinfo_id") or 0):
+                raise UserError(_("Exactly one existing matching Sparex supplier line is required."))
+            expected_snapshot = {
+                key: record.get(key)
+                for key in (
+                    "item_id", "product_id", "sku", "source_url", "source_url_sha256",
+                    "source_artifact_sha256", "priority", "attempt", "has_sales_price",
+                    "has_exact_product_url", "has_image", "supplierinfo_count", "supplierinfo_id",
+                    "supplier_price_before", "supplier_write_date", "product_write_date",
+                )
+            }
+            if _canonical_sha256(expected_snapshot) != (record.get("snapshot_sha256") or "").casefold():
+                raise UserError(_("Dealer-cost rollback snapshot hash does not match."))
+            if abs(float(supplier_lines.price) - float(record.get("supplier_price_before") or 0.0)) > 1e-9:
+                raise UserError(_("The Sparex supplier price changed after the rollback snapshot."))
+            price = float(record.get("dealer_price") or 0.0)
+            if price <= 0 or (record.get("currency") or "").upper() != "USD":
+                raise UserError(_("A positive exact USD dealer price is required."))
+            evidence_sha = (record.get("evidence_sha256") or "").casefold()
+            if not SHA256_PATTERN.fullmatch(evidence_sha):
+                raise UserError(_("Dealer-cost page evidence requires a SHA-256 hash."))
+            supplier_lines.write({"price": price})
+            supplier_lines.invalidate_recordset(["price"])
+            if abs(float(supplier_lines.price) - price) > 1e-9:
+                raise UserError(_("The recovered Sparex supplier price did not verify."))
+            item.write(
+                {
+                    "cost_recovery_state": "resolved",
+                    "cost_recovery_priority": 0,
+                    "cost_recovery_next_at": False,
+                    "cost_recovery_worker_id": False,
+                    "cost_recovery_last_error": False,
+                    "cost_evidence_sha256": evidence_sha,
+                    "cost_evidence_url_sha256": item.source_url_sha256,
+                    "cost_recovery_parser_version": (record.get("parser_version") or "")[:80],
+                    "cost_recovered_at": fields.Datetime.now(),
+                }
+            )
+            item._refresh_readiness()
+            applied.append(
+                {
+                    "item_id": item.id,
+                    "product_id": product.id,
+                    "sku": item.normalized_sku,
+                    "supplierinfo_id": supplier_lines.id,
+                    "supplier_price_before": float(record.get("supplier_price_before") or 0.0),
+                    "supplier_price_applied": price,
+                    "evidence_sha256": evidence_sha,
+                    "evidence_url_sha256": item.source_url_sha256,
+                    "publication_candidate": item.publication_candidate,
+                }
+            )
+        return applied
+
+    @api.model
+    def rollback_cost_recovery(self, records, reason):
+        if not (reason or "").strip() or len(records or []) > MAX_COST_RECOVERY_BATCH:
+            raise UserError(_("A bounded dealer-cost rollback reason is required."))
+        rolled_back = []
+        for record in records or []:
+            item = self.browse(int(record.get("item_id") or 0)).exists()
+            supplier = self.env["product.supplierinfo"].sudo().browse(
+                int(record.get("supplierinfo_id") or 0)
+            ).exists()
+            if (
+                not item
+                or item.company_id != self.env.company
+                or not supplier
+                or supplier.product_tmpl_id != item.matched_product_id
+                or supplier.partner_id.name.casefold() != "sparex"
+                or abs(float(supplier.price) - float(record.get("supplier_price_applied") or 0.0)) > 1e-9
+            ):
+                raise UserError(_("Dealer-cost rollback scope or current value does not match."))
+            supplier.write({"price": float(record.get("supplier_price_before") or 0.0)})
+            item.write(
+                {
+                    "cost_recovery_state": "manual_review",
+                    "cost_recovery_worker_id": False,
+                    "cost_recovery_next_at": False,
+                    "cost_recovery_last_error": (reason or "rollback")[:120],
+                }
+            )
+            item._refresh_readiness()
+            rolled_back.append(item.id)
+        return rolled_back
 
     @api.model
     def record_cost_recovery_result(self, item_id, worker_id, outcome, error_code=""):
@@ -1358,6 +1505,8 @@ class SouthernSparexDiscoveryItem(models.Model):
             }
         else:
             delay_minutes = min(24 * 60, 15 * (2 ** max(0, item.cost_recovery_attempt_count - 1)))
+            if (error_code or "").startswith(("portal_", "dealer_login", "dealer_session")):
+                delay_minutes = max(60, delay_minutes)
             values = {
                 "cost_recovery_state": "retry_wait",
                 "cost_recovery_next_at": fields.Datetime.now() + timedelta(minutes=delay_minutes),

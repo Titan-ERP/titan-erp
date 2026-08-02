@@ -19,6 +19,7 @@ exec "${install_root}/venv/bin/python" -m scripts.sparex_catalog_agents.orchestr
   --odoo-env-file "${odoo_env}" \
   --artifact-root "${artifact_root}" \
   --limit 50 \
+  --cost-recovery-limit 25 \
   --throttle-seconds 3 \
   --apply \
   --publish \

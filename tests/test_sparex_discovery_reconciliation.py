@@ -31,6 +31,8 @@ class SparexDiscoveryReconciliationContractTests(unittest.TestCase):
             "rollback_source_links",
             "claim_cost_recovery_batch",
             "record_cost_recovery_result",
+            "apply_cost_recovery_plan",
+            "rollback_cost_recovery",
             "cost_recovery_next_at",
             "review_required",
             'updates["max_pages_total"] = MAX_DISCOVERY_TOTAL_PAGES',
