@@ -32,6 +32,7 @@ DEFAULT_OPENAI_ENV = ROOT / ".env.local"
 DEFAULT_ARTIFACT_ROOT = ROOT / "outputs" / "catalog-agent-automation"
 WORKFLOW = "catalog-agent-automation"
 PUBLICATION_CONFIRMATION = "catalog-agent-publication"
+SOURCE_LINK_CONFIRMATION = "sparex-discovery-source-link"
 MAX_BATCH = 50
 MAX_AI_CALLS = 5
 AGENT_SEQUENCE: tuple[AgentCode, ...] = (
@@ -223,9 +224,15 @@ def main() -> int:
     ai_max_calls = max(0, min(int(args.ai_max_calls), MAX_AI_CALLS))
     config = OdooConfig.from_env(args.odoo_env_file)
     client = OdooClient(config).connect()
+    source_prepared = client.call(
+        "southern.sparex.discovery.item",
+        "prepare_source_link_plan",
+        limit=limit,
+    )
     preview = client.call("southern.catalog.agent.task", "preview_ready_candidates", limit=limit)
     safe_preview = {
         "mode": "apply" if args.apply else "read_only",
+        "source_link_candidate_count": len(source_prepared),
         "candidate_count": len(preview),
         "candidates": preview,
         "limit": limit,
@@ -235,7 +242,7 @@ def main() -> int:
         return 0
 
     gate = ApplyGate(WORKFLOW, True, args.confirm, args.reason, MAX_BATCH)
-    gate.authorize(len(preview))
+    gate.authorize(max(len(preview), len(source_prepared)))
     if args.run_ai and ai_max_calls:
         if args.openai_env_file.exists():
             load_env_file(args.openai_env_file)
@@ -245,6 +252,53 @@ def main() -> int:
     run_stamp = utc_stamp()
     store = ArtifactStore(args.artifact_root / run_stamp, schema_version="1.1")
     archive_prefix = run_s3_prefix(args.s3_prefix, run_stamp)
+    source_plan = {
+        "schema_version": "1.1",
+        "workflow": WORKFLOW,
+        "run_stamp": run_stamp,
+        "reason": args.reason,
+        "records": [
+            {
+                key: row.get(key)
+                for key in (
+                    "item_id",
+                    "product_id",
+                    "sku",
+                    "source_url_sha256",
+                    "image_url_sha256",
+                    "source_artifact_sha256",
+                    "before_source_url_sha256",
+                    "snapshot_sha256",
+                )
+            }
+            for row in source_prepared
+        ],
+    }
+    source_plan_record = _archive(store, "source-link-plan.json", source_plan, args.s3_bucket, archive_prefix)
+    source_rollback_record = _archive(
+        store,
+        "source-link-rollback.json",
+        {"schema_version": "1.1", "workflow": WORKFLOW, "run_stamp": run_stamp, "records": source_prepared},
+        args.s3_bucket,
+        archive_prefix,
+    )
+    linked_sources = []
+    if source_prepared:
+        linked_sources = client.call(
+            "southern.sparex.discovery.item",
+            "apply_source_link_plan",
+            records=source_prepared,
+            confirmation=SOURCE_LINK_CONFIRMATION,
+            reason=args.reason,
+        )
+    preview = client.call("southern.catalog.agent.task", "preview_ready_candidates", limit=limit)
+    safe_preview.update(
+        {
+            "source_linked_count": len(linked_sources),
+            "candidate_count": len(preview),
+            "candidates": preview,
+        }
+    )
     seeded = client.call(
         "southern.catalog.agent.task",
         "seed_ready_candidates",
@@ -257,6 +311,9 @@ def main() -> int:
         "run_stamp": run_stamp,
         "worker_id": args.worker_id,
         "reason": args.reason,
+        "source_link_plan_sha256": source_plan_record["sha256"],
+        "source_link_rollback_sha256": source_rollback_record["sha256"],
+        "source_linked_count": len(linked_sources),
         "seeded": seeded,
         "idempotency_key": gate.idempotency_key(seeded),
     }
@@ -329,6 +386,13 @@ def main() -> int:
                 task_ids=[row["task_id"] for row in published],
                 reason=error,
             )
+        if linked_sources:
+            client.call(
+                "southern.sparex.discovery.item",
+                "rollback_source_links",
+                records=linked_sources,
+                reason=error,
+            )
 
     result = {
         "schema_version": "1.1",
@@ -336,6 +400,11 @@ def main() -> int:
         "run_stamp": run_stamp,
         "plan_sha256": plan_record["sha256"],
         "plan_uri": plan_record["artifact_uri"],
+        "source_link_plan_sha256": source_plan_record["sha256"],
+        "source_link_plan_uri": source_plan_record["artifact_uri"],
+        "source_link_rollback_sha256": source_rollback_record["sha256"],
+        "source_link_rollback_uri": source_rollback_record["artifact_uri"],
+        "source_linked_count": 0 if error else len(linked_sources),
         "rollback_sha256": rollback_record["sha256"],
         "rollback_uri": rollback_record["artifact_uri"],
         "stages": stages,
@@ -356,6 +425,7 @@ def main() -> int:
     summary = {
         **safe_preview,
         "seeded": len(seeded),
+        "source_linked": 0 if error else len(linked_sources),
         "prepared": len(prepared),
         "published": len(verification) if not error else 0,
         "failed": bool(error),

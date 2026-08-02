@@ -28,6 +28,53 @@ class TestCatalogAgents(TransactionCase):
                 }
             )
 
+    def _record_current_discovery(self, product, source_url):
+        Agent = self.env["southern.catalog.agent"]
+        for code, name in (("sparex_discovery", "Sparex Discovery Agent"), ("odoo_match", "Odoo Match Agent")):
+            if not Agent.search([("code", "=", code), ("company_id", "=", self.env.company.id)], limit=1):
+                Agent.create(
+                    {
+                        "name": name,
+                        "code": code,
+                        "company_id": self.env.company.id,
+                        "instructions": "Use exact deterministic catalog facts.",
+                    }
+                )
+        seed_url = "https://us.sparex.com/test-listing.html"
+        run = self.env["southern.sparex.discovery.run"].start_discovery_run(
+            {
+                "idempotency_key": f"test-current-evidence-{product.id}",
+                "seed_url": seed_url,
+                "seed_url_sha256": hashlib.sha256(seed_url.encode()).hexdigest(),
+                "plan_artifact_uri": f"s3://test-bucket/discovery/{product.id}/plan.json",
+                "plan_sha256": hashlib.sha256(f"plan-{product.id}".encode()).hexdigest(),
+                "parser_version": "test-current-v3",
+                "throttle_seconds": 3,
+            }
+        )
+        self.env["southern.sparex.discovery.run"].prepare_reconciliation_run(run["id"])
+        self.env["southern.sparex.discovery.run"].claim_discovery_checkpoint(run["id"], "test-worker", 180)
+        self.env["southern.sparex.discovery.run"].record_discovery_page(
+            run["id"],
+            "test-worker",
+            {
+                "page_url": seed_url,
+                "page_sha256": hashlib.sha256(f"page-{product.id}".encode()).hexdigest(),
+                "artifact_uri": f"s3://test-bucket/discovery/{product.id}/page.json",
+                "artifact_sha256": hashlib.sha256(f"artifact-{product.id}".encode()).hexdigest(),
+                "next_url": "",
+                "listing_urls": [],
+                "items": [
+                    {
+                        "sku": product.default_code,
+                        "source_url": source_url,
+                        "image_url": f"https://cdn.example.com/{product.id}.jpg",
+                        "source_state": "verified",
+                    }
+                ],
+            },
+        )
+
     def test_ready_snapshot_uses_only_four_business_requirements(self):
         product = self.env["product.template"].create(
             {
@@ -49,6 +96,7 @@ class TestCatalogAgents(TransactionCase):
                 "min_qty": 1.0,
             }
         )
+        self._record_current_discovery(product, "https://us.sparex.com/example-146.html")
         task_id = self.env["southern.catalog.agent.task"].queue_candidate(
             "product_verification",
             "S.146",
@@ -106,6 +154,7 @@ class TestCatalogAgents(TransactionCase):
         self.env["product.supplierinfo"].create(
             {"partner_id": supplier.id, "product_tmpl_id": product.id, "price": 15.0, "min_qty": 1.0}
         )
+        self._record_current_discovery(product, "https://us.sparex.com/example-880001.html")
         agents = self.env["southern.catalog.agent"].search(
             [("company_id", "=", self.env.company.id), ("active", "=", True)]
         )

@@ -13,7 +13,9 @@ pipeline; it does not replace the five Odoo catalog agents.
 - Deterministic application code performs requests, hashing, archival,
   pagination, and exact SKU matching.
 - The discovery worker cannot create products, change prices, copy images into
-  products, or publish products.
+  products, or publish products. The deterministic release worker may link an
+  exact verified source URL to the matched product immediately before release;
+  that write has its own plan, rollback artifact, and exact confirmation.
 - Supplier URLs remain internal. User-facing status reports use hashes and
   counts rather than private URLs.
 
@@ -22,7 +24,8 @@ pipeline; it does not replace the five Odoo catalog agents.
 Each checkpoint:
 
 1. Acquires a short Odoo lease so duplicate workers cannot overlap.
-2. Resumes one explicit cursor from a bounded, deduplicated listing/category frontier bound to an immutable plan.
+2. Resumes up to five explicit cursors sequentially from a bounded,
+   deduplicated listing/category frontier bound to an immutable plan.
 3. Authenticates to Sparex and opens only the listing page. It never requests a
    discovered product-detail URL.
 4. Waits at least three seconds between every portal request and performs no
@@ -39,7 +42,10 @@ Each checkpoint:
 9. Separates products ready for source/image enrichment from products whose
    source URL and image are already stored in Odoo and ready for publication.
 10. Adds same-host category/listing links, never product-detail links, to a 10,000-URL bounded frontier.
-11. Advances the cursor only after the archived page is recorded successfully.
+11. Advances each cursor only after the archived page is recorded successfully.
+12. Marks every SKU seen by the current run as current evidence. When the run
+    completes, records not seen by that run become stale, lose publication
+    eligibility, and remain available for review rather than being deleted.
 
 A transport or parser failure preserves the cursor. A true portal warning,
 login failure, HTTP 429, or qualifying 5xx response starts a 60-minute cooldown.
@@ -53,9 +59,10 @@ System administrators can inspect:
 - **Parts Intelligence → Sparex Discovery Queue** for exact SKU coverage,
   missing products, duplicates, source review, and publication candidates.
 
-Missing records intentionally show **Product Creation Not Authorized**. A
-future product-creation workflow requires separate rules, approval, and
-rollback; discovery alone never creates an unenumerated Odoo product.
+The Odoo menus include a progress dashboard and a separate missing-product
+approval queue. Missing records show **Creation Review Required** and can be
+approved or rejected for a future, separate creation workflow. Discovery alone
+never creates an unenumerated Odoo product.
 
 ## Commands
 
@@ -68,7 +75,7 @@ python -m scripts.sparex_catalog_discovery `
   --run-key sparex-full-catalog-inventory-v1
 ```
 
-Supervised one-page queue checkpoint:
+Supervised five-page queue checkpoint:
 
 ```powershell
 $env:ODOO_WRITE_ENABLED = "true"
@@ -76,6 +83,7 @@ python -m scripts.sparex_catalog_discovery `
   --odoo-env-file odoo_connection.env `
   --dealer-env-file odoo_connection.env `
   --run-key sparex-full-catalog-inventory-v1 `
+  --max-pages-per-checkpoint 5 `
   --apply `
   --confirm sparex-discovery-queue `
   --reason "Approved throttled Sparex listing inventory and Odoo match classification"
@@ -87,9 +95,10 @@ the same non-blocking lock, so they cannot overlap. Install the unit files only
 after the Odoo module upgrade and a bounded read-only portal check.
 
 Every successful discovery service completion triggers
-`titan-catalog-agent.service`. This provides a deterministic discovery-to-release
-handoff in addition to the publication timer. Parser version v3 collapses
+`titan-catalog-agent.service`. The independent publication timer remains
+disabled so there is one non-overlapping discovery-to-release path. Parser version v3 collapses
 duplicate anchors for the same exact product URL and keeps the image-backed
 listing card, while genuine conflicting URLs, images, or explicit SKUs remain
 in review. The v3 run key replays the catalog so items previously classified by
-the older parser are reconciled instead of silently reused.
+the older parser are reconciled instead of silently reused. Publication now
+requires a current-run discovery record; stale evidence cannot qualify.

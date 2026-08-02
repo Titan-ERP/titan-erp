@@ -74,11 +74,12 @@ python -m scripts.sparex_catalog_agents.orchestrator `
   --reason "Approved catalog verification and website publication"
 ```
 
-Production scheduling uses `cloud/aws/titan-catalog-agent.service` and
-`cloud/aws/titan-catalog-agent.timer`. The oneshot service plus `flock` prevents
-overlap; the timer waits two minutes after a completed run before scheduling
-the next deterministic publication batch of at most 50 products. Sparex
-listing discovery remains separately throttled to at most five listing pages.
+Production scheduling is owned by `cloud/aws/titan-sparex-discovery.timer`.
+Each successful discovery checkpoint triggers `titan-catalog-agent.service`;
+the independent catalog timer stays disabled to prevent competing schedules.
+The oneshot services plus `flock` prevent overlap. Discovery processes at most
+five listing pages sequentially with at least three seconds between requests,
+then the deterministic release handles at most 50 current-evidence products.
 
 Whole-catalog coverage is handled separately by
 `scripts/sparex_catalog_discovery.py`. It reuses the Discovery and Match agent

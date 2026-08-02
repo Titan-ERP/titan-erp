@@ -272,6 +272,22 @@ class SouthernCatalogAgentTask(models.Model):
         )
 
     @api.model
+    def _current_discovery_item(self, product, normalized):
+        return self.env["southern.sparex.discovery.item"].search(
+            [
+                ("company_id", "=", self.env.company.id),
+                ("normalized_sku", "=", normalized),
+                ("matched_product_id", "=", product.id),
+                ("reconciliation_state", "=", "current"),
+                ("state", "=", "verified"),
+                ("source_state", "=", "verified"),
+                ("has_exact_sparex_url", "=", True),
+                ("has_image", "=", True),
+            ],
+            limit=1,
+        )
+
+    @api.model
     def _product_invariants(self, product):
         supplier = self._positive_sparex_supplier(product)
         image = product.image_1920 or b""
@@ -325,9 +341,18 @@ class SouthernCatalogAgentTask(models.Model):
                     blockers.append("missing_exact_sparex_url")
                 if not has_image:
                     blockers.append("missing_image")
+                if not task._current_discovery_item(product, normalized):
+                    blockers.append("missing_current_discovery_evidence")
 
             ready = bool(
-                product and product.active and is_hidden and has_cost and has_sales_price and has_url and has_image
+                product
+                and product.active
+                and is_hidden
+                and has_cost
+                and has_sales_price
+                and has_url
+                and has_image
+                and task._current_discovery_item(product, normalized)
             )
             snapshot = {
                 "schema_version": "1.1",
@@ -428,6 +453,8 @@ class SouthernCatalogAgentTask(models.Model):
             if not normalized or not exact_sparex_url(product.southern_source_url, normalized):
                 continue
             if not self._positive_sparex_supplier(product):
+                continue
+            if not self._current_discovery_item(product, normalized):
                 continue
             active_pipeline = self.search_count(
                 [

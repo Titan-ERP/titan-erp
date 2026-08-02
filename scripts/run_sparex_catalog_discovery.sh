@@ -22,6 +22,7 @@ exec "${install_root}/venv/bin/python" -m scripts.sparex_catalog_discovery \
   --artifact-root "${artifact_root}" \
   --run-key "${run_key}" \
   --throttle-seconds 3 \
+  --max-pages-per-checkpoint 5 \
   --apply \
   --confirm sparex-discovery-queue \
   --reason "Approved throttled Sparex listing inventory and Odoo match classification"
