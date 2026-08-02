@@ -162,6 +162,48 @@ def evaluate_agent_tool(agent_code: AgentCode, snapshot: dict[str, Any]) -> dict
     raise ValueError(f"Unknown catalog agent: {agent_code}")
 
 
+def deterministic_agent_decision(agent_code: AgentCode, snapshot: dict[str, Any]) -> CatalogAgentDecision:
+    """Return the bounded decision implied by the deterministic Odoo facts.
+
+    This is a continuity fallback for provider rate limiting only. It does not
+    add facts, relax readiness, or expose a write capability.
+    """
+
+    facts = evaluate_agent_tool(agent_code, snapshot)
+    blockers = list(facts.get("blockers") or [])
+    decision = "hold"
+    next_agent = None
+
+    if agent_code == "coordinator" and facts.get("ready_to_publish") and not blockers:
+        decision = "continue"
+        next_agent = "sparex_discovery"
+    elif agent_code == "sparex_discovery" and facts.get("discovery_evidence_complete") and not blockers:
+        decision = "continue"
+        next_agent = "odoo_match"
+    elif agent_code == "odoo_match":
+        match_state = facts.get("odoo_match_state")
+        if facts.get("exact_single_match") and not blockers:
+            decision = "continue"
+            next_agent = "product_verification"
+        elif match_state == "missing":
+            decision = "missing_in_odoo"
+        elif match_state == "duplicate":
+            decision = "duplicate_in_odoo"
+    elif agent_code == "product_verification" and facts.get("ready_to_publish") and not blockers:
+        decision = "ready_for_release"
+        next_agent = "website_release"
+    elif agent_code == "website_release" and facts.get("supervised_release_eligible") and not blockers:
+        decision = "ready_for_release"
+
+    return CatalogAgentDecision(
+        decision=decision,
+        summary=f"Deterministic {AGENT_NAMES[agent_code]} decision from the verified Odoo snapshot.",
+        confidence=1.0,
+        blocking_reasons=blockers,
+        next_agent=next_agent,
+    )
+
+
 @function_tool
 def route_catalog_task(context: RunContextWrapper[CatalogRunContext]) -> str:
     """Route the current Odoo-owned task to the next bounded specialist."""
