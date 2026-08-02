@@ -19,7 +19,11 @@
                 <field name="duplicate_count"/>
                 <field name="review_count"/>
                 <field name="corrected_count"/>
+                <field name="product_page_count"/>
+                <field name="empty_page_count"/>
                 <field name="stale_count"/>
+                <field name="source_repair_candidate_count"/>
+                <field name="blocked_item_count"/>
                 <field name="progress_percent" widget="progressbar"/>
                 <field name="estimated_minutes_remaining"/>
                 <field name="reconciliation_state"/>
@@ -56,6 +60,10 @@
                             <field name="queued_url_count"/>
                             <field name="visited_url_count"/>
                             <field name="observed_count"/>
+                            <field name="product_page_count"/>
+                            <field name="empty_page_count"/>
+                            <field name="last_page_item_count"/>
+                            <field name="average_items_per_product_page"/>
                             <field name="progress_percent" widget="progressbar"/>
                             <field name="estimated_checkpoints_remaining"/>
                             <field name="estimated_minutes_remaining"/>
@@ -72,6 +80,13 @@
                         <field name="current_item_count"/>
                         <field name="missing_product_count"/>
                         <field name="publication_candidate_count"/>
+                        <field name="source_repair_candidate_count"/>
+                        <field name="source_review_item_count"/>
+                        <field name="blocked_item_count"/>
+                        <field name="missing_cost_blocker_count"/>
+                        <field name="missing_sales_price_blocker_count"/>
+                        <field name="missing_url_blocker_count"/>
+                        <field name="missing_image_blocker_count"/>
                     </group>
                     <notebook>
                         <page string="Cursor and Evidence">
@@ -131,6 +146,9 @@
                 <field name="stale_count"/>
                 <field name="missing_product_count"/>
                 <field name="publication_candidate_count"/>
+                <field name="source_repair_candidate_count"/>
+                <field name="blocked_item_count"/>
+                <field name="source_review_item_count"/>
                 <field name="estimated_minutes_remaining"/>
                 <field name="last_success_at"/>
                 <templates>
@@ -149,6 +167,9 @@
                             <div class="col-6">Stale: <field name="stale_count"/></div>
                             <div class="col-6">Missing Odoo: <field name="missing_product_count"/></div>
                             <div class="col-6">Ready: <field name="publication_candidate_count"/></div>
+                            <div class="col-6">Repair queue: <field name="source_repair_candidate_count"/></div>
+                            <div class="col-6">Blocked: <field name="blocked_item_count"/></div>
+                            <div class="col-6">Source review: <field name="source_review_item_count"/></div>
                         </div>
                         <div class="text-muted mt-2">
                             Estimated minutes: <field name="estimated_minutes_remaining"/>
@@ -178,6 +199,7 @@
                 <field name="has_image"/>
                 <field name="source_enrichment_candidate"/>
                 <field name="publication_candidate"/>
+                <field name="primary_blocker"/>
                 <field name="blocker_summary"/>
                 <field name="correction_count"/>
                 <field name="observation_count"/>
@@ -212,6 +234,7 @@
                             <field name="currently_published"/>
                             <field name="source_enrichment_candidate"/>
                             <field name="publication_candidate"/>
+                            <field name="primary_blocker"/>
                             <field name="blocker_summary"/>
                         </group>
                         <group>
@@ -220,6 +243,7 @@
                             <field name="observation_count"/>
                             <field name="correction_count"/>
                             <field name="last_corrected_at"/>
+                            <field name="readiness_refreshed_at"/>
                             <field name="first_seen_run_id"/>
                             <field name="last_seen_run_id"/>
                             <field name="last_seen_page_id"/>
@@ -257,6 +281,7 @@
             <search>
                 <field name="normalized_sku"/>
                 <field name="matched_product_id"/>
+                <field name="primary_blocker"/>
                 <filter name="missing" string="Missing in Odoo" domain="[('odoo_match_state','=','missing')]"/>
                 <filter name="existing" string="Existing in Odoo" domain="[('odoo_match_state','in',['matched_active','matched_archived'])]"/>
                 <filter name="duplicate" string="Duplicate SKU" domain="[('odoo_match_state','=','duplicate')]"/>
@@ -267,9 +292,15 @@
                 <filter name="creation_review" string="Creation Review" domain="[('creation_state','=','review_required')]"/>
                 <filter name="enrichment_candidates" string="Ready to Link Source" domain="[('source_enrichment_candidate','=',True)]"/>
                 <filter name="publication_candidates" string="Publication Candidates" domain="[('publication_candidate','=',True)]"/>
+                <filter name="publication_blockers" string="Publication Blockers" domain="[('reconciliation_state','=','current'),('odoo_match_state','=','matched_active'),('currently_published','=',False),('publication_candidate','=',False)]"/>
+                <filter name="missing_cost" string="Missing Cost" domain="[('primary_blocker','=','missing_cost')]"/>
+                <filter name="missing_sales_price" string="Missing Sales Price" domain="[('primary_blocker','=','missing_sales_price')]"/>
+                <filter name="missing_product_url" string="Missing Product URL" domain="[('primary_blocker','=','missing_product_url')]"/>
+                <filter name="missing_product_image" string="Missing Product Image" domain="[('primary_blocker','=','missing_product_image')]"/>
                 <separator/>
                 <filter name="group_match" string="Odoo Match" context="{'group_by':'odoo_match_state'}"/>
                 <filter name="group_source" string="Source Status" context="{'group_by':'source_state'}"/>
+                <filter name="group_blocker" string="Publication Blocker" context="{'group_by':'primary_blocker'}"/>
             </search>
         </field>
     </record>
@@ -297,6 +328,14 @@
         <field name="domain">[('odoo_match_state','=','missing')]</field>
         <field name="search_view_id" ref="southern_sparex_discovery_item_search"/>
     </record>
+    <record id="action_southern_sparex_publication_blockers" model="ir.actions.act_window">
+        <field name="name">Sparex Publication Blockers</field>
+        <field name="res_model">southern.sparex.discovery.item</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('reconciliation_state','=','current'),('odoo_match_state','=','matched_active'),('currently_published','=',False),('publication_candidate','=',False)]</field>
+        <field name="context">{'search_default_group_blocker': 1}</field>
+        <field name="search_view_id" ref="southern_sparex_discovery_item_search"/>
+    </record>
 
     <menuitem id="menu_southern_sparex_discovery_dashboard"
               name="Sparex Discovery Dashboard"
@@ -322,5 +361,11 @@
               parent="menu_southern_parts_intelligence_root"
               action="action_southern_sparex_missing_products"
               sequence="7"
+              groups="base.group_system"/>
+    <menuitem id="menu_southern_sparex_publication_blockers"
+              name="Sparex Publication Blockers"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_sparex_publication_blockers"
+              sequence="8"
               groups="base.group_system"/>
 </odoo>

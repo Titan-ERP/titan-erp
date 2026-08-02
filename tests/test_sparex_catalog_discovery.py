@@ -1,7 +1,11 @@
 import unittest
 from pathlib import Path
 
-from scripts.sparex_catalog_discovery import exact_sparex_product_url, parse_listing_page
+from scripts.sparex_catalog_discovery import (
+    adaptive_checkpoint_pages,
+    exact_sparex_product_url,
+    parse_listing_page,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -104,6 +108,23 @@ class SparexCatalogDiscoveryParserTests(unittest.TestCase):
         self.assertNotIn("session.get(source_url", source)
         self.assertIn("RequestThrottle(max(3.0, throttle_seconds))", source)
         self.assertIn('PARSER_VERSION = "sparex-listing-frontier-v3"', source)
+
+    def test_adaptive_checkpoint_expands_only_for_healthy_mature_runs(self):
+        self.assertEqual(adaptive_checkpoint_pages(10, None), 5)
+        self.assertEqual(
+            adaptive_checkpoint_pages(
+                10,
+                {"page_count": 114, "recovery_state": "healthy", "consecutive_failure_count": 0},
+            ),
+            10,
+        )
+        self.assertEqual(
+            adaptive_checkpoint_pages(
+                10,
+                {"page_count": 114, "recovery_state": "retrying", "consecutive_failure_count": 1},
+            ),
+            2,
+        )
 
 
 if __name__ == "__main__":

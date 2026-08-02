@@ -12,10 +12,10 @@ pipeline; it does not replace the five Odoo catalog agents.
   duplicate classification.
 - Deterministic application code performs requests, hashing, archival,
   pagination, and exact SKU matching.
-- The discovery worker cannot create products, change prices, copy images into
-  products, or publish products. The deterministic release worker may link an
-  exact verified source URL to the matched product immediately before release;
-  that write has its own plan, rollback artifact, and exact confirmation.
+- The discovery worker cannot create products, change prices, or publish
+  products. The deterministic release worker may fill only a missing exact
+  verified source URL or missing listing image immediately before release;
+  those writes have their own plan, rollback artifact, and exact confirmation.
 - Supplier URLs remain internal. User-facing status reports use hashes and
   counts rather than private URLs.
 
@@ -24,8 +24,8 @@ pipeline; it does not replace the five Odoo catalog agents.
 Each checkpoint:
 
 1. Acquires a short Odoo lease so duplicate workers cannot overlap.
-2. Resumes up to five explicit cursors sequentially from a bounded,
-   deduplicated listing/category frontier bound to an immutable plan.
+2. Resumes five explicit cursors while new or recovering, then up to ten when
+   healthy, from a bounded deduplicated frontier bound to an immutable plan.
 3. Authenticates to Sparex and opens only the listing page. It never requests a
    discovered product-detail URL.
 4. Waits at least three seconds between every portal request and performs no
@@ -41,7 +41,8 @@ Each checkpoint:
    image presence.
 9. Separates products ready for source/image enrichment from products whose
    source URL and image are already stored in Odoo and ready for publication.
-10. Adds same-host category/listing links, never product-detail links, to a 10,000-URL bounded frontier.
+10. Prioritizes pagination/product-dense listing URLs before broad category
+    expansion and adds only same-host listing links to a 10,000-URL frontier.
 11. Advances each cursor only after the archived page is recorded successfully.
 12. Marks every SKU seen by the current run as current evidence. When the run
     completes, records not seen by that run become stale, lose publication
@@ -64,6 +65,18 @@ approval queue. Missing records show **Creation Review Required** and can be
 approved or rejected for a future, separate creation workflow. Discovery alone
 never creates an unenumerated Odoo product.
 
+The dashboard also separates publication blockers for missing dealer cost,
+sales price, exact product URL, product image, and source review. Each release
+run refreshes up to 500 of the least-recently checked current records, so older
+Odoo products are continuously re-evaluated instead of depending only on new
+discoveries.
+
+Missing URL/image repair never overwrites a valid existing value. Listing image
+bytes are HTTPS-fetched by the worker without retries, limited to 10 MiB,
+checksum verified, and covered by the same locked rollback workflow. Supplier
+cost, sales price, standard cost, accounting data, and unrelated content remain
+invariant.
+
 ## Commands
 
 Read-only parser/authentication check:
@@ -75,7 +88,8 @@ python -m scripts.sparex_catalog_discovery `
   --run-key sparex-full-catalog-inventory-v1
 ```
 
-Supervised five-page queue checkpoint:
+Supervised adaptive queue checkpoint (five pages while new/recovering, up to
+ten when healthy):
 
 ```powershell
 $env:ODOO_WRITE_ENABLED = "true"
@@ -83,7 +97,7 @@ python -m scripts.sparex_catalog_discovery `
   --odoo-env-file odoo_connection.env `
   --dealer-env-file odoo_connection.env `
   --run-key sparex-full-catalog-inventory-v1 `
-  --max-pages-per-checkpoint 5 `
+  --max-pages-per-checkpoint 10 `
   --apply `
   --confirm sparex-discovery-queue `
   --reason "Approved throttled Sparex listing inventory and Odoo match classification"
