@@ -23,7 +23,7 @@ from urllib.parse import quote
 from scripts.odoo_runtime import ApplyGate, ArtifactStore, OdooClient, OdooConfig
 from scripts.odoo_runtime.client import load_env_file
 
-from .agent import AGENT_NAMES, AgentCode, deterministic_agent_decision, run_agent
+from .agent import AGENT_NAMES, AgentCode, deterministic_agent_decision, requires_ai_review, run_agent
 from .worker import canonical_result
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -64,6 +64,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--throttle-seconds", type=float, default=3.0)
     parser.add_argument("--worker-id", default=socket.gethostname())
     parser.add_argument("--run-ai", action="store_true")
+    parser.add_argument(
+        "--ai-max-calls",
+        type=int,
+        default=int(os.environ.get("OPENAI_CATALOG_AGENT_MAX_CALLS", "1")),
+        help="Maximum ambiguous-task model invocations for this run (hard-capped at 5).",
+    )
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--publish", action="store_true")
     parser.add_argument("--confirm", default="")
@@ -87,6 +93,8 @@ def _run_agent_tasks(
     limit: int,
     throttle_seconds: float,
     throttle_state: dict[str, float],
+    run_ai: bool,
+    ai_state: dict[str, Any],
 ) -> dict[str, Any]:
     tasks = client.call(
         "southern.catalog.agent.task",
@@ -97,25 +105,42 @@ def _run_agent_tasks(
     )
     completed = 0
     failed = 0
-    deterministic_fallbacks = 0
+    deterministic_decisions = 0
+    ai_calls = 0
+    ai_failures = 0
     task_ids: list[int] = []
     for task in tasks:
-        wait_seconds = throttle_seconds - (time.monotonic() - throttle_state.get("last_call", 0.0))
-        if wait_seconds > 0:
-            time.sleep(wait_seconds)
-        throttle_state["last_call"] = time.monotonic()
         task_ids.append(int(task["id"]))
+        snapshot = json.loads(task.get("input_json") or "{}")
+        use_ai = (
+            run_ai
+            and requires_ai_review(snapshot)
+            and not ai_state["disabled"]
+            and ai_state["calls"] < ai_state["max_calls"]
+        )
         try:
-            snapshot = json.loads(task.get("input_json") or "{}")
-            output = canonical_result(run_agent(agent_code, snapshot))
+            if use_ai:
+                wait_seconds = throttle_seconds - (time.monotonic() - throttle_state.get("last_call", 0.0))
+                if wait_seconds > 0:
+                    time.sleep(wait_seconds)
+                throttle_state["last_call"] = time.monotonic()
+                ai_state["calls"] += 1
+                ai_calls += 1
+                output = canonical_result(run_agent(agent_code, snapshot))
+            else:
+                output = canonical_result(deterministic_agent_decision(agent_code, snapshot))
+                deterministic_decisions += 1
             state = "completed"
             completed += 1
         except Exception as exc:  # noqa: BLE001 - never persist provider detail or secrets
-            if type(exc).__name__ == "RateLimitError":
+            if use_ai:
                 output = canonical_result(deterministic_agent_decision(agent_code, snapshot))
                 state = "completed"
                 completed += 1
-                deterministic_fallbacks += 1
+                deterministic_decisions += 1
+                ai_failures += 1
+                ai_state["failures"] += 1
+                ai_state["disabled"] = True
             else:
                 output = json.dumps(
                     {
@@ -144,7 +169,9 @@ def _run_agent_tasks(
         "claimed": len(tasks),
         "completed": completed,
         "failed": failed,
-        "deterministic_fallbacks": deterministic_fallbacks,
+        "deterministic_decisions": deterministic_decisions,
+        "ai_calls": ai_calls,
+        "ai_failures": ai_failures,
         "task_ids": task_ids,
     }
 
@@ -190,8 +217,9 @@ def main() -> int:
     args = build_parser().parse_args()
     limit = max(1, min(int(args.limit), MAX_BATCH))
     throttle = max(3.0, float(args.throttle_seconds))
-    if args.publish and not (args.apply and args.run_ai):
-        raise RuntimeError("--publish requires --apply and --run-ai.")
+    if args.publish and not args.apply:
+        raise RuntimeError("--publish requires --apply.")
+    ai_max_calls = max(0, min(int(args.ai_max_calls), MAX_BATCH))
     config = OdooConfig.from_env(args.odoo_env_file)
     client = OdooClient(config).connect()
     preview = client.call("southern.catalog.agent.task", "preview_ready_candidates", limit=limit)
@@ -207,10 +235,11 @@ def main() -> int:
 
     gate = ApplyGate(WORKFLOW, True, args.confirm, args.reason, MAX_BATCH)
     gate.authorize(len(preview))
-    if args.openai_env_file.exists():
-        load_env_file(args.openai_env_file)
-    if not os.environ.get("OPENAI_API_KEY", "").strip():
-        raise RuntimeError("OPENAI_API_KEY is required for the catalog-agent chain.")
+    if args.run_ai and ai_max_calls:
+        if args.openai_env_file.exists():
+            load_env_file(args.openai_env_file)
+        if not os.environ.get("OPENAI_API_KEY", "").strip():
+            raise RuntimeError("OPENAI_API_KEY is required only for explicit ambiguous AI review.")
 
     run_stamp = utc_stamp()
     store = ArtifactStore(args.artifact_root / run_stamp, schema_version="1.1")
@@ -234,6 +263,12 @@ def main() -> int:
 
     stages = []
     throttle_state: dict[str, float] = {}
+    ai_state: dict[str, Any] = {
+        "calls": 0,
+        "failures": 0,
+        "disabled": False,
+        "max_calls": ai_max_calls,
+    }
     for agent_code in AGENT_SEQUENCE:
         stages.append(
             _run_agent_tasks(
@@ -243,6 +278,8 @@ def main() -> int:
                 limit=limit,
                 throttle_seconds=throttle,
                 throttle_state=throttle_state,
+                run_ai=bool(args.run_ai),
+                ai_state=ai_state,
             )
         )
 
@@ -301,6 +338,13 @@ def main() -> int:
         "rollback_sha256": rollback_record["sha256"],
         "rollback_uri": rollback_record["artifact_uri"],
         "stages": stages,
+        "ai": {
+            "enabled": bool(args.run_ai),
+            "max_calls": ai_max_calls,
+            "calls": ai_state["calls"],
+            "failures": ai_state["failures"],
+            "disabled_after_failure": ai_state["disabled"],
+        },
         "prepared_count": len(prepared),
         "published_count": len(verification) if not error else 0,
         "published": verification if not error else [],
@@ -314,6 +358,8 @@ def main() -> int:
         "prepared": len(prepared),
         "published": len(verification) if not error else 0,
         "failed": bool(error),
+        "ai_calls": ai_state["calls"],
+        "ai_failures": ai_state["failures"],
         "plan_sha256": plan_record["sha256"],
         "rollback_sha256": rollback_record["sha256"],
         "result_sha256": result_record["sha256"],
