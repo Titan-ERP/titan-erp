@@ -406,8 +406,16 @@ class SouthernSparexDiscoveryRun(models.Model):
             raise UserError(_("Checkpoint capacity cannot change while a discovery lease is active."))
         if run.state in {"completed", "failed", "cancelled"}:
             return run.read(self._worker_fields())[0]
+        updates = {}
         if run.max_pages_per_checkpoint != bounded:
-            run.write({"max_pages_per_checkpoint": bounded})
+            updates["max_pages_per_checkpoint"] = bounded
+        # Existing runs keep the ceiling that was stored when they were
+        # created.  Raise legacy active runs to the current safe frontier
+        # ceiling so a module upgrade does not strand them at 5,000 pages.
+        if run.max_pages_total < MAX_DISCOVERY_TOTAL_PAGES:
+            updates["max_pages_total"] = MAX_DISCOVERY_TOTAL_PAGES
+        if updates:
+            run.write(updates)
         return run.read(self._worker_fields())[0]
 
     @api.model

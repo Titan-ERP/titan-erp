@@ -30,6 +30,7 @@ class SparexDiscoveryReconciliationContractTests(unittest.TestCase):
             "apply_source_link_plan",
             "rollback_source_links",
             "review_required",
+            'updates["max_pages_total"] = MAX_DISCOVERY_TOTAL_PAGES',
         ):
             self.assertIn(contract, source)
         self.assertNotIn('self.env["product.template"].create', source)
