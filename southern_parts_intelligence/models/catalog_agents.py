@@ -29,7 +29,7 @@ EXPECTED_DECISIONS = {
     "product_verification": "ready_for_release",
     "website_release": "ready_for_release",
 }
-MAX_AGENT_BATCH = 5
+MAX_AGENT_BATCH = 50
 SPAREX_HOSTS = {"us.sparex.com"}
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 SPAREX_SKU_PATTERN = re.compile(r"^S[.\s-]?0*(\d+)$", re.IGNORECASE)
@@ -111,7 +111,7 @@ class SouthernCatalogAgent(models.Model):
     def _check_limits(self):
         for agent in self:
             if not 1 <= agent.batch_size <= MAX_AGENT_BATCH:
-                raise ValidationError(_("Catalog agent batches must contain between 1 and 5 records."))
+                raise ValidationError(_("Catalog agent batches must contain between 1 and 50 records."))
             if agent.throttle_seconds < 3.0:
                 raise ValidationError(_("Catalog agent source throttling cannot be less than 3 seconds."))
 
@@ -637,7 +637,7 @@ class SouthernCatalogAgentTask(models.Model):
         if confirmation != "catalog-agent-publication" or not (reason or "").strip():
             raise UserError(_("Publication requires the exact workflow confirmation and business reason."))
         if not records or len(records) > MAX_AGENT_BATCH:
-            raise UserError(_("Publication batches must contain between 1 and 5 records."))
+            raise UserError(_("Publication batches must contain between 1 and 50 records."))
         results = []
         publication_fields = self._publication_fields()
         for prepared in records:

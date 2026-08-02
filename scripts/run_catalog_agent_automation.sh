@@ -18,7 +18,7 @@ export SOUTHERN_PRODUCT_ARTIFACT_BUCKET="southern-parts-catalog-artifacts-475369
 exec "${install_root}/venv/bin/python" -m scripts.sparex_catalog_agents.orchestrator \
   --odoo-env-file "${odoo_env}" \
   --artifact-root "${artifact_root}" \
-  --limit 5 \
+  --limit 50 \
   --throttle-seconds 3 \
   --apply \
   --publish \

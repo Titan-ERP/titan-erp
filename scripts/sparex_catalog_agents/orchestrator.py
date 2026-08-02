@@ -32,7 +32,8 @@ DEFAULT_OPENAI_ENV = ROOT / ".env.local"
 DEFAULT_ARTIFACT_ROOT = ROOT / "outputs" / "catalog-agent-automation"
 WORKFLOW = "catalog-agent-automation"
 PUBLICATION_CONFIRMATION = "catalog-agent-publication"
-MAX_BATCH = 5
+MAX_BATCH = 50
+MAX_AI_CALLS = 5
 AGENT_SEQUENCE: tuple[AgentCode, ...] = (
     "coordinator",
     "sparex_discovery",
@@ -219,7 +220,7 @@ def main() -> int:
     throttle = max(3.0, float(args.throttle_seconds))
     if args.publish and not args.apply:
         raise RuntimeError("--publish requires --apply.")
-    ai_max_calls = max(0, min(int(args.ai_max_calls), MAX_BATCH))
+    ai_max_calls = max(0, min(int(args.ai_max_calls), MAX_AI_CALLS))
     config = OdooConfig.from_env(args.odoo_env_file)
     client = OdooClient(config).connect()
     preview = client.call("southern.catalog.agent.task", "preview_ready_candidates", limit=limit)
