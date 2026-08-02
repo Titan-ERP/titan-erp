@@ -119,7 +119,7 @@ def _ensure_ms_rule(env, structure=None):
         "condition_python": f"result = employee.l10n_us_state_filing_status in {tuple(MS_FILING_STATUSES)!r}",
         "amount_select": "code",
         "amount_python_compute": (
-            "taxable = categories.TAXABLE or 0.0\n"
+            "taxable = categories['TAXABLE'] or 0.0\n"
             "result = -employee._l10n_us_ms_state_withholding(taxable, payslip)"
         ),
         "appears_on_payslip": True,

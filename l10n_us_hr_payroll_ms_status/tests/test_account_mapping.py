@@ -102,4 +102,5 @@ class TestSouthernPayrollAccountMapping(TransactionCase):
         )
         self.assertEqual(len(rule), 1)
         self.assertNotIn("getattr", rule.amount_python_compute)
-        self.assertIn("categories.TAXABLE", rule.amount_python_compute)
+        self.assertNotIn("categories.TAXABLE", rule.amount_python_compute)
+        self.assertIn("categories['TAXABLE']", rule.amount_python_compute)
