@@ -1,6 +1,6 @@
 {
     "name": "US Payroll Mississippi Tax Status",
-    "version": "19.0.1.0.0",
+    "version": "19.0.1.1.0",
     "category": "Human Resources/Payroll",
     "summary": "Adds Mississippi state withholding statuses and payroll tax rule.",
     "author": "Southern Equipment Company",
