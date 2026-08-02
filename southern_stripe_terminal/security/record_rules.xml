@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="stripe_terminal_config_company_rule" model="ir.rule">
+        <field name="name">Stripe Terminal reader company access</field>
+        <field name="model_id" ref="model_southern_stripe_terminal_config"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="groups" eval="[(4, ref('account.group_account_manager'))]"/>
+    </record>
+
+    <record id="stripe_terminal_payment_company_rule" model="ir.rule">
+        <field name="name">Stripe Terminal payment company access</field>
+        <field name="model_id" ref="model_southern_stripe_terminal_payment"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="groups" eval="[(4, ref('account.group_account_readonly')), (4, ref('account.group_account_invoice')), (4, ref('account.group_account_manager'))]"/>
+    </record>
+
+    <record id="stripe_terminal_event_company_rule" model="ir.rule">
+        <field name="name">Stripe Terminal event company access</field>
+        <field name="model_id" ref="model_southern_stripe_terminal_event"/>
+        <field name="domain_force">[('payment_id.company_id', 'in', company_ids)]</field>
+        <field name="groups" eval="[(4, ref('account.group_account_manager'))]"/>
+    </record>
+</odoo>
