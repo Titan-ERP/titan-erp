@@ -13,6 +13,7 @@ class SouthernStripeTerminalEvent(models.Model):
     processed = fields.Boolean(default=False, readonly=True)
     processing_note = fields.Char(readonly=True)
 
-    _sql_constraints = [  # noqa: RUF012 - Odoo model declaration
-        ("stripe_event_id_unique", "unique(stripe_event_id)", "This Stripe webhook event was already received."),
-    ]
+    _stripe_event_id_unique = models.Constraint(
+        "UNIQUE(stripe_event_id)",
+        "This Stripe webhook event was already received.",
+    )

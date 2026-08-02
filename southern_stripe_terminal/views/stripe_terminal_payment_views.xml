@@ -72,11 +72,9 @@
                 <filter name="active_payments" string="Active" domain="[('state', 'in', ('draft', 'in_progress', 'stripe_succeeded'))]"/>
                 <filter name="needs_review" string="Needs Review" domain="[('state', '=', 'needs_review')]"/>
                 <filter name="registered" string="Registered" domain="[('state', '=', 'registered')]"/>
-                <group string="Group By">
-                    <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
-                    <filter name="group_reader" string="Reader" context="{'group_by': 'config_id'}"/>
-                    <filter name="group_company" string="Company" context="{'group_by': 'company_id'}" groups="base.group_multi_company"/>
-                </group>
+                <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
+                <filter name="group_reader" string="Reader" context="{'group_by': 'config_id'}"/>
+                <filter name="group_company" string="Company" context="{'group_by': 'company_id'}" groups="base.group_multi_company"/>
             </search>
         </field>
     </record>

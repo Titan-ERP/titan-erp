@@ -69,3 +69,12 @@ def test_cash_and_ach_reuse_native_payment_registration():
     assert "self.action_register_payment()" in source
     assert '"default_journal_id"' in source
     assert '"default_payment_method_line_id"' in source
+
+
+def test_odoo_19_views_and_constraints_use_current_syntax():
+    payment_view = (MODULE / "views" / "stripe_terminal_payment_views.xml").read_text(encoding="utf-8")
+    assert "<search>" in payment_view
+    assert '<group string="Group By">' not in payment_view
+    for path in (MODULE / "models").glob("*.py"):
+        source = path.read_text(encoding="utf-8")
+        assert "_sql_constraints" not in source

@@ -27,7 +27,11 @@ class SouthernStripeTerminalConfig(models.Model):
         check_company=True,
         domain="[('code', '=', 'stripe'), ('company_id', '=', company_id)]",
     )
-    provider_state = fields.Selection(related="provider_id.state", readonly=True)
+    provider_state = fields.Selection(
+        related="provider_id.state",
+        string="Stripe Provider State",
+        readonly=True,
+    )
     currency_id = fields.Many2one(related="company_id.currency_id", readonly=True)
     reader_id = fields.Char(
         string="Stripe Reader ID",
@@ -57,9 +61,10 @@ class SouthernStripeTerminalConfig(models.Model):
     )
     webhook_ready = fields.Boolean(compute="_compute_webhook_ready")
 
-    _sql_constraints = [  # noqa: RUF012 - Odoo model declaration
-        ("reader_id_unique", "unique(reader_id)", "A Stripe Terminal reader can only be configured once."),
-    ]
+    _reader_id_unique = models.Constraint(
+        "UNIQUE(reader_id)",
+        "A Stripe Terminal reader can only be configured once.",
+    )
 
     @api.depends("journal_id")
     def _compute_available_payment_method_line_ids(self):

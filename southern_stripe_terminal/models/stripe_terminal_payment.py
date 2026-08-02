@@ -29,7 +29,11 @@ class SouthernStripeTerminalPayment(models.Model):
         ondelete="restrict",
     )
     provider_id = fields.Many2one(related="config_id.provider_id", store=True)
-    provider_state = fields.Selection(related="provider_id.state", readonly=True)
+    provider_state = fields.Selection(
+        related="provider_id.state",
+        string="Stripe Provider State",
+        readonly=True,
+    )
     reader_id = fields.Char(related="config_id.reader_id", store=True)
     amount = fields.Monetary(required=True, tracking=True)
     currency_id = fields.Many2one("res.currency", required=True, check_company=True)
@@ -74,10 +78,14 @@ class SouthernStripeTerminalPayment(models.Model):
     completed_at = fields.Datetime(readonly=True, copy=False)
     retry_count = fields.Integer(default=0, readonly=True, copy=False)
 
-    _sql_constraints = [  # noqa: RUF012 - Odoo model declaration
-        ("idempotency_key_unique", "unique(idempotency_key)", "The terminal idempotency key must be unique."),
-        ("payment_intent_id_unique", "unique(payment_intent_id)", "The Stripe PaymentIntent is already linked."),
-    ]
+    _idempotency_key_unique = models.Constraint(
+        "UNIQUE(idempotency_key)",
+        "The terminal idempotency key must be unique.",
+    )
+    _payment_intent_id_unique = models.Constraint(
+        "UNIQUE(payment_intent_id)",
+        "The Stripe PaymentIntent is already linked.",
+    )
 
     @api.constrains("invoice_id", "config_id", "currency_id", "amount")
     def _check_payment_identity(self):
