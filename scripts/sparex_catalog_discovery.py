@@ -36,6 +36,7 @@ PARSER_VERSION = "sparex-listing-frontier-v3"
 SCHEMA_VERSION = "1.1"
 SPAREX_HOST = "us.sparex.com"
 MAX_PAGE_ITEMS = 100
+MAX_CHECKPOINT_PAGES = 10
 PORTAL_COOLDOWN_STATUSES = {429, 500, 502, 503, 504}
 SKU_FROM_URL = re.compile(r"-(?P<digits>\d+)\.html(?:$|[?#])", re.IGNORECASE)
 SKU_IN_TEXT = re.compile(r"(?<![A-Z0-9])S[.\s-]?0*(?P<digits>\d+)(?!\d)", re.IGNORECASE)
@@ -329,20 +330,33 @@ def _existing_run(client: OdooClient, run_key: str) -> dict[str, Any] | None:
             "throttle_seconds",
             "max_pages_per_checkpoint",
             "page_count",
+            "recovery_state",
+            "consecutive_failure_count",
         ],
         limit=1,
     )
     return rows[0] if rows else None
 
 
+def adaptive_checkpoint_pages(requested: int, existing: dict[str, Any] | None) -> int:
+    bounded = max(1, min(int(requested or 5), MAX_CHECKPOINT_PAGES))
+    if not existing:
+        return min(5, bounded)
+    if existing.get("recovery_state") not in {None, "healthy"} or int(existing.get("consecutive_failure_count") or 0):
+        return min(2, bounded)
+    if int(existing.get("page_count") or 0) < 10:
+        return min(5, bounded)
+    return bounded
+
+
 def main() -> int:
     args = build_parser().parse_args()
     throttle_seconds = max(3.0, float(args.throttle_seconds))
-    checkpoint_pages = max(1, min(int(args.max_pages_per_checkpoint or 5), 5))
     client = OdooClient(OdooConfig.from_env(args.odoo_env_file)).connect()
     if not client.count("ir.model", [("model", "=", "southern.sparex.discovery.run")]):
         raise RuntimeError("Upgrade Southern Parts Intelligence before running Sparex discovery.")
     existing = _existing_run(client, args.run_key)
+    checkpoint_pages = adaptive_checkpoint_pages(args.max_pages_per_checkpoint, existing)
     seed_url = (args.seed_url or (existing or {}).get("seed_url") or "").strip()
     if not seed_url:
         load_env_file(args.dealer_env_file.resolve())
@@ -391,7 +405,7 @@ def main() -> int:
             "parser_version": PARSER_VERSION,
             "throttle_seconds": throttle_seconds,
             "max_pages_per_checkpoint": checkpoint_pages,
-            "max_pages_total": 5000,
+            "max_pages_total": 10000,
             "product_creation_authorized": False,
         }
         plan_record = _archive(store, "plan.json", plan, args.s3_bucket, archive_prefix)
@@ -409,7 +423,7 @@ def main() -> int:
                 "throttle_seconds": throttle_seconds,
                 "max_pages_per_checkpoint": checkpoint_pages,
                 "max_items_per_page": MAX_PAGE_ITEMS,
-                "max_pages_total": 5000,
+                "max_pages_total": 10000,
             },
         )
     run = client.call(

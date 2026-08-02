@@ -285,6 +285,22 @@ class TestSparexDiscovery(TransactionCase):
         Item.rollback_source_links(applied, "Synthetic source-link rollback")
         self.assertFalse(product.southern_source_url)
 
+        product.image_1920 = False
+        item._refresh_readiness()
+        image_plan = Item.prepare_source_link_plan(limit=5)
+        self.assertEqual(len(image_plan), 1)
+        image_bytes = b"listing-image-repair"
+        image_plan[0]["image_base64"] = base64.b64encode(image_bytes).decode("ascii")
+        image_plan[0]["image_content_sha256"] = hashlib.sha256(image_bytes).hexdigest()
+        repaired = Item.apply_source_link_plan(
+            image_plan, "sparex-discovery-source-link", "Test exact URL and image repair"
+        )
+        self.assertTrue(product.image_1920)
+        self.assertTrue(item.publication_candidate)
+        Item.rollback_source_links(repaired, "Synthetic URL and image rollback")
+        self.assertFalse(product.southern_source_url)
+        self.assertFalse(product.image_1920)
+
     def test_large_listing_frontier_remains_bounded_and_resumable(self):
         seed_url = "https://us.sparex.com/"
         listing_urls = [f"https://us.sparex.com/category-{index}-parts.html" for index in range(501)]

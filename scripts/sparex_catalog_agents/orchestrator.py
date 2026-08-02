@@ -8,6 +8,7 @@ snapshot, explicit write gate, public verification, and scoped rollback.
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -18,7 +19,7 @@ import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from scripts.odoo_runtime import ApplyGate, ArtifactStore, OdooClient, OdooConfig
 from scripts.odoo_runtime.client import load_env_file
@@ -35,6 +36,7 @@ PUBLICATION_CONFIRMATION = "catalog-agent-publication"
 SOURCE_LINK_CONFIRMATION = "sparex-discovery-source-link"
 MAX_BATCH = 50
 MAX_AI_CALLS = 5
+MAX_SOURCE_IMAGE_BYTES = 10 * 1024 * 1024
 AGENT_SEQUENCE: tuple[AgentCode, ...] = (
     "coordinator",
     "sparex_discovery",
@@ -215,6 +217,42 @@ def verify_public_pages(base_url: str, published: list[dict[str, Any]]) -> list[
     return verification
 
 
+def hydrate_source_repair_images(records: list[dict[str, Any]], throttle_seconds: float) -> list[dict[str, Any]]:
+    hydrated = []
+    last_request = 0.0
+    for record in records:
+        prepared = dict(record)
+        if prepared.get("repair_image"):
+            image_url = str(prepared.get("image_url") or "").strip()
+            parsed = urlsplit(image_url)
+            if parsed.scheme.casefold() != "https" or not parsed.hostname:
+                raise RuntimeError("source_image_url_invalid")
+            expected_url_sha = str(prepared.get("image_url_sha256") or "").casefold()
+            if hashlib.sha256(image_url.encode("utf-8")).hexdigest() != expected_url_sha:
+                raise RuntimeError("source_image_url_hash_mismatch")
+            wait_seconds = throttle_seconds - (time.monotonic() - last_request)
+            if wait_seconds > 0:
+                time.sleep(wait_seconds)
+            request = urllib.request.Request(
+                image_url,
+                headers={"User-Agent": "Titan-Sparex-Listing-Image-Repair/1.0"},
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=45) as response:
+                    content_type = str(response.headers.get("Content-Type") or "").split(";", 1)[0].casefold()
+                    content = response.read(MAX_SOURCE_IMAGE_BYTES + 1)
+            except (urllib.error.URLError, TimeoutError, OSError) as exc:
+                raise RuntimeError(f"source_image_fetch_failed:{type(exc).__name__}") from exc
+            finally:
+                last_request = time.monotonic()
+            if not content_type.startswith("image/") or not content or len(content) > MAX_SOURCE_IMAGE_BYTES:
+                raise RuntimeError("source_image_content_invalid")
+            prepared["image_base64"] = base64.b64encode(content).decode("ascii")
+            prepared["image_content_sha256"] = hashlib.sha256(content).hexdigest()
+        hydrated.append(prepared)
+    return hydrated
+
+
 def main() -> int:
     args = build_parser().parse_args()
     limit = max(1, min(int(args.limit), MAX_BATCH))
@@ -224,6 +262,11 @@ def main() -> int:
     ai_max_calls = max(0, min(int(args.ai_max_calls), MAX_AI_CALLS))
     config = OdooConfig.from_env(args.odoo_env_file)
     client = OdooClient(config).connect()
+    readiness_refresh = client.call(
+        "southern.sparex.discovery.item",
+        "refresh_readiness_batch",
+        limit=min(2000, max(500, limit * 10)),
+    )
     source_prepared = client.call(
         "southern.sparex.discovery.item",
         "prepare_source_link_plan",
@@ -233,6 +276,7 @@ def main() -> int:
     safe_preview = {
         "mode": "apply" if args.apply else "read_only",
         "source_link_candidate_count": len(source_prepared),
+        "readiness_refresh": readiness_refresh,
         "candidate_count": len(preview),
         "candidates": preview,
         "limit": limit,
@@ -268,6 +312,10 @@ def main() -> int:
                     "image_url_sha256",
                     "source_artifact_sha256",
                     "before_source_url_sha256",
+                    "before_image_present",
+                    "before_image_sha256",
+                    "repair_url",
+                    "repair_image",
                     "snapshot_sha256",
                 )
             }
@@ -284,10 +332,11 @@ def main() -> int:
     )
     linked_sources = []
     if source_prepared:
+        source_execution = hydrate_source_repair_images(source_prepared, throttle)
         linked_sources = client.call(
             "southern.sparex.discovery.item",
             "apply_source_link_plan",
-            records=source_prepared,
+            records=source_execution,
             confirmation=SOURCE_LINK_CONFIRMATION,
             reason=args.reason,
         )

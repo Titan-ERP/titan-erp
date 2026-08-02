@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from scripts.sparex_catalog_agents import orchestrator
 from scripts.sparex_catalog_agents.agent import build_agent, deterministic_agent_decision, requires_ai_review
@@ -8,6 +9,7 @@ from scripts.sparex_catalog_agents.orchestrator import (
     MAX_BATCH,
     _public_url,
     _run_agent_tasks,
+    hydrate_source_repair_images,
     run_s3_prefix,
 )
 
@@ -140,4 +142,25 @@ def test_successful_discovery_triggers_publication_handoff():
     assert "OnSuccess=titan-catalog-agent.service" in discovery_service
     assert "SPAREX_DISCOVERY_RUN_KEY=sparex-full-catalog-inventory-v3" in discovery_service
     assert "sparex-full-catalog-inventory-v3" in discovery_launcher
-    assert "--max-pages-per-checkpoint 5" in discovery_launcher
+    assert "--max-pages-per-checkpoint 10" in discovery_launcher
+
+
+def test_listing_image_repair_is_hash_verified_and_bounded(monkeypatch):
+    image_url = "https://cdn.example.com/part.jpg"
+    image_bytes = b"verified-image"
+    response = MagicMock()
+    response.headers = {"Content-Type": "image/jpeg"}
+    response.read.return_value = image_bytes
+    response.__enter__.return_value = response
+    response.__exit__.return_value = False
+    monkeypatch.setattr(orchestrator.urllib.request, "urlopen", lambda *_args, **_kwargs: response)
+    records = [
+        {
+            "repair_image": True,
+            "image_url": image_url,
+            "image_url_sha256": orchestrator.hashlib.sha256(image_url.encode()).hexdigest(),
+        }
+    ]
+    hydrated = hydrate_source_repair_images(records, 3.0)
+    assert hydrated[0]["image_content_sha256"] == orchestrator.hashlib.sha256(image_bytes).hexdigest()
+    assert hydrated[0]["image_base64"]

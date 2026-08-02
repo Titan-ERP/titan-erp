@@ -13,7 +13,7 @@ class SparexDiscoveryReconciliationContractTests(unittest.TestCase):
         self.assertIn("for _index in range(checkpoint_pages):", source)
         self.assertIn('"configure_discovery_checkpoint"', source)
         self.assertIn('"prepare_reconciliation_run"', source)
-        self.assertIn("--max-pages-per-checkpoint 5", launcher)
+        self.assertIn("--max-pages-per-checkpoint 10", launcher)
         self.assertIn("sparex-full-catalog-inventory-v3", launcher)
 
     def test_odoo_model_has_reconciliation_recovery_and_source_link_contracts(self):
