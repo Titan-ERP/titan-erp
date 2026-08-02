@@ -85,3 +85,11 @@ Production uses `titan-sparex-discovery.service` and
 `titan-sparex-discovery.timer`. Both the discovery and publication services use
 the same non-blocking lock, so they cannot overlap. Install the unit files only
 after the Odoo module upgrade and a bounded read-only portal check.
+
+Every successful discovery service completion triggers
+`titan-catalog-agent.service`. This provides a deterministic discovery-to-release
+handoff in addition to the publication timer. Parser version v3 collapses
+duplicate anchors for the same exact product URL and keeps the image-backed
+listing card, while genuine conflicting URLs, images, or explicit SKUs remain
+in review. The v3 run key replays the catalog so items previously classified by
+the older parser are reconciled instead of silently reused.

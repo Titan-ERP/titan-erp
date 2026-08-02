@@ -32,7 +32,7 @@ DEFAULT_ODOO_ENV = ROOT / "odoo_connection.env"
 DEFAULT_ARTIFACT_ROOT = ROOT / "outputs" / "sparex-catalog-discovery"
 WORKFLOW = "sparex-discovery-queue"
 CONFIRMATION = "sparex-discovery-queue"
-PARSER_VERSION = "sparex-listing-frontier-v2"
+PARSER_VERSION = "sparex-listing-frontier-v3"
 SCHEMA_VERSION = "1.1"
 SPAREX_HOST = "us.sparex.com"
 MAX_PAGE_ITEMS = 100
@@ -170,10 +170,23 @@ def parse_listing_page(content: bytes | str, page_url: str) -> dict[str, Any]:
 
     items: list[dict[str, str]] = []
     for _sku, candidates in sorted(by_sku.items(), key=lambda row: int(row[0].split(".", 1)[1])):
-        unique = {(row["source_url"], row["image_url"], row["source_state"]) for row in candidates}
-        selected = dict(candidates[0])
-        if len(unique) > 1:
+        # Sparex listing cards can expose the same product link more than once
+        # (for example, the card wrapper and its title).  A title-only anchor
+        # has no image of its own, but that must not downgrade the image-backed
+        # card for the same exact product URL.
+        source_urls = {row["source_url"] for row in candidates}
+        image_urls = {row["image_url"] for row in candidates if row["image_url"]}
+        selected = dict(next((row for row in candidates if row["image_url"]), candidates[0]))
+        if (
+            len(source_urls) > 1
+            or len(image_urls) > 1
+            or any(row["source_state"] == "ambiguous" for row in candidates)
+        ):
             selected["source_state"] = "ambiguous"
+        elif selected["image_url"]:
+            selected["source_state"] = "verified"
+        else:
+            selected["source_state"] = "missing_image"
         items.append(selected)
     if len(items) > MAX_PAGE_ITEMS:
         raise RuntimeError(f"listing_page_exceeded_{MAX_PAGE_ITEMS}_items")

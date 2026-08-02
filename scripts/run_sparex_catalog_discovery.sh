@@ -5,7 +5,7 @@ install_root="${CATALOG_AGENT_INSTALL_ROOT:-/opt/southern-parts/catalog-agent}"
 runtime_root="${install_root}/current"
 artifact_root="${install_root}/artifacts/discovery"
 odoo_env="${ODOO_ENV_FILE:-/opt/southern-parts/Odoo/odoo_connection.env}"
-run_key="${SPAREX_DISCOVERY_RUN_KEY:-sparex-full-catalog-inventory-v2}"
+run_key="${SPAREX_DISCOVERY_RUN_KEY:-sparex-full-catalog-inventory-v3}"
 
 mkdir -p "${artifact_root}"
 exec 9>"${install_root}/artifacts/catalog-agent.lock"

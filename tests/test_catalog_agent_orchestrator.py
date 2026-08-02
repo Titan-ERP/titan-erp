@@ -130,3 +130,13 @@ def test_service_uses_non_overlapping_secure_runtime():
     assert "Environment=ODOO_COMPANY_ID=1" in service
     assert "OnUnitInactiveSec=2min" in timer
     assert "Persistent=false" in timer
+
+
+def test_successful_discovery_triggers_publication_handoff():
+    discovery_service = (ROOT / "cloud" / "aws" / "titan-sparex-discovery.service").read_text(
+        encoding="utf-8"
+    )
+    discovery_launcher = (ROOT / "scripts" / "run_sparex_catalog_discovery.sh").read_text(encoding="utf-8")
+    assert "OnSuccess=titan-catalog-agent.service" in discovery_service
+    assert "SPAREX_DISCOVERY_RUN_KEY=sparex-full-catalog-inventory-v3" in discovery_service
+    assert "sparex-full-catalog-inventory-v3" in discovery_launcher
