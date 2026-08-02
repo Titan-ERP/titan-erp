@@ -136,7 +136,8 @@ def _ensure_ms_rule(env, structure=None):
 
 
 def _account_for_company(env, company, specification):
-    accounts = env["account.account"].sudo().with_context(active_test=False).search(
+    account_model = env["account.account"].sudo().with_company(company).with_context(active_test=False)
+    accounts = account_model.search(
         [("company_ids", "in", company.ids), ("code", "=", specification["code"])]
     )
     if not accounts:
@@ -145,7 +146,7 @@ def _account_for_company(env, company, specification):
                 _("Required Southern payroll account %(code)s %(name)s does not exist.")
                 % {"code": specification["code"], "name": specification["name"]}
             )
-        return env["account.account"].sudo().create(
+        return account_model.create(
             {
                 "code": specification["code"],
                 "name": specification["name"],
