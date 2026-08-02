@@ -56,7 +56,7 @@ class TestMississippiWithholding(TransactionCase):
             Decimal("59"),
         )
 
-    def test_single_zero_exemption_uses_form_amount_exactly(self):
+    def test_single_status_supplies_fixed_form_exemption(self):
         self.assertEqual(
             calculate_ms_withholding(
                 Decimal("3000"),
@@ -64,5 +64,15 @@ class TestMississippiWithholding(TransactionCase):
                 12,
                 exemption_claimed=Decimal("0"),
             ),
-            Decimal("79"),
+            Decimal("59"),
+        )
+
+    def test_married_spouse_not_employed_weekly_uses_twelve_thousand_exemption(self):
+        self.assertEqual(
+            calculate_ms_withholding(
+                Decimal("1250"),
+                "ms_married_spouse_not_employed",
+                52,
+            ),
+            Decimal("30"),
         )

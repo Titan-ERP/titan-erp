@@ -5,6 +5,7 @@ from .models.mississippi_withholding import MS_FILING_STATUSES
 
 SOUTHERN_COMPANY_NAME = "Southern Equipment Company (Laurel)"
 US_REGULAR_PAY_STRUCTURE = "United States: Regular Pay"
+SOUTHERN_FUTA_EFFECTIVE_RATE = 0.6
 
 SOUTHERN_PAYROLL_ACCOUNTS = {
     "accrued_payroll": {
@@ -209,9 +210,48 @@ def configure_southern_payroll_accounts(env, company=None, structure=None):
     return accounts
 
 
+def configure_southern_employer_tax_rules(env, structure=None):
+    structure = structure or _regular_pay_structure(env)
+    rule_model = env["hr.salary.rule"].sudo()
+
+    futa_rule = _require_one(
+        rule_model.search([("code", "=", "COMPANYFUTA"), ("struct_id", "=", structure.id)]),
+        _("salary rule COMPANYFUTA on United States: Regular Pay"),
+    )
+    default_futa_rate = "result_rate = payslip._rule_parameter('l10n_us_FUTA_tax_rate')"
+    southern_futa_rate = (
+        f"result_rate = {SOUTHERN_FUTA_EFFECTIVE_RATE} "
+        f"if version.company_id.name == {SOUTHERN_COMPANY_NAME!r} "
+        "else payslip._rule_parameter('l10n_us_FUTA_tax_rate')"
+    )
+    futa_code = futa_rule.amount_python_compute or ""
+    if southern_futa_rate not in futa_code:
+        if default_futa_rate not in futa_code:
+            raise ValidationError(_("COMPANYFUTA no longer contains the expected rate expression."))
+        futa_rule.write(
+            {"amount_python_compute": futa_code.replace(default_futa_rate, southern_futa_rate)}
+        )
+
+    sui_rule = _require_one(
+        rule_model.search([("code", "=", "COMPANYSUI"), ("struct_id", "=", structure.id)]),
+        _("salary rule COMPANYSUI on United States: Regular Pay"),
+    )
+    default_sui_condition = "result = version.address_id.state_id.code"
+    private_state_sui_condition = (
+        "result = version.private_state_id.code or version.address_id.state_id.code"
+    )
+    if sui_rule.condition_python != private_state_sui_condition:
+        if sui_rule.condition_python != default_sui_condition:
+            raise ValidationError(_("COMPANYSUI no longer contains the expected state expression."))
+        sui_rule.write({"condition_python": private_state_sui_condition})
+
+    return {"futa": futa_rule, "sui": sui_rule}
+
+
 def apply_southern_mississippi_payroll_setup(env):
     structure = _regular_pay_structure(env)
     _ensure_ms_rule(env, structure=structure)
+    configure_southern_employer_tax_rules(env, structure=structure)
     company = _southern_companies(env)
     if not company:
         return {}

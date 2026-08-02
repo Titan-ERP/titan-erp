@@ -5,18 +5,22 @@ MS_FILING_STATUSES = {
     "ms_single": {
         "label": "MS: Single",
         "standard_deduction": Decimal("2300"),
+        "fixed_exemption": Decimal("6000"),
     },
     "ms_head_of_family": {
         "label": "MS: Head-of-Family",
         "standard_deduction": Decimal("3400"),
+        "fixed_exemption": Decimal("9500"),
     },
     "ms_married_spouse_not_employed": {
         "label": "MS: Married (Spouse Not Employed)",
         "standard_deduction": Decimal("4600"),
+        "fixed_exemption": Decimal("12000"),
     },
     "ms_married_both_spouses_employed": {
         "label": "MS: Married (Both Spouses Employed)",
         "standard_deduction": Decimal("2300"),
+        "fixed_exemption": None,
     },
 }
 
@@ -65,11 +69,11 @@ def calculate_ms_withholding(
         return Decimal("0.00")
 
     annualized_wages = _money(pay_period_taxable_wages) * periods
-    taxable_income = (
-        annualized_wages
-        - status["standard_deduction"]
-        - _money(exemption_claimed)
+    fixed_exemption = status.get("fixed_exemption")
+    effective_exemption = _money(
+        fixed_exemption if fixed_exemption is not None else exemption_claimed
     )
+    taxable_income = annualized_wages - status["standard_deduction"] - effective_exemption
     if taxable_income <= Decimal("10000"):
         period_tax = Decimal("0")
     else:
