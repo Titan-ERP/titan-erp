@@ -32,6 +32,15 @@ AGENT_TOOL_NAMES: dict[AgentCode, str] = {
     "website_release": "evaluate_release_gate",
 }
 
+AI_REVIEW_BLOCKERS = frozenset(
+    {
+        "ambiguous_identity",
+        "duplicate_match",
+        "incomplete_listing_identity",
+        "conflicting_evidence",
+    }
+)
+
 COMMON_BOUNDARY = """
 Call your assigned function tool exactly once before deciding. Use only the
 tool result and supplied task identity. Never invent a SKU, URL, image, price, cost,
@@ -165,8 +174,8 @@ def evaluate_agent_tool(agent_code: AgentCode, snapshot: dict[str, Any]) -> dict
 def deterministic_agent_decision(agent_code: AgentCode, snapshot: dict[str, Any]) -> CatalogAgentDecision:
     """Return the bounded decision implied by the deterministic Odoo facts.
 
-    This is a continuity fallback for provider rate limiting only. It does not
-    add facts, relax readiness, or expose a write capability.
+    This is the normal production decision path. It does not add facts, relax
+    readiness, or expose a write capability.
     """
 
     facts = evaluate_agent_tool(agent_code, snapshot)
@@ -202,6 +211,18 @@ def deterministic_agent_decision(agent_code: AgentCode, snapshot: dict[str, Any]
         blocking_reasons=blockers,
         next_agent=next_agent,
     )
+
+
+def requires_ai_review(snapshot: dict[str, Any]) -> bool:
+    """Return whether a bounded snapshot contains an explicit ambiguity.
+
+    Normal catalog readiness is completely deterministic. AI is reserved for
+    an operator-enabled review of known ambiguity markers and cannot relax the
+    underlying Odoo blockers or perform a write.
+    """
+
+    blockers = {str(value) for value in snapshot.get("blockers", []) if value}
+    return bool(blockers & AI_REVIEW_BLOCKERS)
 
 
 @function_tool
@@ -251,7 +272,7 @@ AGENT_TOOLS = {
 def build_agent(agent_code: AgentCode, *, model_name: str | None = None) -> Agent:
     if agent_code not in AGENT_NAMES:
         raise ValueError(f"Unknown catalog agent: {agent_code}")
-    model = model_name or os.environ.get("OPENAI_CATALOG_AGENT_MODEL", "gpt-5.6").strip()
+    model = model_name or os.environ.get("OPENAI_CATALOG_AGENT_MODEL", "gpt-5.6-luna").strip()
     instructions = (
         f"{COMMON_BOUNDARY}\n\n{AGENT_INSTRUCTIONS[agent_code]}\n\nYour only tool is {AGENT_TOOL_NAMES[agent_code]}."
     )

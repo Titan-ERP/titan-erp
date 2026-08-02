@@ -1,7 +1,14 @@
 from pathlib import Path
 
-from scripts.sparex_catalog_agents.agent import deterministic_agent_decision
-from scripts.sparex_catalog_agents.orchestrator import AGENT_SEQUENCE, MAX_BATCH, _public_url, run_s3_prefix
+from scripts.sparex_catalog_agents import orchestrator
+from scripts.sparex_catalog_agents.agent import build_agent, deterministic_agent_decision, requires_ai_review
+from scripts.sparex_catalog_agents.orchestrator import (
+    AGENT_SEQUENCE,
+    MAX_BATCH,
+    _public_url,
+    _run_agent_tasks,
+    run_s3_prefix,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -52,6 +59,54 @@ def test_rate_limit_fallback_keeps_the_exact_ready_chain_bounded():
     assert release.next_agent is None
 
 
+def test_ai_review_is_only_for_explicit_ambiguity():
+    assert not requires_ai_review({"blockers": []})
+    assert not requires_ai_review({"blockers": ["missing_image"]})
+    assert requires_ai_review({"blockers": ["ambiguous_identity"]})
+
+
+def test_optional_agents_default_to_efficient_model():
+    assert build_agent("coordinator").model == "gpt-5.6-luna"
+
+
+def test_normal_task_path_never_calls_openai(monkeypatch):
+    class FakeClient:
+        def __init__(self):
+            self.recorded = []
+
+        def call(self, model, method, **kwargs):
+            if method == "claim_tasks":
+                return [
+                    {
+                        "id": 10,
+                        "input_json": '{"task_id":10,"sku":"S.42","ready_to_publish":true}',
+                    }
+                ]
+            if method == "record_external_result":
+                self.recorded.append(kwargs)
+                return True
+            raise AssertionError((model, method))
+
+    monkeypatch.setattr(orchestrator, "run_agent", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError()))
+    client = FakeClient()
+    state = {"calls": 0, "failures": 0, "disabled": False, "max_calls": 1}
+    result = _run_agent_tasks(
+        client,
+        "coordinator",
+        worker_id="test",
+        limit=1,
+        throttle_seconds=3.0,
+        throttle_state={},
+        run_ai=False,
+        ai_state=state,
+    )
+    assert result["completed"] == 1
+    assert result["ai_calls"] == 0
+    assert result["deterministic_decisions"] == 1
+    assert state["calls"] == 0
+    assert client.recorded[0]["state"] == "completed"
+
+
 def test_each_run_gets_an_immutable_s3_prefix():
     assert (
         run_s3_prefix("sparex-product-catalog/catalog-agent-automation/production/", "20260801T043236Z")
@@ -64,7 +119,8 @@ def test_service_uses_non_overlapping_secure_runtime():
     service = (ROOT / "cloud" / "aws" / "titan-catalog-agent.service").read_text(encoding="utf-8")
     timer = (ROOT / "cloud" / "aws" / "titan-catalog-agent.timer").read_text(encoding="utf-8")
     assert "flock -n" in launcher
-    assert "aws ssm get-parameter" in launcher
+    assert "aws ssm get-parameter" not in launcher
+    assert "--run-ai" not in launcher
     assert "export ODOO_API_MODE=json2" in launcher
     assert "--limit 5" in launcher
     assert "--publish" in launcher

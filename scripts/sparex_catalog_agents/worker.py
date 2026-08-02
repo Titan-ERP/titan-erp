@@ -16,7 +16,7 @@ from pathlib import Path
 from scripts.odoo_runtime import ApplyGate, OdooClient, OdooConfig
 from scripts.odoo_runtime.client import load_env_file
 
-from .agent import AGENT_NAMES, AgentCode, run_agent
+from .agent import AGENT_NAMES, AgentCode, deterministic_agent_decision, requires_ai_review, run_agent
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OPENAI_ENV = ROOT / ".env.local"
@@ -56,8 +56,6 @@ def canonical_result(decision) -> str:
 
 def main() -> int:
     args = build_parser().parse_args()
-    if args.apply and not args.run_ai:
-        raise RuntimeError("--apply requires --run-ai so claimed tasks always reach a terminal result.")
     limit = max(1, min(int(args.limit), MAX_BATCH))
     client = OdooClient(OdooConfig.from_env(args.odoo_env_file)).connect()
     if not client.count("ir.model", [("model", "=", "southern.catalog.agent.task")]):
@@ -83,20 +81,25 @@ def main() -> int:
         "task_ids": [task["id"] for task in tasks],
         "run_ai": bool(args.run_ai),
     }
-    if not args.run_ai:
+    if not args.apply:
         print(json.dumps(safe_plan, sort_keys=True))
         return 0
 
-    load_env_file(args.openai_env_file)
-    if not os.environ.get("OPENAI_API_KEY", "").strip():
-        raise RuntimeError("OPENAI_API_KEY is required for --run-ai.")
+    if args.run_ai:
+        load_env_file(args.openai_env_file)
+        if not os.environ.get("OPENAI_API_KEY", "").strip():
+            raise RuntimeError("OPENAI_API_KEY is required for --run-ai.")
 
     completed = 0
     failed = 0
     for task in tasks:
         try:
             snapshot = json.loads(task.get("input_json") or "{}")
-            decision = run_agent(args.agent, snapshot)
+            decision = (
+                run_agent(args.agent, snapshot)
+                if args.run_ai and requires_ai_review(snapshot)
+                else deterministic_agent_decision(args.agent, snapshot)
+            )
             output = canonical_result(decision)
             state = "completed"
             completed += 1

@@ -1,7 +1,8 @@
 # Odoo Sparex Catalog Agents
 
-This bounded OpenAI Agents SDK worker processes tasks owned by the
-`southern_parts_intelligence` Odoo module.
+This bounded catalog worker processes tasks owned by the
+`southern_parts_intelligence` Odoo module. The scheduled production path is
+deterministic and makes zero OpenAI API calls for normal product processing.
 
 The five profiles are:
 
@@ -33,9 +34,11 @@ writable publication flags. It records the prior flags and price/cost/image/URL
 hashes, verifies the public HTTP page, and performs a scoped rollback if public
 verification fails.
 
-The production runner retrieves `OPENAI_API_KEY` from AWS Systems Manager
-Parameter Store at runtime. The key is never stored in Odoo, the repository,
-the service definition, or an artifact.
+OpenAI review is optional and reserved for explicitly marked ambiguous
+exceptions. It is disabled in the scheduled production launcher. A supervised
+AI review uses `gpt-5.6-luna`, a hard per-run invocation cap (maximum five), and
+stops all further model calls after the first provider failure. The key is never
+stored in Odoo, the repository, the service definition, or an artifact.
 
 Install the optional local dependency:
 
@@ -49,9 +52,10 @@ Inspect the next bounded queue without calling OpenAI or writing Odoo:
 python -m scripts.sparex_catalog_agents.worker --agent product_verification --limit 5
 ```
 
-An API call requires explicit `--run-ai`. Recording results also requires the
-normal `ODOO_WRITE_ENABLED=true`, `--apply`, `--confirm catalog-agent-results`,
-and a business reason. Product writes remain outside this worker.
+An API call requires an explicit ambiguity plus `--run-ai`. Recording either
+deterministic or optional AI results requires the normal
+`ODOO_WRITE_ENABLED=true`, `--apply`, `--confirm catalog-agent-results`, and a
+business reason. Product writes remain outside this worker.
 
 Run the complete chain in read-only preview mode:
 
@@ -65,7 +69,7 @@ The supervised apply path requires all controls and an S3 artifact bucket:
 $env:ODOO_WRITE_ENABLED = "true"
 $env:SOUTHERN_PRODUCT_ARTIFACT_BUCKET = "southern-parts-catalog-artifacts-475369996980-us-east-1"
 python -m scripts.sparex_catalog_agents.orchestrator `
-  --odoo-env-file odoo_connection.env --run-ai --apply --publish `
+  --odoo-env-file odoo_connection.env --apply --publish `
   --confirm catalog-agent-automation `
   --reason "Approved catalog verification and website publication"
 ```
