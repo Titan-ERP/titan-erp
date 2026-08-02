@@ -83,8 +83,9 @@ class TestCatalogAgents(TransactionCase):
         self.assertEqual(self.env["product.template"].search_count([]), before)
 
     def test_batch_and_throttle_safety_floors(self):
+        self.agent.batch_size = 50
         with self.assertRaises(ValidationError):
-            self.agent.batch_size = 6
+            self.agent.batch_size = 51
         with self.assertRaises(ValidationError):
             self.agent.throttle_seconds = 2.9
 

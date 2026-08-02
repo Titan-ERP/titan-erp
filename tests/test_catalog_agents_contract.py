@@ -46,7 +46,7 @@ class CatalogAgentsContractTests(unittest.TestCase):
         self.assertNotIn('product.write({"standard_price"', source)
         self.assertNotIn('product.write({"list_price"', source)
         self.assertNotIn('product.write({"image_1920"', source)
-        self.assertIn("MAX_AGENT_BATCH = 5", source)
+        self.assertIn("MAX_AGENT_BATCH = 50", source)
         self.assertIn("throttle_seconds < 3.0", source)
         self.assertIn("exact_sparex_url(product.southern_source_url, normalized)", source)
 
@@ -54,7 +54,7 @@ class CatalogAgentsContractTests(unittest.TestCase):
         source = (ROOT / "scripts" / "sparex_catalog_agents" / "worker.py").read_text(encoding="utf-8")
         self.assertIn("ApplyGate", source)
         self.assertIn('WORKFLOW = "catalog-agent-results"', source)
-        self.assertIn("MAX_BATCH = 5", source)
+        self.assertIn("MAX_BATCH = 50", source)
         self.assertIn("deterministic_agent_decision", source)
         self.assertIn("requires_ai_review", source)
 

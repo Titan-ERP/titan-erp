@@ -49,7 +49,7 @@ python -m pip install -e ".[agents,dev]"
 Inspect the next bounded queue without calling OpenAI or writing Odoo:
 
 ```powershell
-python -m scripts.sparex_catalog_agents.worker --agent product_verification --limit 5
+python -m scripts.sparex_catalog_agents.worker --agent product_verification --limit 50
 ```
 
 An API call requires an explicit ambiguity plus `--run-ai`. Recording either
@@ -60,7 +60,7 @@ business reason. Product writes remain outside this worker.
 Run the complete chain in read-only preview mode:
 
 ```powershell
-python -m scripts.sparex_catalog_agents.orchestrator --odoo-env-file odoo_connection.env --limit 5
+python -m scripts.sparex_catalog_agents.orchestrator --odoo-env-file odoo_connection.env --limit 50
 ```
 
 The supervised apply path requires all controls and an S3 artifact bucket:
@@ -77,7 +77,8 @@ python -m scripts.sparex_catalog_agents.orchestrator `
 Production scheduling uses `cloud/aws/titan-catalog-agent.service` and
 `cloud/aws/titan-catalog-agent.timer`. The oneshot service plus `flock` prevents
 overlap; the timer waits two minutes after a completed run before scheduling
-the next batch of at most five products.
+the next deterministic publication batch of at most 50 products. Sparex
+listing discovery remains separately throttled to at most five listing pages.
 
 Whole-catalog coverage is handled separately by
 `scripts/sparex_catalog_discovery.py`. It reuses the Discovery and Match agent

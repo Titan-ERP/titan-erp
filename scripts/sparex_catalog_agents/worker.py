@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OPENAI_ENV = ROOT / ".env.local"
 DEFAULT_ODOO_ENV = ROOT / "odoo_connection.env"
 WORKFLOW = "catalog-agent-results"
-MAX_BATCH = 5
+MAX_BATCH = 50
 
 
 def build_parser() -> argparse.ArgumentParser:
