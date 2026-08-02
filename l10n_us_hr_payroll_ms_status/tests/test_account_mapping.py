@@ -5,9 +5,11 @@ from odoo.tests.common import TransactionCase
 
 from ..hooks import (
     SOUTHERN_COMPANY_NAME,
+    SOUTHERN_FUTA_EFFECTIVE_RATE,
     SOUTHERN_PAYROLL_ACCOUNTS,
     SOUTHERN_PAYROLL_RULE_MAPPINGS,
     US_REGULAR_PAY_STRUCTURE,
+    configure_southern_employer_tax_rules,
     configure_southern_payroll_accounts,
 )
 
@@ -104,3 +106,19 @@ class TestSouthernPayrollAccountMapping(TransactionCase):
         self.assertNotIn("getattr", rule.amount_python_compute)
         self.assertNotIn("categories.TAXABLE", rule.amount_python_compute)
         self.assertIn("categories['TAXABLE']", rule.amount_python_compute)
+
+    def test_southern_employer_tax_rules_are_idempotent(self):
+        first = configure_southern_employer_tax_rules(self.env, structure=self.structure)
+        second = configure_southern_employer_tax_rules(self.env, structure=self.structure)
+
+        self.assertEqual(first["futa"], second["futa"])
+        self.assertEqual(first["sui"], second["sui"])
+        self.assertIn(
+            f"result_rate = {SOUTHERN_FUTA_EFFECTIVE_RATE}",
+            first["futa"].amount_python_compute,
+        )
+        self.assertIn(SOUTHERN_COMPANY_NAME, first["futa"].amount_python_compute)
+        self.assertEqual(
+            first["sui"].condition_python,
+            "result = version.private_state_id.code or version.address_id.state_id.code",
+        )
