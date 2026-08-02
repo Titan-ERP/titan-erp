@@ -303,6 +303,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--run-key", required=True)
     parser.add_argument("--seed-url", default="")
     parser.add_argument("--throttle-seconds", type=float, default=3.0)
+    parser.add_argument("--max-pages-per-checkpoint", type=int, default=5)
     parser.add_argument("--worker-id", default=socket.gethostname())
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--confirm", default="")
@@ -326,6 +327,7 @@ def _existing_run(client: OdooClient, run_key: str) -> dict[str, Any] | None:
             "plan_artifact_uri",
             "plan_sha256",
             "throttle_seconds",
+            "max_pages_per_checkpoint",
             "page_count",
         ],
         limit=1,
@@ -336,6 +338,7 @@ def _existing_run(client: OdooClient, run_key: str) -> dict[str, Any] | None:
 def main() -> int:
     args = build_parser().parse_args()
     throttle_seconds = max(3.0, float(args.throttle_seconds))
+    checkpoint_pages = max(1, min(int(args.max_pages_per_checkpoint or 5), 5))
     client = OdooClient(OdooConfig.from_env(args.odoo_env_file)).connect()
     if not client.count("ir.model", [("model", "=", "southern.sparex.discovery.run")]):
         raise RuntimeError("Upgrade Southern Parts Intelligence before running Sparex discovery.")
@@ -387,7 +390,7 @@ def main() -> int:
             "seed_url_sha256": sha256_text(seed_url),
             "parser_version": PARSER_VERSION,
             "throttle_seconds": throttle_seconds,
-            "max_pages_per_checkpoint": 1,
+            "max_pages_per_checkpoint": checkpoint_pages,
             "max_pages_total": 5000,
             "product_creation_authorized": False,
         }
@@ -404,68 +407,118 @@ def main() -> int:
                 "parser_version": PARSER_VERSION,
                 "schema_version": SCHEMA_VERSION,
                 "throttle_seconds": throttle_seconds,
-                "max_pages_per_checkpoint": 1,
+                "max_pages_per_checkpoint": checkpoint_pages,
                 "max_items_per_page": MAX_PAGE_ITEMS,
                 "max_pages_total": 5000,
             },
         )
-    claim = client.call(
+    run = client.call(
         "southern.sparex.discovery.run",
-        "claim_discovery_checkpoint",
+        "configure_discovery_checkpoint",
         run_id=int(run["id"]),
-        worker_id=args.worker_id,
-        lease_seconds=180,
+        max_pages_per_checkpoint=checkpoint_pages,
     )
-    if not claim.get("claimed"):
-        print(json.dumps({"mode": "apply", "claimed": False, "state": claim.get("state")}, sort_keys=True))
-        return 0
-
-    cursor_url = str(claim["cursor_url"])
+    run = client.call(
+        "southern.sparex.discovery.run",
+        "prepare_reconciliation_run",
+        run_id=int(run["id"]),
+    )
+    current_claim: dict[str, Any] | None = None
     try:
-        session, throttle, _products_url = authenticated_session(args.dealer_env_file, throttle_seconds)
-        response = _checked_request(session, throttle, "GET", cursor_url)
-        if "customer/account/login" in response.url.casefold():
-            raise PortalCooldownError("dealer_session_lost")
-        parsed = parse_listing_page(response.content, cursor_url)
-        page_payload = {
-            "schema_version": SCHEMA_VERSION,
-            "workflow": WORKFLOW,
-            "run_id": int(run["id"]),
-            "run_key_sha256": sha256_text(args.run_key),
-            "page_number": int(claim.get("page_count") or 0) + 1,
-            "page_url": cursor_url,
-            "page_url_sha256": sha256_text(cursor_url),
-            "effective_url_sha256": sha256_text(response.url),
-            "response_sha256": hashlib.sha256(response.content).hexdigest(),
-            "parser_version": PARSER_VERSION,
-            "items": parsed["items"],
-            "next_url": parsed["next_url"],
-            "listing_urls": parsed["listing_urls"],
-        }
-        page_record = _archive(store, "listing-page.json", page_payload, args.s3_bucket, archive_prefix)
-        recorded = client.call(
-            "southern.sparex.discovery.run",
-            "record_discovery_page",
-            run_id=int(run["id"]),
-            worker_id=args.worker_id,
-            page={
+        session = throttle = None
+        pages = []
+        aggregate_counts = {"matched": 0, "missing": 0, "duplicate": 0, "review": 0}
+        observed = corrected = stale = 0
+        terminal_state = str(run.get("state") or "ready")
+        for _index in range(checkpoint_pages):
+            current_claim = client.call(
+                "southern.sparex.discovery.run",
+                "claim_discovery_checkpoint",
+                run_id=int(run["id"]),
+                worker_id=args.worker_id,
+                lease_seconds=180,
+            )
+            if not current_claim.get("claimed"):
+                terminal_state = str(current_claim.get("state") or terminal_state)
+                break
+            if session is None or throttle is None:
+                session, throttle, _products_url = authenticated_session(args.dealer_env_file, throttle_seconds)
+            cursor_url = str(current_claim["cursor_url"])
+            response = _checked_request(session, throttle, "GET", cursor_url)
+            if "customer/account/login" in response.url.casefold():
+                raise PortalCooldownError("dealer_session_lost")
+            parsed = parse_listing_page(response.content, cursor_url)
+            page_number = int(current_claim.get("page_count") or 0) + 1
+            page_payload = {
+                "schema_version": SCHEMA_VERSION,
+                "workflow": WORKFLOW,
+                "run_id": int(run["id"]),
+                "run_key_sha256": sha256_text(args.run_key),
+                "page_number": page_number,
                 "page_url": cursor_url,
-                "page_sha256": page_payload["response_sha256"],
-                "artifact_uri": page_record["artifact_uri"],
-                "artifact_sha256": page_record["sha256"],
+                "page_url_sha256": sha256_text(cursor_url),
+                "effective_url_sha256": sha256_text(response.url),
+                "response_sha256": hashlib.sha256(response.content).hexdigest(),
+                "parser_version": PARSER_VERSION,
                 "items": parsed["items"],
                 "next_url": parsed["next_url"],
                 "listing_urls": parsed["listing_urls"],
-            },
-        )
+            }
+            page_record = _archive(
+                store,
+                f"listing-page-{page_number:05d}.json",
+                page_payload,
+                args.s3_bucket,
+                archive_prefix,
+            )
+            recorded = client.call(
+                "southern.sparex.discovery.run",
+                "record_discovery_page",
+                run_id=int(run["id"]),
+                worker_id=args.worker_id,
+                page={
+                    "page_url": cursor_url,
+                    "page_sha256": page_payload["response_sha256"],
+                    "artifact_uri": page_record["artifact_uri"],
+                    "artifact_sha256": page_record["sha256"],
+                    "items": parsed["items"],
+                    "next_url": parsed["next_url"],
+                    "listing_urls": parsed["listing_urls"],
+                },
+            )
+            current_claim = None
+            terminal_state = str(recorded.get("state") or terminal_state)
+            observed += int(recorded.get("observed") or 0)
+            corrected += int(recorded.get("corrected") or 0)
+            stale = max(stale, int(recorded.get("stale") or 0))
+            for key in aggregate_counts:
+                aggregate_counts[key] += int((recorded.get("counts") or {}).get(key) or 0)
+            pages.append(
+                {
+                    "page_number": page_number,
+                    "page_url_sha256": page_payload["page_url_sha256"],
+                    "page_artifact_uri": page_record["artifact_uri"],
+                    "page_artifact_sha256": page_record["sha256"],
+                    "recorded": recorded,
+                }
+            )
+            if terminal_state == "completed":
+                break
+        if not pages:
+            print(json.dumps({"mode": "apply", "claimed": False, "state": terminal_state}, sort_keys=True))
+            return 0
         result = {
             "schema_version": SCHEMA_VERSION,
             "workflow": WORKFLOW,
             "run_id": int(run["id"]),
             "run_key_sha256": sha256_text(args.run_key),
-            "page_artifact_uri": page_record["artifact_uri"],
-            "page_artifact_sha256": page_record["sha256"],
-            "recorded": recorded,
+            "checkpoint_page_limit": checkpoint_pages,
+            "pages": pages,
+            "aggregate_counts": aggregate_counts,
+            "observed": observed,
+            "corrected": corrected,
+            "stale": stale,
+            "terminal_state": terminal_state,
             "product_creation_authorized": False,
         }
         result_record = _archive(store, "result.json", result, args.s3_bucket, archive_prefix)
@@ -474,9 +527,12 @@ def main() -> int:
                 {
                     "mode": "apply",
                     "run_id": int(run["id"]),
-                    "state": recorded.get("state"),
-                    "observed": recorded.get("observed", 0),
-                    "counts": recorded.get("counts", {}),
+                    "state": terminal_state,
+                    "pages_processed": len(pages),
+                    "observed": observed,
+                    "corrected": corrected,
+                    "stale": stale,
+                    "counts": aggregate_counts,
                     "result_sha256": result_record["sha256"],
                     "result_uri": result_record["artifact_uri"],
                 },
@@ -485,24 +541,26 @@ def main() -> int:
         )
         return 0
     except PortalCooldownError as exc:
-        client.call(
-            "southern.sparex.discovery.run",
-            "record_discovery_failure",
-            run_id=int(run["id"]),
-            worker_id=args.worker_id,
-            error_code=str(exc),
-            cooldown=True,
-        )
+        if current_claim and current_claim.get("claimed"):
+            client.call(
+                "southern.sparex.discovery.run",
+                "record_discovery_failure",
+                run_id=int(run["id"]),
+                worker_id=args.worker_id,
+                error_code=str(exc),
+                cooldown=True,
+            )
         raise
     except Exception as exc:
-        client.call(
-            "southern.sparex.discovery.run",
-            "record_discovery_failure",
-            run_id=int(run["id"]),
-            worker_id=args.worker_id,
-            error_code=type(exc).__name__,
-            cooldown=False,
-        )
+        if current_claim and current_claim.get("claimed"):
+            client.call(
+                "southern.sparex.discovery.run",
+                "record_discovery_failure",
+                run_id=int(run["id"]),
+                worker_id=args.worker_id,
+                error_code=type(exc).__name__,
+                cooldown=False,
+            )
         raise
 
 

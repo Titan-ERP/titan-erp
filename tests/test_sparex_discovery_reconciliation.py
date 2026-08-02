@@ -1,0 +1,54 @@
+import unittest
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class SparexDiscoveryReconciliationContractTests(unittest.TestCase):
+    def test_worker_runs_five_throttled_pages_and_preserves_exact_run(self):
+        source = (ROOT / "scripts" / "sparex_catalog_discovery.py").read_text(encoding="utf-8")
+        launcher = (ROOT / "scripts" / "run_sparex_catalog_discovery.sh").read_text(encoding="utf-8")
+        self.assertIn('parser.add_argument("--max-pages-per-checkpoint", type=int, default=5)', source)
+        self.assertIn("for _index in range(checkpoint_pages):", source)
+        self.assertIn('"configure_discovery_checkpoint"', source)
+        self.assertIn('"prepare_reconciliation_run"', source)
+        self.assertIn("--max-pages-per-checkpoint 5", launcher)
+        self.assertIn("sparex-full-catalog-inventory-v3", launcher)
+
+    def test_odoo_model_has_reconciliation_recovery_and_source_link_contracts(self):
+        source = (ROOT / "southern_parts_intelligence" / "models" / "sparex_discovery.py").read_text(
+            encoding="utf-8"
+        )
+        for contract in (
+            "prepare_reconciliation_run",
+            "_complete_reconciliation",
+            "reconciliation_state",
+            "stale_not_seen",
+            "consecutive_failure_count",
+            "prepare_source_link_plan",
+            "apply_source_link_plan",
+            "rollback_source_links",
+            "review_required",
+        ):
+            self.assertIn(contract, source)
+        self.assertNotIn('self.env["product.template"].create', source)
+
+    def test_dashboard_and_missing_product_views_are_valid_xml(self):
+        path = ROOT / "southern_parts_intelligence" / "views" / "sparex_discovery_views.xml"
+        ET.parse(path)
+        source = path.read_text(encoding="utf-8")
+        self.assertIn("Sparex Discovery Dashboard", source)
+        self.assertIn("Missing Sparex Products", source)
+        self.assertIn('widget="progressbar"', source)
+
+    def test_publication_requires_current_discovery_evidence(self):
+        source = (ROOT / "southern_parts_intelligence" / "models" / "catalog_agents.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("_current_discovery_item", source)
+        self.assertIn("missing_current_discovery_evidence", source)
+
+
+if __name__ == "__main__":
+    unittest.main()

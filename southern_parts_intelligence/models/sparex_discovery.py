@@ -1,4 +1,5 @@
 import hashlib
+import json
 import re
 from datetime import timedelta
 from urllib.parse import urlsplit
@@ -14,6 +15,8 @@ MAX_DISCOVERY_CHECKPOINT_PAGES = 5
 MAX_DISCOVERY_FRONTIER_URLS = 10000
 MAX_DISCOVERY_LINKS_PER_PAGE = 5_000
 MAX_DISCOVERY_TOTAL_PAGES = 10000
+MAX_SOURCE_LINK_BATCH = 50
+SOURCE_LINK_CONFIRMATION = "sparex-discovery-source-link"
 PRODUCT_DETAIL_PATH = re.compile(r"(?:^|[-/])\d+\.html$", re.IGNORECASE)
 LISTING_PATH_DENY_PREFIXES = (
     "/about",
@@ -57,6 +60,11 @@ def _sparex_listing_url(value):
 
 def _sha256_text(value):
     return hashlib.sha256((value or "").encode("utf-8")).hexdigest()
+
+
+def _canonical_sha256(value):
+    payload = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 class SouthernSparexDiscoveryRun(models.Model):
@@ -107,6 +115,34 @@ class SouthernSparexDiscoveryRun(models.Model):
     missing_count = fields.Integer(default=0, readonly=True)
     duplicate_count = fields.Integer(default=0, readonly=True)
     review_count = fields.Integer(default=0, readonly=True)
+    corrected_count = fields.Integer(default=0, readonly=True)
+    stale_count = fields.Integer(default=0, readonly=True)
+    current_item_count = fields.Integer(compute="_compute_dashboard_counts")
+    missing_product_count = fields.Integer(compute="_compute_dashboard_counts")
+    publication_candidate_count = fields.Integer(compute="_compute_dashboard_counts")
+    progress_percent = fields.Float(compute="_compute_progress")
+    estimated_checkpoints_remaining = fields.Integer(compute="_compute_progress")
+    estimated_minutes_remaining = fields.Integer(compute="_compute_progress")
+    reconciliation_state = fields.Selection(
+        [("pending", "Pending"), ("in_progress", "In Progress"), ("completed", "Completed")],
+        default="pending",
+        required=True,
+        readonly=True,
+        index=True,
+    )
+    reconciliation_started_at = fields.Datetime(readonly=True)
+    reconciliation_completed_at = fields.Datetime(readonly=True)
+    recovery_state = fields.Selection(
+        [("healthy", "Healthy"), ("retrying", "Retrying"), ("cooldown", "Portal Cooldown")],
+        default="healthy",
+        required=True,
+        readonly=True,
+        index=True,
+    )
+    consecutive_failure_count = fields.Integer(default=0, readonly=True)
+    recovered_lease_count = fields.Integer(default=0, readonly=True)
+    last_success_at = fields.Datetime(readonly=True)
+    last_failure_at = fields.Datetime(readonly=True)
     lease_owner = fields.Char(readonly=True, copy=False, index=True)
     lease_expires_at = fields.Datetime(readonly=True, copy=False, index=True)
     last_request_at = fields.Datetime(readonly=True, copy=False)
@@ -126,6 +162,27 @@ class SouthernSparexDiscoveryRun(models.Model):
     def _compute_name(self):
         for run in self:
             run.name = f"{run.idempotency_key or _('New discovery')} / {run.state or 'ready'}"
+
+    @api.depends("page_count", "queued_url_count", "max_pages_per_checkpoint")
+    def _compute_progress(self):
+        for run in self:
+            total = run.page_count + run.queued_url_count
+            run.progress_percent = (100.0 * run.page_count / total) if total else (100.0 if run.state == "completed" else 0.0)
+            capacity = max(1, run.max_pages_per_checkpoint)
+            checkpoints = (run.queued_url_count + capacity - 1) // capacity
+            run.estimated_checkpoints_remaining = checkpoints
+            run.estimated_minutes_remaining = checkpoints * 2
+
+    @api.depends("item_ids.reconciliation_state", "item_ids.odoo_match_state", "item_ids.publication_candidate")
+    def _compute_dashboard_counts(self):
+        Item = self.env["southern.sparex.discovery.item"]
+        for run in self:
+            current_domain = [("last_seen_run_id", "=", run.id), ("reconciliation_state", "=", "current")]
+            run.current_item_count = Item.search_count(current_domain)
+            run.missing_product_count = Item.search_count(current_domain + [("odoo_match_state", "=", "missing")])
+            run.publication_candidate_count = Item.search_count(
+                current_domain + [("publication_candidate", "=", True)]
+            )
 
     @api.constrains(
         "seed_url_sha256",
@@ -234,8 +291,93 @@ class SouthernSparexDiscoveryRun(models.Model):
             "missing_count",
             "duplicate_count",
             "review_count",
+            "corrected_count",
+            "stale_count",
+            "reconciliation_state",
+            "recovery_state",
+            "consecutive_failure_count",
+            "recovered_lease_count",
             "cooldown_until",
         ]
+
+    @api.model
+    def configure_discovery_checkpoint(self, run_id, max_pages_per_checkpoint=5):
+        run = self.browse(int(run_id)).exists()
+        if not run or run.company_id != self.env.company:
+            raise UserError(_("The discovery run does not exist in the active company."))
+        bounded = max(1, min(int(max_pages_per_checkpoint or 1), MAX_DISCOVERY_CHECKPOINT_PAGES))
+        self.env.cr.execute("SELECT id FROM southern_sparex_discovery_run WHERE id = %s FOR UPDATE NOWAIT", [run.id])
+        run.invalidate_recordset()
+        if run.lease_owner and run.lease_expires_at and run.lease_expires_at > fields.Datetime.now():
+            raise UserError(_("Checkpoint capacity cannot change while a discovery lease is active."))
+        if run.state in {"completed", "failed", "cancelled"}:
+            return run.read(self._worker_fields())[0]
+        if run.max_pages_per_checkpoint != bounded:
+            run.write({"max_pages_per_checkpoint": bounded})
+        return run.read(self._worker_fields())[0]
+
+    @api.model
+    def prepare_reconciliation_run(self, run_id):
+        run = self.browse(int(run_id)).exists()
+        if not run or run.company_id != self.env.company:
+            raise UserError(_("The discovery run does not exist in the active company."))
+        self.env.cr.execute("SELECT id FROM southern_sparex_discovery_run WHERE id = %s FOR UPDATE NOWAIT", [run.id])
+        run.invalidate_recordset()
+        if run.reconciliation_state != "pending":
+            return run.read(self._worker_fields())[0]
+        Item = self.env["southern.sparex.discovery.item"]
+        Item.search([("company_id", "=", run.company_id.id)]).write(
+            {
+                "reconciliation_state": "pending",
+                "source_enrichment_candidate": False,
+                "publication_candidate": False,
+            }
+        )
+        Item.search([("company_id", "=", run.company_id.id), ("last_seen_run_id", "=", run.id)]).write(
+            {"reconciliation_state": "current"}
+        )
+        run.write(
+            {
+                "reconciliation_state": "in_progress",
+                "reconciliation_started_at": fields.Datetime.now(),
+                "reconciliation_completed_at": False,
+                "stale_count": 0,
+            }
+        )
+        return run.read(self._worker_fields())[0]
+
+    def _complete_reconciliation(self):
+        self.ensure_one()
+        if self.reconciliation_state == "completed":
+            return self.stale_count
+        Item = self.env["southern.sparex.discovery.item"]
+        stale = Item.search(
+            [
+                ("company_id", "=", self.company_id.id),
+                ("last_seen_run_id", "!=", self.id),
+            ]
+        )
+        stale.write(
+            {
+                "reconciliation_state": "stale",
+                "state": "review",
+                "review_reason": "stale_not_seen",
+                "source_enrichment_candidate": False,
+                "publication_candidate": False,
+            }
+        )
+        current = Item.search(
+            [("company_id", "=", self.company_id.id), ("last_seen_run_id", "=", self.id)]
+        )
+        current.write({"reconciliation_state": "current"})
+        self.write(
+            {
+                "reconciliation_state": "completed",
+                "reconciliation_completed_at": fields.Datetime.now(),
+                "stale_count": len(stale),
+            }
+        )
+        return len(stale)
 
     @api.model
     def claim_discovery_checkpoint(self, run_id, worker_id, lease_seconds=180):
@@ -251,6 +393,7 @@ class SouthernSparexDiscoveryRun(models.Model):
             return {"claimed": False, "state": run.state, "cooldown_until": run.cooldown_until}
         if run.lease_owner and run.lease_expires_at and run.lease_expires_at > now and run.lease_owner != worker_id:
             return {"claimed": False, "state": "busy"}
+        recovered_lease = bool(run.lease_owner and run.lease_expires_at and run.lease_expires_at <= now)
         run.write(
             {
                 "state": "running",
@@ -259,6 +402,7 @@ class SouthernSparexDiscoveryRun(models.Model):
                 "cooldown_until": False,
                 "error_code": False,
                 "error_message": False,
+                "recovered_lease_count": run.recovered_lease_count + (1 if recovered_lease else 0),
             }
         )
         return {"claimed": True, **run.read(self._worker_fields())[0]}
@@ -310,6 +454,7 @@ class SouthernSparexDiscoveryRun(models.Model):
         )
         seen_skus = set()
         page_counts = {"matched": 0, "missing": 0, "duplicate": 0, "review": 0}
+        page_corrected = 0
         Item = self.env["southern.sparex.discovery.item"]
         for observation in items:
             raw_sku = (observation.get("sku") or "").strip()
@@ -381,6 +526,25 @@ class SouthernSparexDiscoveryRun(models.Model):
             )
             publication_candidate = bool(source_enrichment_candidate and product_has_exact_url and product_has_image)
             item = Item.search([("company_id", "=", run.company_id.id), ("normalized_sku", "=", normalized)], limit=1)
+            review_reason = False
+            if source_state == "ambiguous":
+                review_reason = "source_ambiguous"
+            elif source_state == "missing_image" or not image_url:
+                review_reason = "missing_image"
+            elif match_state == "missing":
+                review_reason = "missing_odoo"
+            elif match_state == "duplicate":
+                review_reason = "duplicate_odoo"
+            corrected = bool(
+                item
+                and queue_state == "verified"
+                and (
+                    item.state != "verified"
+                    or item.source_state != "verified"
+                    or item.source_url_sha256 != _sha256_text(source_url)
+                    or item.image_url_sha256 != (_sha256_text(image_url) if image_url else False)
+                )
+            )
             values = {
                 "raw_sku": raw_sku,
                 "source_url": source_url,
@@ -401,6 +565,9 @@ class SouthernSparexDiscoveryRun(models.Model):
                 "currently_published": currently_published,
                 "source_enrichment_candidate": source_enrichment_candidate,
                 "publication_candidate": publication_candidate,
+                "reconciliation_state": "current",
+                "review_reason": review_reason,
+                "creation_state": "review_required" if match_state == "missing" else "not_authorized",
                 "last_seen_run_id": run.id,
                 "last_seen_page_id": page_record.id,
                 "last_seen_at": now,
@@ -409,6 +576,10 @@ class SouthernSparexDiscoveryRun(models.Model):
             }
             if item:
                 values["observation_count"] = item.observation_count + 1
+                if corrected:
+                    values["correction_count"] = item.correction_count + 1
+                    values["last_corrected_at"] = now
+                    page_corrected += 1
                 item.write(values)
             else:
                 values.update(
@@ -477,7 +648,11 @@ class SouthernSparexDiscoveryRun(models.Model):
                 "missing_count": run.missing_count + page_counts["missing"],
                 "duplicate_count": run.duplicate_count + page_counts["duplicate"],
                 "review_count": run.review_count + page_counts["review"],
+                "corrected_count": run.corrected_count + page_corrected,
                 "last_request_at": now,
+                "last_success_at": now,
+                "consecutive_failure_count": 0,
+                "recovery_state": "healthy",
                 "next_request_at": False if completed else now + timedelta(seconds=run.throttle_seconds),
                 "completed_at": now if completed else False,
                 "error_code": "max_pages_total_reached" if page_limit_reached and frontier else False,
@@ -485,6 +660,8 @@ class SouthernSparexDiscoveryRun(models.Model):
                 "lease_expires_at": False,
             }
         )
+        if completed:
+            run._complete_reconciliation()
         return {
             "idempotent": False,
             "page_id": page_record.id,
@@ -492,6 +669,8 @@ class SouthernSparexDiscoveryRun(models.Model):
             "next_cursor_sha256": run.cursor_url_sha256,
             "counts": page_counts,
             "observed": len(items),
+            "corrected": page_corrected,
+            "stale": run.stale_count if completed else 0,
         }
 
     @api.model
@@ -508,6 +687,9 @@ class SouthernSparexDiscoveryRun(models.Model):
                 "cooldown_until": now + timedelta(minutes=60) if cooldown else False,
                 "error_code": (error_code or "checkpoint_failed")[:255],
                 "error_message": _("Discovery checkpoint failed; the explicit cursor was preserved."),
+                "last_failure_at": now,
+                "consecutive_failure_count": run.consecutive_failure_count + 1,
+                "recovery_state": "cooldown" if cooldown else "retrying",
                 "lease_owner": False,
                 "lease_expires_at": False,
             }
@@ -601,11 +783,39 @@ class SouthernSparexDiscoveryItem(models.Model):
     currently_published = fields.Boolean(readonly=True, index=True)
     source_enrichment_candidate = fields.Boolean(readonly=True, index=True)
     publication_candidate = fields.Boolean(readonly=True, index=True)
+    reconciliation_state = fields.Selection(
+        [("pending", "Awaiting Current Run"), ("current", "Current Run Verified"), ("stale", "Not Seen")],
+        default="pending",
+        required=True,
+        readonly=True,
+        index=True,
+    )
+    review_reason = fields.Selection(
+        [
+            ("source_ambiguous", "Ambiguous Listing"),
+            ("missing_image", "Missing Listing Image"),
+            ("missing_odoo", "Missing in Odoo"),
+            ("duplicate_odoo", "Duplicate Odoo SKU"),
+            ("stale_not_seen", "Not Seen in Current Catalog Run"),
+        ],
+        readonly=True,
+        index=True,
+    )
+    correction_count = fields.Integer(default=0, readonly=True)
+    last_corrected_at = fields.Datetime(readonly=True)
+    blocker_summary = fields.Char(compute="_compute_blocker_summary")
     creation_state = fields.Selection(
-        [("not_authorized", "Product Creation Not Authorized")],
+        [
+            ("not_authorized", "Product Creation Not Authorized"),
+            ("review_required", "Creation Review Required"),
+            ("approved", "Approved for Separate Creation Workflow"),
+            ("rejected", "Creation Rejected"),
+        ],
         default="not_authorized",
         required=True,
         readonly=True,
+        tracking=True,
+        index=True,
     )
     first_seen_run_id = fields.Many2one(
         "southern.sparex.discovery.run", required=True, readonly=True, ondelete="restrict"
@@ -625,6 +835,62 @@ class SouthernSparexDiscoveryItem(models.Model):
     _sku_company_unique = models.Constraint(
         "unique(normalized_sku, company_id)", "Each Sparex SKU can appear only once in the company discovery queue."
     )
+
+    @api.depends(
+        "reconciliation_state",
+        "review_reason",
+        "has_positive_supplier_cost",
+        "has_positive_sales_price",
+        "has_exact_sparex_url",
+        "has_image",
+        "odoo_match_state",
+    )
+    def _compute_blocker_summary(self):
+        labels = {
+            "source_ambiguous": _("ambiguous source"),
+            "missing_image": _("missing listing image"),
+            "missing_odoo": _("missing in Odoo"),
+            "duplicate_odoo": _("duplicate Odoo SKU"),
+            "stale_not_seen": _("not seen in current run"),
+        }
+        for item in self:
+            blockers = []
+            if item.reconciliation_state != "current":
+                blockers.append(_("stale evidence"))
+            if item.review_reason:
+                blockers.append(labels.get(item.review_reason, item.review_reason))
+            if not item.has_positive_supplier_cost:
+                blockers.append(_("supplier cost"))
+            if not item.has_positive_sales_price:
+                blockers.append(_("sales price"))
+            if not item.has_exact_sparex_url:
+                blockers.append(_("exact URL"))
+            if not item.has_image:
+                blockers.append(_("image"))
+            item.blocker_summary = ", ".join(dict.fromkeys(blockers)) or _("Ready")
+
+    def action_approve_creation_review(self):
+        missing = self.filtered(lambda item: item.odoo_match_state == "missing")
+        if len(missing) != len(self):
+            raise UserError(_("Only Sparex SKUs confirmed missing in Odoo can be approved for creation review."))
+        missing.write({"creation_state": "approved"})
+        return True
+
+    def action_reject_creation_review(self):
+        missing = self.filtered(lambda item: item.odoo_match_state == "missing")
+        if len(missing) != len(self):
+            raise UserError(_("Only Sparex SKUs confirmed missing in Odoo can be rejected."))
+        missing.write({"creation_state": "rejected"})
+        return True
+
+    def action_reset_creation_review(self):
+        self.filtered(lambda item: item.odoo_match_state == "missing").write(
+            {"creation_state": "review_required"}
+        )
+        self.filtered(lambda item: item.odoo_match_state != "missing").write(
+            {"creation_state": "not_authorized"}
+        )
+        return True
 
     @api.constrains(
         "normalized_sku", "source_url", "source_url_sha256", "image_url", "image_url_sha256", "source_artifact_sha256"
@@ -646,3 +912,179 @@ class SouthernSparexDiscoveryItem(models.Model):
                 for value in (item.source_url_sha256, item.image_url_sha256, item.source_artifact_sha256)
             ):
                 raise ValidationError(_("Discovery evidence hashes must be SHA-256 hexadecimal values."))
+
+    def _positive_sparex_supplier(self):
+        self.ensure_one()
+        if not self.matched_product_id:
+            return self.env["product.supplierinfo"]
+        return (
+            self.env["product.supplierinfo"]
+            .sudo()
+            .search(
+                [
+                    ("product_tmpl_id", "=", self.matched_product_id.id),
+                    ("partner_id.name", "=ilike", "Sparex"),
+                    ("price", ">", 0),
+                ],
+                limit=1,
+            )
+        )
+
+    def _source_link_snapshot(self):
+        self.ensure_one()
+        product = self.matched_product_id.sudo()
+        before_url = product.southern_source_url or ""
+        values = {
+            "item_id": self.id,
+            "product_id": product.id,
+            "sku": self.normalized_sku,
+            "source_url_sha256": self.source_url_sha256,
+            "image_url_sha256": self.image_url_sha256 or "",
+            "source_artifact_sha256": self.source_artifact_sha256,
+            "before_source_url": before_url,
+            "before_source_url_sha256": _sha256_text(before_url),
+            "product_write_date": str(product.write_date or ""),
+        }
+        values["snapshot_sha256"] = _canonical_sha256(values)
+        return values
+
+    def _refresh_readiness(self):
+        for item in self:
+            product = item.matched_product_id.sudo()
+            has_cost = bool(item._positive_sparex_supplier())
+            has_sales_price = bool(product and product.list_price > 0)
+            product_has_exact_url = bool(
+                product and exact_sparex_url(product.southern_source_url, item.normalized_sku)
+            )
+            product_has_image = bool(product and product.image_1920)
+            currently_published = bool(product and product.website_published)
+            source_ready = bool(
+                item.reconciliation_state == "current"
+                and item.state == "verified"
+                and item.source_state == "verified"
+                and item.odoo_match_state == "matched_active"
+                and item.has_exact_sparex_url
+                and item.has_image
+            )
+            enrichment = bool(
+                source_ready
+                and not currently_published
+                and has_cost
+                and has_sales_price
+                and product_has_image
+                and not product_has_exact_url
+            )
+            item.write(
+                {
+                    "has_positive_supplier_cost": has_cost,
+                    "has_positive_sales_price": has_sales_price,
+                    "product_has_exact_sparex_url": product_has_exact_url,
+                    "product_has_image": product_has_image,
+                    "currently_published": currently_published,
+                    "source_enrichment_candidate": enrichment,
+                    "publication_candidate": bool(
+                        source_ready
+                        and not currently_published
+                        and has_cost
+                        and has_sales_price
+                        and product_has_exact_url
+                        and product_has_image
+                    ),
+                }
+            )
+        return True
+
+    @api.model
+    def prepare_source_link_plan(self, limit=MAX_SOURCE_LINK_BATCH):
+        bounded = max(1, min(int(limit or MAX_SOURCE_LINK_BATCH), MAX_SOURCE_LINK_BATCH))
+        candidates = self.search(
+            [
+                ("reconciliation_state", "=", "current"),
+                ("state", "=", "verified"),
+                ("source_state", "=", "verified"),
+                ("odoo_match_state", "=", "matched_active"),
+                ("currently_published", "=", False),
+                ("has_exact_sparex_url", "=", True),
+                ("has_image", "=", True),
+            ],
+            order="last_seen_at, id",
+            limit=bounded * 4,
+        )
+        prepared = []
+        for item in candidates:
+            item._refresh_readiness()
+            product = item.matched_product_id.sudo()
+            if (
+                not item.source_enrichment_candidate
+                or not product
+                or not product.active
+                or not product.image_1920
+                or not item._positive_sparex_supplier()
+                or product.list_price <= 0
+            ):
+                continue
+            prepared.append(item._source_link_snapshot())
+            if len(prepared) >= bounded:
+                break
+        return prepared
+
+    @api.model
+    def apply_source_link_plan(self, records, confirmation, reason):
+        if confirmation != SOURCE_LINK_CONFIRMATION or not (reason or "").strip():
+            raise UserError(_("Source linking requires the exact confirmation and business reason."))
+        if not records or len(records) > MAX_SOURCE_LINK_BATCH:
+            raise UserError(_("Source-link batches must contain between 1 and 50 records."))
+        applied = []
+        for prepared in records:
+            item = self.browse(int(prepared.get("item_id") or 0)).exists()
+            if not item:
+                raise UserError(_("A prepared discovery item no longer exists."))
+            self.env.cr.execute(
+                "SELECT id FROM southern_sparex_discovery_item WHERE id = %s FOR UPDATE NOWAIT", [item.id]
+            )
+            item.invalidate_recordset()
+            item._refresh_readiness()
+            product = item.matched_product_id.sudo()
+            self.env.cr.execute("SELECT id FROM product_template WHERE id = %s FOR UPDATE NOWAIT", [product.id])
+            product.invalidate_recordset()
+            if (
+                not item.source_enrichment_candidate
+                or product.id != int(prepared.get("product_id") or 0)
+                or item.normalized_sku != normalized_sparex_sku(prepared.get("sku"))
+                or item.source_url_sha256 != prepared.get("source_url_sha256")
+                or item._source_link_snapshot().get("snapshot_sha256") != prepared.get("snapshot_sha256")
+            ):
+                raise UserError(_("Source-link evidence changed; create a fresh plan."))
+            product.write({"southern_source_url": item.source_url})
+            product.invalidate_recordset(["southern_source_url"])
+            if not exact_sparex_url(product.southern_source_url, item.normalized_sku):
+                product.write({"southern_source_url": prepared.get("before_source_url") or False})
+                raise UserError(_("The exact Sparex URL was not retained; the prior value was restored."))
+            item._refresh_readiness()
+            applied.append(
+                {
+                    **prepared,
+                    "after_source_url_sha256": _sha256_text(product.southern_source_url),
+                }
+            )
+        return applied
+
+    @api.model
+    def rollback_source_links(self, records, reason):
+        if not (reason or "").strip():
+            raise UserError(_("Source-link rollback requires a reason."))
+        for prepared in records or []:
+            item = self.browse(int(prepared.get("item_id") or 0)).exists()
+            if not item or item.normalized_sku != normalized_sparex_sku(prepared.get("sku")):
+                continue
+            product = item.matched_product_id.sudo()
+            if product.id != int(prepared.get("product_id") or 0):
+                continue
+            self.env.cr.execute("SELECT id FROM product_template WHERE id = %s FOR UPDATE NOWAIT", [product.id])
+            product.invalidate_recordset()
+            expected_after = (prepared.get("after_source_url_sha256") or "").casefold()
+            if expected_after and _sha256_text(product.southern_source_url or "") != expected_after:
+                raise UserError(_("Source-link rollback stopped because the product URL changed after this run."))
+            product.write({"southern_source_url": prepared.get("before_source_url") or False})
+            item._refresh_readiness()
+        return True

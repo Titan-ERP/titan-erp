@@ -140,3 +140,4 @@ def test_successful_discovery_triggers_publication_handoff():
     assert "OnSuccess=titan-catalog-agent.service" in discovery_service
     assert "SPAREX_DISCOVERY_RUN_KEY=sparex-full-catalog-inventory-v3" in discovery_service
     assert "sparex-full-catalog-inventory-v3" in discovery_launcher
+    assert "--max-pages-per-checkpoint 5" in discovery_launcher
