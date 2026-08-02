@@ -17,6 +17,8 @@ MAX_DISCOVERY_FRONTIER_URLS = 10000
 MAX_DISCOVERY_LINKS_PER_PAGE = 5_000
 MAX_DISCOVERY_TOTAL_PAGES = 10000
 MAX_SOURCE_LINK_BATCH = 50
+MAX_COST_RECOVERY_BATCH = 50
+MAX_COST_RECOVERY_ATTEMPTS = 5
 SOURCE_LINK_CONFIRMATION = "sparex-discovery-source-link"
 PRODUCT_DETAIL_PATH = re.compile(r"(?:^|[-/])\d+\.html$", re.IGNORECASE)
 LISTING_PATH_DENY_PREFIXES = (
@@ -166,6 +168,11 @@ class SouthernSparexDiscoveryRun(models.Model):
     source_repair_candidate_count = fields.Integer(compute="_compute_dashboard_counts")
     source_review_item_count = fields.Integer(compute="_compute_dashboard_counts")
     blocked_item_count = fields.Integer(compute="_compute_dashboard_counts")
+    published_product_count = fields.Integer(compute="_compute_dashboard_counts")
+    readiness_refreshed_count = fields.Integer(compute="_compute_dashboard_counts")
+    cost_recovery_queued_count = fields.Integer(compute="_compute_dashboard_counts")
+    cost_recovery_retry_count = fields.Integer(compute="_compute_dashboard_counts")
+    cost_recovery_manual_count = fields.Integer(compute="_compute_dashboard_counts")
     missing_cost_blocker_count = fields.Integer(compute="_compute_dashboard_counts")
     missing_sales_price_blocker_count = fields.Integer(compute="_compute_dashboard_counts")
     missing_url_blocker_count = fields.Integer(compute="_compute_dashboard_counts")
@@ -238,6 +245,8 @@ class SouthernSparexDiscoveryRun(models.Model):
         "item_ids.publication_candidate",
         "item_ids.source_enrichment_candidate",
         "item_ids.primary_blocker",
+        "item_ids.cost_recovery_state",
+        "item_ids.readiness_refreshed_at",
     )
     def _compute_dashboard_counts(self):
         Item = self.env["southern.sparex.discovery.item"]
@@ -258,6 +267,21 @@ class SouthernSparexDiscoveryRun(models.Model):
                 ("publication_candidate", "=", False),
             ]
             run.blocked_item_count = Item.search_count(blocked_domain)
+            run.published_product_count = Item.search_count(
+                current_domain + [("currently_published", "=", True)]
+            )
+            run.readiness_refreshed_count = Item.search_count(
+                current_domain + [("readiness_refreshed_at", "!=", False)]
+            )
+            run.cost_recovery_queued_count = Item.search_count(
+                current_domain + [("cost_recovery_state", "=", "queued")]
+            )
+            run.cost_recovery_retry_count = Item.search_count(
+                current_domain + [("cost_recovery_state", "=", "retry_wait")]
+            )
+            run.cost_recovery_manual_count = Item.search_count(
+                current_domain + [("cost_recovery_state", "=", "manual_review")]
+            )
             run.missing_cost_blocker_count = Item.search_count(
                 current_domain + [("primary_blocker", "=", "missing_cost")]
             )
@@ -938,6 +962,27 @@ class SouthernSparexDiscoveryItem(models.Model):
         index=True,
     )
     readiness_refreshed_at = fields.Datetime(readonly=True, index=True)
+    cost_recovery_state = fields.Selection(
+        [
+            ("not_required", "Not Required"),
+            ("queued", "Queued"),
+            ("claimed", "Claimed"),
+            ("retry_wait", "Retry Scheduled"),
+            ("resolved", "Resolved"),
+            ("manual_review", "Manual Review"),
+        ],
+        default="not_required",
+        required=True,
+        readonly=True,
+        index=True,
+        tracking=True,
+    )
+    cost_recovery_priority = fields.Integer(default=0, readonly=True, index=True)
+    cost_recovery_attempt_count = fields.Integer(default=0, readonly=True)
+    cost_recovery_next_at = fields.Datetime(readonly=True, index=True)
+    cost_recovery_claimed_at = fields.Datetime(readonly=True)
+    cost_recovery_worker_id = fields.Char(readonly=True, copy=False, index=True)
+    cost_recovery_last_error = fields.Char(readonly=True, copy=False)
     reconciliation_state = fields.Selection(
         [("pending", "Awaiting Current Run"), ("current", "Current Run Verified"), ("stale", "Not Seen")],
         default="pending",
@@ -1113,6 +1158,7 @@ class SouthernSparexDiscoveryItem(models.Model):
         return values
 
     def _refresh_readiness(self):
+        now = fields.Datetime.now()
         for item in self:
             product = item.matched_product_id.sudo()
             has_cost = bool(item._positive_sparex_supplier())
@@ -1149,6 +1195,57 @@ class SouthernSparexDiscoveryItem(models.Model):
                 product_has_exact_url=product_has_exact_url,
                 product_has_image=product_has_image,
             )
+            recovery_priority = 0
+            recovery_values = {}
+            if has_cost:
+                recovery_values = {
+                    "cost_recovery_state": "resolved",
+                    "cost_recovery_priority": 0,
+                    "cost_recovery_next_at": False,
+                    "cost_recovery_worker_id": False,
+                    "cost_recovery_last_error": False,
+                }
+            elif primary_blocker == "missing_cost":
+                recovery_priority = 100
+                recovery_priority += 30 if has_sales_price else 0
+                recovery_priority += 20 if product_has_exact_url else 0
+                recovery_priority += 10 if product_has_image else 0
+                claimed_until = (
+                    item.cost_recovery_claimed_at + timedelta(minutes=30)
+                    if item.cost_recovery_claimed_at
+                    else False
+                )
+                if item.cost_recovery_state == "claimed" and claimed_until and claimed_until > now:
+                    next_state = "claimed"
+                elif item.cost_recovery_attempt_count >= MAX_COST_RECOVERY_ATTEMPTS:
+                    next_state = "manual_review"
+                elif (
+                    item.cost_recovery_state == "retry_wait"
+                    and item.cost_recovery_next_at
+                    and item.cost_recovery_next_at > now
+                ):
+                    next_state = "retry_wait"
+                else:
+                    next_state = "queued"
+                recovery_values = {
+                    "cost_recovery_state": next_state,
+                    "cost_recovery_priority": recovery_priority,
+                }
+                if next_state == "queued":
+                    recovery_values.update(
+                        {
+                            "cost_recovery_next_at": False,
+                            "cost_recovery_worker_id": False,
+                        }
+                    )
+            else:
+                recovery_values = {
+                    "cost_recovery_state": "not_required",
+                    "cost_recovery_priority": 0,
+                    "cost_recovery_next_at": False,
+                    "cost_recovery_worker_id": False,
+                    "cost_recovery_last_error": False,
+                }
             item.write(
                 {
                     "has_positive_supplier_cost": has_cost,
@@ -1158,7 +1255,7 @@ class SouthernSparexDiscoveryItem(models.Model):
                     "currently_published": currently_published,
                     "source_enrichment_candidate": enrichment,
                     "primary_blocker": primary_blocker,
-                    "readiness_refreshed_at": fields.Datetime.now(),
+                    "readiness_refreshed_at": now,
                     "publication_candidate": bool(
                         source_ready
                         and not currently_published
@@ -1167,6 +1264,7 @@ class SouthernSparexDiscoveryItem(models.Model):
                         and product_has_exact_url
                         and product_has_image
                     ),
+                    **recovery_values,
                 }
             )
         return True
@@ -1183,7 +1281,95 @@ class SouthernSparexDiscoveryItem(models.Model):
         counts = {}
         for blocker in items.mapped("primary_blocker"):
             counts[blocker or "unclassified"] = counts.get(blocker or "unclassified", 0) + 1
-        return {"refreshed": len(items), "blockers": counts}
+        recovery_counts = {}
+        for state in items.mapped("cost_recovery_state"):
+            recovery_counts[state or "unclassified"] = recovery_counts.get(state or "unclassified", 0) + 1
+        return {"refreshed": len(items), "blockers": counts, "cost_recovery": recovery_counts}
+
+    @api.model
+    def claim_cost_recovery_batch(self, worker_id, limit=MAX_COST_RECOVERY_BATCH):
+        worker = (worker_id or "").strip()
+        if not worker:
+            raise UserError(_("Cost recovery requires a worker identifier."))
+        bounded = max(1, min(int(limit or MAX_COST_RECOVERY_BATCH), MAX_COST_RECOVERY_BATCH))
+        now = fields.Datetime.now()
+        self.env.cr.execute(
+            """
+            SELECT id FROM southern_sparex_discovery_item
+             WHERE company_id = %s
+               AND reconciliation_state = 'current'
+               AND primary_blocker = 'missing_cost'
+               AND cost_recovery_state IN ('queued', 'retry_wait')
+               AND (cost_recovery_next_at IS NULL OR cost_recovery_next_at <= %s)
+             ORDER BY cost_recovery_priority DESC, readiness_refreshed_at, id
+             FOR UPDATE SKIP LOCKED LIMIT %s
+            """,
+            [self.env.company.id, now, bounded],
+        )
+        items = self.browse([row[0] for row in self.env.cr.fetchall()])
+        items.write(
+            {
+                "cost_recovery_state": "claimed",
+                "cost_recovery_claimed_at": now,
+                "cost_recovery_worker_id": worker,
+            }
+        )
+        for item in items:
+            item.cost_recovery_attempt_count += 1
+        return [
+            {
+                "item_id": item.id,
+                "product_id": item.matched_product_id.id,
+                "sku": item.normalized_sku,
+                "source_url_sha256": item.source_url_sha256,
+                "source_artifact_sha256": item.source_artifact_sha256,
+                "priority": item.cost_recovery_priority,
+                "attempt": item.cost_recovery_attempt_count,
+                "has_sales_price": item.has_positive_sales_price,
+                "has_exact_product_url": item.product_has_exact_sparex_url,
+                "has_image": item.product_has_image,
+            }
+            for item in items
+        ]
+
+    @api.model
+    def record_cost_recovery_result(self, item_id, worker_id, outcome, error_code=""):
+        allowed = {"cost_present", "not_found", "source_unavailable", "manual_review"}
+        if outcome not in allowed:
+            raise UserError(_("Invalid cost-recovery outcome."))
+        item = self.browse(int(item_id)).exists()
+        if not item or item.company_id != self.env.company:
+            raise UserError(_("The cost-recovery item does not exist in the active company."))
+        self.env.cr.execute(
+            "SELECT id FROM southern_sparex_discovery_item WHERE id = %s FOR UPDATE NOWAIT", [item.id]
+        )
+        item.invalidate_recordset()
+        if item.cost_recovery_state != "claimed" or item.cost_recovery_worker_id != (worker_id or "").strip():
+            raise UserError(_("The cost-recovery claim is no longer owned by this worker."))
+        if outcome == "cost_present":
+            item._refresh_readiness()
+            if not item.has_positive_supplier_cost:
+                raise UserError(_("Dealer cost is still absent; verified evidence must be applied separately."))
+            return True
+        if outcome == "manual_review" or item.cost_recovery_attempt_count >= MAX_COST_RECOVERY_ATTEMPTS:
+            values = {
+                "cost_recovery_state": "manual_review",
+                "cost_recovery_next_at": False,
+            }
+        else:
+            delay_minutes = min(24 * 60, 15 * (2 ** max(0, item.cost_recovery_attempt_count - 1)))
+            values = {
+                "cost_recovery_state": "retry_wait",
+                "cost_recovery_next_at": fields.Datetime.now() + timedelta(minutes=delay_minutes),
+            }
+        values.update(
+            {
+                "cost_recovery_worker_id": False,
+                "cost_recovery_last_error": (error_code or outcome)[:120],
+            }
+        )
+        item.write(values)
+        return True
 
     @api.model
     def prepare_source_link_plan(self, limit=MAX_SOURCE_LINK_BATCH):

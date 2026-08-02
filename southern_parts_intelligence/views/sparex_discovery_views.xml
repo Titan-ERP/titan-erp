@@ -23,6 +23,9 @@
                 <field name="empty_page_count"/>
                 <field name="stale_count"/>
                 <field name="source_repair_candidate_count"/>
+                <field name="cost_recovery_queued_count"/>
+                <field name="cost_recovery_retry_count"/>
+                <field name="cost_recovery_manual_count"/>
                 <field name="blocked_item_count"/>
                 <field name="progress_percent" widget="progressbar"/>
                 <field name="estimated_minutes_remaining"/>
@@ -81,6 +84,11 @@
                         <field name="missing_product_count"/>
                         <field name="publication_candidate_count"/>
                         <field name="source_repair_candidate_count"/>
+                        <field name="published_product_count"/>
+                        <field name="readiness_refreshed_count"/>
+                        <field name="cost_recovery_queued_count"/>
+                        <field name="cost_recovery_retry_count"/>
+                        <field name="cost_recovery_manual_count"/>
                         <field name="source_review_item_count"/>
                         <field name="blocked_item_count"/>
                         <field name="missing_cost_blocker_count"/>
@@ -147,6 +155,11 @@
                 <field name="missing_product_count"/>
                 <field name="publication_candidate_count"/>
                 <field name="source_repair_candidate_count"/>
+                <field name="published_product_count"/>
+                <field name="readiness_refreshed_count"/>
+                <field name="cost_recovery_queued_count"/>
+                <field name="cost_recovery_retry_count"/>
+                <field name="cost_recovery_manual_count"/>
                 <field name="blocked_item_count"/>
                 <field name="source_review_item_count"/>
                 <field name="estimated_minutes_remaining"/>
@@ -168,6 +181,10 @@
                             <div class="col-6">Missing Odoo: <field name="missing_product_count"/></div>
                             <div class="col-6">Ready: <field name="publication_candidate_count"/></div>
                             <div class="col-6">Repair queue: <field name="source_repair_candidate_count"/></div>
+                            <div class="col-6">Cost recovery: <field name="cost_recovery_queued_count"/></div>
+                            <div class="col-6">Cost retries: <field name="cost_recovery_retry_count"/></div>
+                            <div class="col-6">Published: <field name="published_product_count"/></div>
+                            <div class="col-6">Readiness rescanned: <field name="readiness_refreshed_count"/></div>
                             <div class="col-6">Blocked: <field name="blocked_item_count"/></div>
                             <div class="col-6">Source review: <field name="source_review_item_count"/></div>
                         </div>
@@ -200,6 +217,10 @@
                 <field name="source_enrichment_candidate"/>
                 <field name="publication_candidate"/>
                 <field name="primary_blocker"/>
+                <field name="cost_recovery_state"/>
+                <field name="cost_recovery_priority"/>
+                <field name="cost_recovery_attempt_count"/>
+                <field name="cost_recovery_next_at"/>
                 <field name="blocker_summary"/>
                 <field name="correction_count"/>
                 <field name="observation_count"/>
@@ -235,6 +256,11 @@
                             <field name="source_enrichment_candidate"/>
                             <field name="publication_candidate"/>
                             <field name="primary_blocker"/>
+                            <field name="cost_recovery_state"/>
+                            <field name="cost_recovery_priority"/>
+                            <field name="cost_recovery_attempt_count"/>
+                            <field name="cost_recovery_next_at"/>
+                            <field name="cost_recovery_last_error"/>
                             <field name="blocker_summary"/>
                         </group>
                         <group>
@@ -294,6 +320,9 @@
                 <filter name="publication_candidates" string="Publication Candidates" domain="[('publication_candidate','=',True)]"/>
                 <filter name="publication_blockers" string="Publication Blockers" domain="[('reconciliation_state','=','current'),('odoo_match_state','=','matched_active'),('currently_published','=',False),('publication_candidate','=',False)]"/>
                 <filter name="missing_cost" string="Missing Cost" domain="[('primary_blocker','=','missing_cost')]"/>
+                <filter name="cost_recovery_queued" string="Cost Recovery Queued" domain="[('cost_recovery_state','=','queued')]"/>
+                <filter name="cost_recovery_retry" string="Cost Retry Scheduled" domain="[('cost_recovery_state','=','retry_wait')]"/>
+                <filter name="cost_recovery_manual" string="Cost Manual Review" domain="[('cost_recovery_state','=','manual_review')]"/>
                 <filter name="missing_sales_price" string="Missing Sales Price" domain="[('primary_blocker','=','missing_sales_price')]"/>
                 <filter name="missing_product_url" string="Missing Product URL" domain="[('primary_blocker','=','missing_product_url')]"/>
                 <filter name="missing_product_image" string="Missing Product Image" domain="[('primary_blocker','=','missing_product_image')]"/>
@@ -301,6 +330,7 @@
                 <filter name="group_match" string="Odoo Match" context="{'group_by':'odoo_match_state'}"/>
                 <filter name="group_source" string="Source Status" context="{'group_by':'source_state'}"/>
                 <filter name="group_blocker" string="Publication Blocker" context="{'group_by':'primary_blocker'}"/>
+                <filter name="group_cost_recovery" string="Cost Recovery State" context="{'group_by':'cost_recovery_state'}"/>
             </search>
         </field>
     </record>
@@ -336,6 +366,14 @@
         <field name="context">{'search_default_group_blocker': 1}</field>
         <field name="search_view_id" ref="southern_sparex_discovery_item_search"/>
     </record>
+    <record id="action_southern_sparex_cost_recovery" model="ir.actions.act_window">
+        <field name="name">Sparex Dealer Cost Recovery</field>
+        <field name="res_model">southern.sparex.discovery.item</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('reconciliation_state','=','current'),('primary_blocker','=','missing_cost')]</field>
+        <field name="context">{'search_default_group_cost_recovery': 1}</field>
+        <field name="search_view_id" ref="southern_sparex_discovery_item_search"/>
+    </record>
 
     <menuitem id="menu_southern_sparex_discovery_dashboard"
               name="Sparex Discovery Dashboard"
@@ -367,5 +405,11 @@
               parent="menu_southern_parts_intelligence_root"
               action="action_southern_sparex_publication_blockers"
               sequence="8"
+              groups="base.group_system"/>
+    <menuitem id="menu_southern_sparex_cost_recovery"
+              name="Sparex Dealer Cost Recovery"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_sparex_cost_recovery"
+              sequence="9"
               groups="base.group_system"/>
 </odoo>

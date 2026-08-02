@@ -71,6 +71,19 @@ run refreshes up to 500 of the least-recently checked current records, so older
 Odoo products are continuously re-evaluated instead of depending only on new
 discoveries.
 
+Products whose only leading blocker is dealer cost enter the dedicated
+**Sparex Dealer Cost Recovery** queue. Records with an existing sales price,
+exact product URL, and image receive the highest priority. Recovery claims use
+row locks, stable worker ownership, exponential retry scheduling, and a
+five-attempt manual-review threshold. This queue never writes supplier cost:
+verified dealer-cost evidence must still be applied by the existing supervised
+price workflow before the record can become publication-ready.
+
+Publication selection now starts from current, refreshed discovery records
+already marked publication-ready rather than repeatedly scanning the first
+2,000 product templates. This keeps older corrected records moving while
+preserving exact SKU, source, image, cost, and publication safeguards.
+
 Missing URL/image repair never overwrites a valid existing value. Listing image
 bytes are HTTPS-fetched by the worker without retries, limited to 10 MiB,
 checksum verified, and covered by the same locked rollback workflow. Supplier

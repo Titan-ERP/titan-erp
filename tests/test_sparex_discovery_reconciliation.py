@@ -29,6 +29,9 @@ class SparexDiscoveryReconciliationContractTests(unittest.TestCase):
             "prepare_source_link_plan",
             "apply_source_link_plan",
             "rollback_source_links",
+            "claim_cost_recovery_batch",
+            "record_cost_recovery_result",
+            "cost_recovery_next_at",
             "review_required",
             'updates["max_pages_total"] = MAX_DISCOVERY_TOTAL_PAGES',
         ):
@@ -41,6 +44,8 @@ class SparexDiscoveryReconciliationContractTests(unittest.TestCase):
         source = path.read_text(encoding="utf-8")
         self.assertIn("Sparex Discovery Dashboard", source)
         self.assertIn("Missing Sparex Products", source)
+        self.assertIn("Sparex Dealer Cost Recovery", source)
+        self.assertIn("cost_recovery_queued", source)
         self.assertIn('widget="progressbar"', source)
 
     def test_publication_requires_current_discovery_evidence(self):
