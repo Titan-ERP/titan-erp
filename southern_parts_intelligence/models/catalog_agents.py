@@ -473,6 +473,23 @@ class SouthernCatalogAgentTask(models.Model):
                 {"idempotency_key": key, "priority": "1"},
             )
             task = self.browse(task_id)
+            task.action_prepare_snapshot()
+            if (
+                task.agent_code == "coordinator"
+                and task.state in {"blocked", "failed", "cancelled"}
+                and task.ready_to_publish
+                and task.publication_state not in {"published", "verified"}
+            ):
+                task.write(
+                    {
+                        "state": "queued",
+                        "output_json": False,
+                        "result_sha256": False,
+                        "claimed_at": False,
+                        "finished_at": False,
+                        "error_message": False,
+                    }
+                )
             task.worker_id = worker_id
             task_ids.append(task.id)
         return self.browse(task_ids).read(

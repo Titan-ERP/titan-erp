@@ -18,11 +18,12 @@ import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from scripts.odoo_runtime import ApplyGate, ArtifactStore, OdooClient, OdooConfig
 from scripts.odoo_runtime.client import load_env_file
 
-from .agent import AGENT_NAMES, AgentCode, run_agent
+from .agent import AGENT_NAMES, AgentCode, deterministic_agent_decision, run_agent
 from .worker import canonical_result
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -96,6 +97,7 @@ def _run_agent_tasks(
     )
     completed = 0
     failed = 0
+    deterministic_fallbacks = 0
     task_ids: list[int] = []
     for task in tasks:
         wait_seconds = throttle_seconds - (time.monotonic() - throttle_state.get("last_call", 0.0))
@@ -109,19 +111,25 @@ def _run_agent_tasks(
             state = "completed"
             completed += 1
         except Exception as exc:  # noqa: BLE001 - never persist provider detail or secrets
-            output = json.dumps(
-                {
-                    "decision": "needs_review",
-                    "summary": f"Agent execution failed: {type(exc).__name__}",
-                    "confidence": 0.0,
-                    "blocking_reasons": ["agent_execution_failed"],
-                    "next_agent": None,
-                },
-                sort_keys=True,
-                separators=(",", ":"),
-            )
-            state = "failed"
-            failed += 1
+            if type(exc).__name__ == "RateLimitError":
+                output = canonical_result(deterministic_agent_decision(agent_code, snapshot))
+                state = "completed"
+                completed += 1
+                deterministic_fallbacks += 1
+            else:
+                output = json.dumps(
+                    {
+                        "decision": "needs_review",
+                        "summary": f"Agent execution failed: {type(exc).__name__}",
+                        "confidence": 0.0,
+                        "blocking_reasons": ["agent_execution_failed"],
+                        "next_agent": None,
+                    },
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                state = "failed"
+                failed += 1
         client.call(
             "southern.catalog.agent.task",
             "record_external_result",
@@ -136,14 +144,17 @@ def _run_agent_tasks(
         "claimed": len(tasks),
         "completed": completed,
         "failed": failed,
+        "deterministic_fallbacks": deterministic_fallbacks,
         "task_ids": task_ids,
     }
 
 
 def _public_url(base_url: str, path: str) -> str:
     if path.startswith(("http://", "https://")):
-        return path
-    return f"{base_url.rstrip('/')}/{path.lstrip('/')}"
+        url = path
+    else:
+        url = f"{base_url.rstrip('/')}/{path.lstrip('/')}"
+    return quote(url, safe=":/?#[]@!$&'()*+,;=%")
 
 
 def verify_public_pages(base_url: str, published: list[dict[str, Any]]) -> list[dict[str, Any]]:

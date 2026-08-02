@@ -57,6 +57,14 @@ class CatalogAgentsContractTests(unittest.TestCase):
         self.assertIn("MAX_BATCH = 5", source)
         self.assertIn("if args.apply and not args.run_ai", source)
 
+    def test_failed_ready_root_tasks_can_be_requeued_without_product_writes(self):
+        source = (ROOT / "southern_parts_intelligence" / "models" / "catalog_agents.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('task.state in {"blocked", "failed", "cancelled"}', source)
+        self.assertIn('"state": "queued"', source)
+        self.assertIn('task.publication_state not in {"published", "verified"}', source)
+
     def test_each_agent_has_one_read_only_function_tool(self):
         source = (ROOT / "scripts" / "sparex_catalog_agents" / "agent.py").read_text(encoding="utf-8")
         for tool_name in (
