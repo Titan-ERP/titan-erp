@@ -72,6 +72,24 @@ class SparexCatalogDiscoveryParserTests(unittest.TestCase):
         self.assertEqual(parsed["items"][0]["sku"], "S.165551")
         self.assertEqual(parsed["items"][0]["source_state"], "ambiguous")
 
+    def test_duplicate_same_product_anchor_keeps_image_backed_card_verified(self):
+        page = b"""
+        <li class="item pm-listitem">
+          <a href="/engine-block-heater-156811.html">
+            <img src="https://cdn.example.com/156811.jpg" />
+            S.156811
+          </a>
+          <h2 class="product-name">
+            <a href="/engine-block-heater-156811.html">Engine Block Heater</a>
+          </h2>
+        </li>
+        """
+        parsed = parse_listing_page(page, "https://us.sparex.com/products")
+        self.assertEqual(len(parsed["items"]), 1)
+        self.assertEqual(parsed["items"][0]["sku"], "S.156811")
+        self.assertEqual(parsed["items"][0]["source_state"], "verified")
+        self.assertEqual(parsed["items"][0]["image_url"], "https://cdn.example.com/156811.jpg")
+
     def test_rejects_non_sparex_and_mismatched_product_urls(self):
         self.assertFalse(exact_sparex_product_url("https://example.com/filter-165551.html", "S.165551"))
         self.assertFalse(exact_sparex_product_url("https://us.sparex.com/filter-165552.html", "S.165551"))
@@ -85,6 +103,7 @@ class SparexCatalogDiscoveryParserTests(unittest.TestCase):
         self.assertNotIn('client.call("product.template", "write"', source)
         self.assertNotIn("session.get(source_url", source)
         self.assertIn("RequestThrottle(max(3.0, throttle_seconds))", source)
+        self.assertIn('PARSER_VERSION = "sparex-listing-frontier-v3"', source)
 
 
 if __name__ == "__main__":
