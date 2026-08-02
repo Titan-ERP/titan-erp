@@ -122,3 +122,8 @@ class TestSouthernPayrollAccountMapping(TransactionCase):
             first["sui"].condition_python,
             "result = version.private_state_id.code or version.address_id.state_id.code",
         )
+        self.assertIn(
+            "state_code = (version.private_state_id.code or "
+            "version.address_id.state_id.code).lower()",
+            first["sui"].amount_python_compute,
+        )

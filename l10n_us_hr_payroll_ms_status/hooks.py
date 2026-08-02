@@ -245,6 +245,23 @@ def configure_southern_employer_tax_rules(env, structure=None):
             raise ValidationError(_("COMPANYSUI no longer contains the expected state expression."))
         sui_rule.write({"condition_python": private_state_sui_condition})
 
+    default_sui_state_code = "state_code = version.address_id.state_id.code.lower()"
+    private_state_sui_state_code = (
+        "state_code = (version.private_state_id.code or "
+        "version.address_id.state_id.code).lower()"
+    )
+    sui_code = sui_rule.amount_python_compute or ""
+    if private_state_sui_state_code not in sui_code:
+        if default_sui_state_code not in sui_code:
+            raise ValidationError(_("COMPANYSUI no longer contains the expected state-code expression."))
+        sui_rule.write(
+            {
+                "amount_python_compute": sui_code.replace(
+                    default_sui_state_code, private_state_sui_state_code
+                )
+            }
+        )
+
     return {"futa": futa_rule, "sui": sui_rule}
 
 
