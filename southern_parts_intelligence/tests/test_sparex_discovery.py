@@ -337,3 +337,66 @@ class TestSparexDiscovery(TransactionCase):
         self.assertEqual(result["state"], "ready")
         self.assertEqual(active_run.queued_url_count, 501)
         self.assertEqual(active_run.visited_url_count, 1)
+
+    def test_missing_cost_enters_prioritized_recovery_and_schedules_retry(self):
+        product = self.env["product.template"].create(
+            {
+                "name": "Cost recovery candidate",
+                "default_code": "S.720001",
+                "active": True,
+                "list_price": 45.0,
+                "southern_source_url": "https://us.sparex.com/part-720001.html",
+                "image_1920": base64.b64encode(b"cost-recovery-image"),
+                "website_published": False,
+            }
+        )
+        seed = "https://us.sparex.com/cost-recovery-listing.html"
+        run = self.env["southern.sparex.discovery.run"].start_discovery_run(
+            {
+                "idempotency_key": "test-cost-recovery-v1",
+                "seed_url": seed,
+                "seed_url_sha256": hashlib.sha256(seed.encode()).hexdigest(),
+                "plan_artifact_uri": "s3://test-bucket/discovery/cost-recovery-plan.json",
+                "plan_sha256": "f" * 64,
+                "parser_version": "test-v3",
+                "throttle_seconds": 3,
+            }
+        )
+        Run = self.env["southern.sparex.discovery.run"]
+        Run.prepare_reconciliation_run(run["id"])
+        Run.claim_discovery_checkpoint(run["id"], "cost-recovery-discovery", 180)
+        Run.record_discovery_page(
+            run["id"],
+            "cost-recovery-discovery",
+            {
+                "page_url": seed,
+                "page_sha256": "1" * 64,
+                "artifact_uri": "s3://test-bucket/discovery/cost-recovery-page.json",
+                "artifact_sha256": "2" * 64,
+                "items": [
+                    {
+                        "sku": "S.720001",
+                        "source_url": "https://us.sparex.com/part-720001.html",
+                        "image_url": "https://cdn.example.com/720001.jpg",
+                        "source_state": "verified",
+                    }
+                ],
+                "next_url": "",
+                "listing_urls": [],
+            },
+        )
+        Item = self.env["southern.sparex.discovery.item"]
+        item = Item.search([("normalized_sku", "=", "S.720001")])
+        item._refresh_readiness()
+        self.assertEqual(item.primary_blocker, "missing_cost")
+        self.assertEqual(item.cost_recovery_state, "queued")
+        self.assertEqual(item.cost_recovery_priority, 160)
+        claimed = Item.claim_cost_recovery_batch("test-cost-worker", limit=1)
+        self.assertEqual(claimed[0]["product_id"], product.id)
+        self.assertEqual(claimed[0]["attempt"], 1)
+        Item.record_cost_recovery_result(
+            item.id, "test-cost-worker", "not_found", error_code="verified_cost_absent"
+        )
+        self.assertEqual(item.cost_recovery_state, "retry_wait")
+        self.assertTrue(item.cost_recovery_next_at)
+        self.assertEqual(item.cost_recovery_last_error, "verified_cost_absent")

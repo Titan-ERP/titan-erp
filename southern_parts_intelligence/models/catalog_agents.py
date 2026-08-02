@@ -431,24 +431,19 @@ class SouthernCatalogAgentTask(models.Model):
     @api.model
     def _ready_products(self, limit=MAX_AGENT_BATCH):
         bounded = max(1, min(int(limit or MAX_AGENT_BATCH), MAX_AGENT_BATCH))
-        products = (
-            self.env["product.template"]
-            .sudo()
-            .search(
-                [
-                    ("active", "=", True),
-                    ("website_published", "=", False),
-                    ("default_code", "ilike", "S.%"),
-                    ("list_price", ">", 0),
-                    ("southern_source_url", "!=", False),
-                    ("image_1920", "!=", False),
-                ],
-                order="id",
-                limit=2000,
-            )
+        discovery_items = self.env["southern.sparex.discovery.item"].search(
+            [
+                ("company_id", "=", self.env.company.id),
+                ("reconciliation_state", "=", "current"),
+                ("publication_candidate", "=", True),
+                ("matched_product_id", "!=", False),
+            ],
+            order="readiness_refreshed_at, last_seen_at desc, id",
+            limit=bounded * 4,
         )
         ready = self.env["product.template"]
-        for product in products:
+        for item in discovery_items:
+            product = item.matched_product_id.sudo()
             normalized = normalized_sparex_sku(product.default_code)
             if not normalized or not exact_sparex_url(product.southern_source_url, normalized):
                 continue
