@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <menuitem id="menu_stripe_terminal_root"
-              name="Stripe Terminal"
+              name="Invoice Payments"
               parent="account.menu_finance"
               sequence="95"
               groups="account.group_account_readonly"/>
@@ -16,5 +16,11 @@
               parent="menu_stripe_terminal_root"
               action="action_stripe_terminal_config"
               sequence="20"
+              groups="account.group_account_manager"/>
+    <menuitem id="menu_invoice_payment_routes"
+              name="Cash and ACH Routes"
+              parent="menu_stripe_terminal_root"
+              action="action_invoice_payment_routes"
+              sequence="30"
               groups="account.group_account_manager"/>
 </odoo>

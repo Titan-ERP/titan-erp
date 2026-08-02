@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_invoice_payment_route_list" model="ir.ui.view">
+        <field name="name">southern.invoice.payment.route.list</field>
+        <field name="model">southern.invoice.payment.route</field>
+        <field name="arch" type="xml">
+            <list create="1" delete="0">
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="cash_journal_id"/>
+                <field name="cash_payment_method_line_id"/>
+                <field name="ach_journal_id"/>
+                <field name="ach_payment_method_line_id"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_invoice_payment_route_form" model="ir.ui.view">
+        <field name="name">southern.invoice.payment.route.form</field>
+        <field name="model">southern.invoice.payment.route</field>
+        <field name="arch" type="xml">
+            <form string="Invoice Payment Routes">
+                <sheet>
+                    <div class="oe_title"><h1>Invoice Payment Routes</h1></div>
+                    <group>
+                        <field name="company_id" groups="base.group_multi_company"/>
+                    </group>
+                    <group>
+                        <group string="Cash">
+                            <field name="cash_journal_id"/>
+                            <field name="available_cash_payment_method_line_ids" invisible="1"/>
+                            <field name="cash_payment_method_line_id"/>
+                        </group>
+                        <group string="ACH">
+                            <field name="ach_journal_id"/>
+                            <field name="available_ach_payment_method_line_ids" invisible="1"/>
+                            <field name="ach_payment_method_line_id"/>
+                        </group>
+                    </group>
+                    <div class="alert alert-info" role="status">
+                        Cash and ACH open Odoo's native Register Payment wizard with the selected journal and incoming payment method. The operator reviews and confirms the payment before it is posted.
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_invoice_payment_routes" model="ir.actions.act_window">
+        <field name="name">Payment Routes</field>
+        <field name="res_model">southern.invoice.payment.route</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>

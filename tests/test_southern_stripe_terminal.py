@@ -50,3 +50,22 @@ def test_terminal_webhook_uses_separate_signing_secret():
 def test_write_capable_polling_cron_is_disabled_by_default():
     cron = (MODULE / "data" / "ir_cron.xml").read_text(encoding="utf-8")
     assert '<field name="active" eval="False"/>' in cron
+
+
+def test_invoice_replaces_pay_with_three_explicit_payment_routes():
+    view = (MODULE / "views" / "account_move_views.xml").read_text(encoding="utf-8")
+    assert "//button[@id='account_invoice_payment_btn']" in view
+    assert "//button[@id='account_invoice_payment_secondary_btn']" in view
+    assert "move_type == 'out_invoice'" in view
+    assert 'string="Pay with Terminal"' in view
+    assert 'string="Pay with Cash"' in view
+    assert 'string="Pay with ACH"' in view
+
+
+def test_cash_and_ach_reuse_native_payment_registration():
+    source = (MODULE / "models" / "account_move.py").read_text(encoding="utf-8")
+    assert "def action_pay_with_cash(self):" in source
+    assert "def action_pay_with_ach(self):" in source
+    assert "self.action_register_payment()" in source
+    assert '"default_journal_id"' in source
+    assert '"default_payment_method_line_id"' in source

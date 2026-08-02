@@ -2,6 +2,14 @@
 
 This Odoo 19 module sends the exact residual balance of a posted customer invoice to a Stripe Terminal reader and registers the successful card-present charge through Odoo's native `account.payment.register` workflow.
 
+Posted customer invoices replace the generic **Pay** action with three explicit choices:
+
+- **Pay with Terminal** sends the exact residual to Stripe Terminal.
+- **Pay with Cash** opens native payment registration with the configured cash journal and method.
+- **Pay with ACH** opens native payment registration with the configured ACH bank journal and method.
+
+Cash and ACH require operator review and confirmation in Odoo's standard payment wizard. The ACH route records a payment through the configured Odoo method; it does not initiate an external bank debit by itself.
+
 ## Safety properties
 
 - Reuses Odoo's configured Stripe provider and API credentials.

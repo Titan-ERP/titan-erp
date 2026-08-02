@@ -14,6 +14,13 @@
         <field name="groups" eval="[(4, ref('account.group_account_readonly')), (4, ref('account.group_account_invoice')), (4, ref('account.group_account_manager'))]"/>
     </record>
 
+    <record id="invoice_payment_route_company_rule" model="ir.rule">
+        <field name="name">Invoice payment route company access</field>
+        <field name="model_id" ref="model_southern_invoice_payment_route"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="groups" eval="[(4, ref('account.group_account_invoice')), (4, ref('account.group_account_manager'))]"/>
+    </record>
+
     <record id="stripe_terminal_event_company_rule" model="ir.rule">
         <field name="name">Stripe Terminal event company access</field>
         <field name="model_id" ref="model_southern_stripe_terminal_event"/>
