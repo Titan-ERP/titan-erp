@@ -25,6 +25,8 @@ class SouthernServiceOperationsTests(unittest.TestCase):
                 "repair",
                 "maintenance",
                 "purchase",
+                "sale_stock_renting",
+                "cs_rental_inspection",
                 "cs_client_equipment",
                 "dmc_fieldservice",
             }.issubset(manifest["depends"])
@@ -139,6 +141,46 @@ class SouthernServiceOperationsTests(unittest.TestCase):
             ],
             ["Parts", "Service", "Equipment Sale", "Rental"],
         )
+
+    def test_parts_equipment_and_rental_are_sales_workspaces(self):
+        document = etree.parse(str(MODULE / "views" / "sales_workspaces.xml"))
+        expected_roots = {
+            "menu_southern_parts_root": "sale.sale_menu_root",
+            "menu_southern_equipment_sales_root": "sale.sale_menu_root",
+        }
+        for menu_id, parent in expected_roots.items():
+            rows = document.xpath(f"//menuitem[@id='{menu_id}']")
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0].get("parent"), parent)
+
+        rental_root = document.xpath(
+            "//record[@id='sale_renting.rental_menu_root']"
+        )[0]
+        self.assertEqual(
+            rental_root.xpath("./field[@name='parent_id']/@ref"),
+            ["sale.sale_menu_root"],
+        )
+
+        actions = {
+            row.get("id"): row
+            for row in document.xpath("//record[@model='ir.actions.act_window']")
+        }
+        self.assertIn("action_southern_parts_all", actions)
+        self.assertIn("action_southern_equipment_sales_all", actions)
+        self.assertIn("action_southern_rentals_all", actions)
+        rental_domain = actions["action_southern_rentals_all"].xpath(
+            "./field[@name='domain']/text()"
+        )[0]
+        self.assertIn("is_rental_order", rental_domain)
+
+    def test_rental_quote_type_syncs_to_native_rental(self):
+        source = (MODULE / "models" / "sale_order.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('vals["is_rental_order"] = True', source)
+        self.assertIn('vals["southern_quote_type"] = "rental"', source)
+        self.assertIn('values.setdefault("is_rental_order", True)', source)
+        self.assertIn('order.is_rental_order = True', source)
 
     def test_odoo_19_search_views_do_not_use_group_container(self):
         for path in (MODULE / "views").glob("*.xml"):

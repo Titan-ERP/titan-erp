@@ -65,6 +65,24 @@ class TestSouthernServiceFlow(TransactionCase):
             }
         )
 
+    def test_rental_quote_type_uses_native_rental_order(self):
+        order = self.env["sale.order"].create(
+            {
+                "partner_id": self.partner.id,
+                "southern_quote_type": "rental",
+            }
+        )
+        self.assertTrue(order.is_rental_order)
+
+    def test_native_rental_order_is_classified_as_rental(self):
+        order = self.env["sale.order"].create(
+            {
+                "partner_id": self.partner.id,
+                "is_rental_order": True,
+            }
+        )
+        self.assertEqual(order.southern_quote_type, "rental")
+
     def test_onsite_routing_is_idempotent(self):
         case = self._create_customer_case()
         case.action_route_work()

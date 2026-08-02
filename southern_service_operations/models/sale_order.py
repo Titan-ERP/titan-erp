@@ -123,8 +123,13 @@ class SaleOrder(models.Model):
             "default_southern_quote_type", "general"
         )
         for vals in vals_list:
+            quote_type = vals.get("southern_quote_type", default_quote_type)
+            if quote_type == "rental":
+                vals["is_rental_order"] = True
+            elif vals.get("is_rental_order"):
+                vals["southern_quote_type"] = "rental"
             if (
-                vals.get("southern_quote_type", default_quote_type) == "service"
+                quote_type == "service"
                 and not vals.get("southern_client_equipment_id")
                 and vals.get("partner_id")
             ):
@@ -136,6 +141,14 @@ class SaleOrder(models.Model):
                 if equipment:
                     vals["southern_client_equipment_id"] = equipment.id
         return super().create(vals_list)
+
+    def write(self, vals):
+        values = dict(vals)
+        if values.get("southern_quote_type") == "rental":
+            values.setdefault("is_rental_order", True)
+        elif values.get("is_rental_order"):
+            values.setdefault("southern_quote_type", "rental")
+        return super().write(values)
 
     @api.onchange("southern_client_equipment_id")
     def _onchange_southern_client_equipment_id(self):
@@ -152,6 +165,8 @@ class SaleOrder(models.Model):
     @api.onchange("southern_quote_type")
     def _onchange_southern_quote_type(self):
         for order in self:
+            if order.southern_quote_type == "rental":
+                order.is_rental_order = True
             if (
                 order.southern_quote_type == "service"
                 and not order.southern_service_location
