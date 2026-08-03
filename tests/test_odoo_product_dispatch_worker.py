@@ -6,6 +6,7 @@ from pathlib import Path
 from scripts.odoo_product_dispatch_worker import (
     build_job_command,
     finish_values,
+    resolve_discovery_run_key,
     warning_cooldown_minutes,
 )
 
@@ -48,6 +49,53 @@ class OdooProductDispatchWorkerTests(unittest.TestCase):
                     "request": {"job_type": "sparex_discovery", "http_retries": 1},
                 }
             )
+
+    def test_discovery_command_uses_resolved_cycle_key(self):
+        command = self.command(
+            {
+                "job_type": "sparex_discovery",
+                "request": {
+                    "job_type": "sparex_discovery",
+                    "run_key": "sparex-full-catalog-inventory-v3-cycle-25",
+                },
+            }
+        )
+        self.assertEqual(
+            command[command.index("--run-key") + 1],
+            "sparex-full-catalog-inventory-v3-cycle-25",
+        )
+
+    def test_discovery_cycle_key_continues_active_and_rotates_terminal_run(self):
+        class Client:
+            def __init__(self, rows):
+                self.rows = rows
+
+            def call(self, model, method, **params):
+                self.model = model
+                self.method = method
+                self.params = params
+                return self.rows
+
+        base = "sparex-full-catalog-inventory-v3"
+        self.assertEqual(resolve_discovery_run_key(Client([]), base, 25), base)
+        self.assertEqual(
+            resolve_discovery_run_key(
+                Client([{"idempotency_key": f"{base}-cycle-24", "state": "running"}]),
+                base,
+                25,
+            ),
+            f"{base}-cycle-24",
+        )
+        for state in ("completed", "failed", "cancelled"):
+            with self.subTest(state=state):
+                self.assertEqual(
+                    resolve_discovery_run_key(
+                        Client([{"idempotency_key": base, "state": state}]),
+                        base,
+                        25,
+                    ),
+                    f"{base}-cycle-25",
+                )
 
     def test_release_requires_apply_mode_and_publish_approval(self):
         with self.assertRaises(RuntimeError):
