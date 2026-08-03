@@ -5,6 +5,8 @@
     "version": "19.0.1.2.0",
     "category": "Accounting/Payment",
     "summary": "Collect invoice balances on Stripe Terminal and register native Odoo payments.",
+    "author": "Southern Equipment Company",
+    "website": "https://github.com/Titan-ERP/titan-erp",
     "depends": [
         "account",
         "mail",
