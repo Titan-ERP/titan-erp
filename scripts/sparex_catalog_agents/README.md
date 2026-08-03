@@ -74,12 +74,13 @@ python -m scripts.sparex_catalog_agents.orchestrator `
   --reason "Approved catalog verification and website publication"
 ```
 
-Production scheduling is owned by `cloud/aws/titan-sparex-discovery.timer`.
-Each successful discovery checkpoint triggers `titan-catalog-agent.service`;
-the independent catalog timer stays disabled to prevent competing schedules.
-The oneshot services plus `flock` prevent overlap. Discovery processes at most
-five listing pages while new/recovering and up to ten while healthy, sequentially with at least three seconds between requests,
-then the deterministic release handles at most 50 current-evidence products.
+Production scheduling is owned by Odoo. `cloud/aws/titan-sparex-discovery.timer`
+polls for one Odoo-owned dispatch and exits without portal access when the queue
+is empty. Odoo queues release work only after approval; the independent catalog
+timer stays disabled to prevent competing schedules. The oneshot service plus
+`flock` prevents overlap. Both discovery and an approved deterministic release
+process at most five items sequentially, with at least three seconds between
+portal requests and no HTTP retry loop.
 
 Whole-catalog coverage is handled separately by
 `scripts/sparex_catalog_discovery.py`. It reuses the Discovery and Match agent

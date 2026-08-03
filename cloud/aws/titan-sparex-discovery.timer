@@ -1,9 +1,9 @@
 [Unit]
-Description=Resume one Sparex listing discovery page after each completed interval
+Description=Poll for one Odoo-owned product dispatch
 
 [Timer]
-OnBootSec=4min
-OnUnitInactiveSec=2min
+OnBootSec=2min
+OnUnitInactiveSec=1min
 RandomizedDelaySec=15s
 AccuracySec=1s
 Persistent=false
