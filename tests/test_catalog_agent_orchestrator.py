@@ -137,15 +137,17 @@ def test_service_uses_non_overlapping_secure_runtime():
     assert "Persistent=false" in timer
 
 
-def test_successful_discovery_triggers_publication_handoff():
+def test_odoo_dispatch_separates_discovery_from_approved_publication():
     discovery_service = (ROOT / "cloud" / "aws" / "titan-sparex-discovery.service").read_text(
         encoding="utf-8"
     )
     discovery_launcher = (ROOT / "scripts" / "run_sparex_catalog_discovery.sh").read_text(encoding="utf-8")
-    assert "OnSuccess=titan-catalog-agent.service" in discovery_service
-    assert "SPAREX_DISCOVERY_RUN_KEY=sparex-full-catalog-inventory-v3" in discovery_service
-    assert "sparex-full-catalog-inventory-v3" in discovery_launcher
-    assert "--max-pages-per-checkpoint 10" in discovery_launcher
+    assert "OnSuccess=titan-catalog-agent.service" not in discovery_service
+    assert "scripts.odoo_product_dispatch_worker" in discovery_launcher
+    assert "scripts.sparex_catalog_discovery" not in discovery_launcher
+    dispatch_source = (ROOT / "scripts" / "odoo_product_dispatch_worker.py").read_text(encoding="utf-8")
+    assert '"claim_queued_run"' in dispatch_source
+    assert 'claim.get("mode") != "apply"' in dispatch_source
 
 
 def test_listing_image_repair_is_hash_verified_and_bounded(monkeypatch):

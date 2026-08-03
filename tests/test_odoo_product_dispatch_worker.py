@@ -1,0 +1,115 @@
+import sys
+import unittest
+from pathlib import Path
+
+from scripts.odoo_product_dispatch_worker import (
+    build_job_command,
+    finish_values,
+    warning_cooldown_minutes,
+)
+
+
+class OdooProductDispatchWorkerTests(unittest.TestCase):
+    def command(self, claim):
+        return build_job_command(
+            claim,
+            python=sys.executable,
+            odoo_env_file=Path("odoo.env"),
+            dealer_env_file=Path("dealer.env"),
+            artifact_root=Path("artifacts"),
+            worker_id="test-worker",
+            s3_bucket="test-bucket",
+        )
+
+    def test_discovery_command_is_bounded_and_has_no_retry_option(self):
+        command = self.command(
+            {
+                "job_type": "sparex_discovery",
+                "mode": "evidence_only",
+                "request": {
+                    "job_type": "sparex_discovery",
+                    "limit": 500,
+                    "throttle_seconds": 1,
+                    "http_retries": 0,
+                },
+            }
+        )
+        self.assertIn("scripts.sparex_catalog_discovery", command)
+        self.assertEqual(command[command.index("--max-pages-per-checkpoint") + 1], "5")
+        self.assertEqual(command[command.index("--throttle-seconds") + 1], "3.0")
+        self.assertNotIn("--http-retries", command)
+
+    def test_nonzero_retry_contract_is_rejected(self):
+        with self.assertRaises(RuntimeError):
+            self.command(
+                {
+                    "job_type": "sparex_discovery",
+                    "request": {"job_type": "sparex_discovery", "http_retries": 1},
+                }
+            )
+
+    def test_release_requires_apply_mode_and_publish_approval(self):
+        with self.assertRaises(RuntimeError):
+            self.command(
+                {
+                    "job_type": "catalog_release",
+                    "mode": "evidence_only",
+                    "request": {"job_type": "catalog_release", "publish": False},
+                }
+            )
+        command = self.command(
+            {
+                "job_type": "catalog_release",
+                "mode": "apply",
+                "request": {
+                    "job_type": "catalog_release",
+                    "publish": True,
+                    "http_retries": 0,
+                },
+            }
+        )
+        self.assertIn("scripts.sparex_catalog_agents.orchestrator", command)
+        self.assertIn("--publish", command)
+
+    def test_finish_values_preserve_archived_result_evidence(self):
+        values = finish_values(
+            {
+                "prepared": 4,
+                "published": 3,
+                "result_uri": "s3://bucket/result.json",
+                "result_sha256": "a" * 64,
+            }
+        )
+        self.assertEqual(values["processed_count"], 4)
+        self.assertEqual(values["changed_count"], 3)
+        self.assertTrue(values["artifact_archived"])
+
+    def test_warning_signals_enforce_sixty_minute_cooldown(self):
+        for warning in (
+            "portal_http_429",
+            "HTTP 503",
+            "html_proxy_error",
+            "dealer_login_failed",
+            "TimeoutExpired",
+            "slow page",
+            "Odoo transient",
+        ):
+            with self.subTest(warning=warning):
+                self.assertEqual(warning_cooldown_minutes(warning), 60)
+        self.assertEqual(warning_cooldown_minutes("validation error"), 0)
+
+    def test_systemd_worker_is_poll_only_and_installer_disables_old_timer(self):
+        root = Path(__file__).resolve().parents[1]
+        service = (root / "cloud" / "aws" / "titan-sparex-discovery.service").read_text()
+        timer = (root / "cloud" / "aws" / "titan-sparex-discovery.timer").read_text()
+        installer = (root / "cloud" / "aws" / "install-product-dispatch-worker.sh").read_text()
+        self.assertNotIn("OnSuccess=titan-catalog-agent.service", service)
+        self.assertIn("ExecStart=/bin/bash", service)
+        self.assertIn("scripts/run_sparex_catalog_discovery.sh", service)
+        self.assertIn("OnUnitInactiveSec=1min", timer)
+        self.assertIn("disable --now titan-catalog-agent.timer", installer)
+        self.assertIn("enable --now titan-sparex-discovery.timer", installer)
+
+
+if __name__ == "__main__":
+    unittest.main()

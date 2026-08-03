@@ -1,7 +1,9 @@
 from datetime import timedelta
+import json
 import uuid
 
 from odoo import api, fields, models
+from odoo.exceptions import UserError
 
 
 class SouthernPartsCatalogSync(models.Model):
@@ -27,6 +29,7 @@ class SouthernPartsCatalogSync(models.Model):
         [
             ("snapshot_refresh", "Refresh Website Snapshots"),
             ("evidence_review", "Evidence Review Only"),
+            ("sparex_discovery", "Sparex Product Updates"),
         ],
         default="snapshot_refresh",
         required=True,
@@ -42,6 +45,7 @@ class SouthernPartsCatalogSync(models.Model):
 
     @api.model
     def _cron_run_active_syncs(self):
+        self.env["southern.parts.automation.run"].sudo().recover_expired_claims()
         syncs = self.sudo().search(
             [
                 ("active", "=", True),
@@ -57,6 +61,43 @@ class SouthernPartsCatalogSync(models.Model):
     def action_run_now(self):
         for sync in self:
             sync.sudo()._run_one_batch()
+        return True
+
+    def action_queue_approved_apply(self):
+        for sync in self:
+            sync.sudo()._queue_sparex_dispatch("apply")
+        return True
+
+    def action_enable_dispatch_schedule(self):
+        cron = self.env.ref(
+            "southern_parts_intelligence.ir_cron_southern_parts_catalog_sync",
+            raise_if_not_found=False,
+        )
+        for sync in self:
+            if sync.mode != "sparex_discovery" or sync.approval_state != "approved":
+                raise UserError("Enabling Sparex scheduling requires an approved workflow.")
+            sync.write(
+                {
+                    "internal_cron_enabled": True,
+                    "state": "idle",
+                    "approval_state": "not_required",
+                    "approved_by_id": False,
+                    "approved_at": False,
+                    "last_message": "Odoo scheduling enabled; awaiting the next bounded dispatch window.",
+                }
+            )
+        if cron:
+            cron.sudo().write({"active": True})
+        return True
+
+    def action_disable_dispatch_schedule(self):
+        self.filtered(lambda sync: sync.mode == "sparex_discovery").write(
+            {
+                "internal_cron_enabled": False,
+                "state": "paused",
+                "last_message": "Odoo product dispatch scheduling disabled.",
+            }
+        )
         return True
 
     def action_pause(self):
@@ -81,6 +122,8 @@ class SouthernPartsCatalogSync(models.Model):
                 }
             )
             return
+        if self.mode == "sparex_discovery":
+            return self._queue_sparex_dispatch("evidence_only")
         if self.mode != "snapshot_refresh":
             self.write(
                 {
@@ -187,3 +230,65 @@ class SouthernPartsCatalogSync(models.Model):
                 },
             )
             return False
+
+    def _queue_sparex_dispatch(self, mode):
+        self.ensure_one()
+        if self.mode != "sparex_discovery":
+            return False
+        if mode not in {"evidence_only", "apply"}:
+            raise ValueError("Unsupported Sparex dispatch mode.")
+        if mode == "apply" and self.approval_state != "approved":
+            raise UserError("Sparex apply and publication require an approved workflow.")
+        now = fields.Datetime.now()
+        gate = max(
+            [value for value in (self.cooldown_until, self.next_allowed_run_at) if value],
+            default=False,
+        )
+        if gate and gate > now:
+            self.write({"last_message": "The next Sparex dispatch is not allowed before %s." % gate})
+            return False
+        Run = self.env["southern.parts.automation.run"].sudo()
+        job_type = "sparex_discovery" if mode == "evidence_only" else "catalog_release"
+        existing = Run.search_count(
+            [
+                ("sync_id", "=", self.id),
+                ("job_type", "=", job_type),
+                ("state", "in", ["queued", "running"]),
+            ]
+        )
+        if existing:
+            self.write({"last_message": "A %s dispatch is already queued or running." % job_type})
+            return False
+        requested_count = max(1, min(int(self.batch_size or 5), 5))
+        request = {
+            "schema_version": "1.0",
+            "job_type": job_type,
+            "limit": requested_count,
+            "throttle_seconds": 3.0,
+            "http_retries": 0,
+            "publish": mode == "apply",
+        }
+        run_id = Run.queue_external_run(
+            self.id,
+            {
+                "name": (
+                    "Sparex evidence checkpoint"
+                    if mode == "evidence_only"
+                    else "Approved Sparex product update and release"
+                ),
+                "idempotency_key": "%s:%s:%s" % (job_type, self.id, uuid.uuid4().hex),
+                "job_type": job_type,
+                "mode": mode,
+                "requested_count": requested_count,
+                "request_json": json.dumps(request, sort_keys=True),
+            },
+        )
+        self.write(
+            {
+                "state": "idle",
+                "last_run_at": now,
+                "run_count": self.run_count + 1,
+                "last_message": "Queued Odoo-owned %s dispatch %s for AWS." % (job_type, run_id),
+            }
+        )
+        return run_id
