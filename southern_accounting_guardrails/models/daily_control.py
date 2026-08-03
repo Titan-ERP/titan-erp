@@ -28,6 +28,7 @@ class SouthernAccountingDailyControl(models.Model):
     bank_line_count = fields.Integer(readonly=True)
     unreconciled_bank_line_count = fields.Integer(readonly=True)
     bank_needs_review_count = fields.Integer(readonly=True)
+    bank_exception_count = fields.Integer(readonly=True)
     merchant_batch_needs_review_count = fields.Integer(readonly=True)
     revenue_line_needs_review_count = fields.Integer(readonly=True)
     product_account_needs_review_count = fields.Integer(readonly=True)
@@ -75,6 +76,9 @@ class SouthernAccountingDailyControl(models.Model):
                     "bank_needs_review_count": BankLine.search_count(
                         day_domain + [("southern_review_status", "=", "needs_review")]
                     ),
+                    "bank_exception_count": BankLine.search_count(
+                        day_domain + [("southern_review_status", "=", "exception")]
+                    ),
                     "merchant_batch_needs_review_count": Batch.search_count(
                         [
                             ("company_id", "=", control.company_id.id),
@@ -87,9 +91,13 @@ class SouthernAccountingDailyControl(models.Model):
                     ),
                     "product_account_needs_review_count": Product.search_count(
                         [
+                            "&",
+                            "&",
                             ("sale_ok", "=", True),
                             ("company_id", "in", [False, control.company_id.id]),
+                            "|",
                             ("southern_income_account_review", "=", "needs_review"),
+                            ("southern_expense_account_review", "=", "needs_review"),
                         ]
                     ),
                     "draft_invoice_count": Move.search_count(move_day_domain + [("state", "=", "draft")]),
@@ -163,8 +171,12 @@ class SouthernAccountingDailyControl(models.Model):
             "res_model": "product.template",
             "view_mode": "list,form",
             "domain": [
+                "&",
+                "&",
                 ("sale_ok", "=", True),
                 ("company_id", "in", [False, self.company_id.id]),
+                "|",
                 ("southern_income_account_review", "=", "needs_review"),
+                ("southern_expense_account_review", "=", "needs_review"),
             ],
         }

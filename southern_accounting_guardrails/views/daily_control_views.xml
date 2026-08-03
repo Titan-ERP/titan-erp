@@ -13,6 +13,7 @@
                 <field name="bank_line_count"/>
                 <field name="unreconciled_bank_line_count"/>
                 <field name="bank_needs_review_count"/>
+                <field name="bank_exception_count"/>
                 <field name="merchant_batch_needs_review_count"/>
                 <field name="revenue_line_needs_review_count"/>
                 <field name="draft_invoice_count"/>
@@ -56,6 +57,7 @@
                         <group string="Open Items">
                             <field name="unreconciled_bank_line_count" readonly="1"/>
                             <field name="bank_needs_review_count" readonly="1"/>
+                            <field name="bank_exception_count" readonly="1"/>
                             <field name="merchant_batch_needs_review_count" readonly="1"/>
                             <field name="revenue_line_needs_review_count" readonly="1"/>
                             <field name="product_account_needs_review_count" readonly="1"/>
