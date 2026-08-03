@@ -10,6 +10,9 @@
                 <field name="cash_payment_method_line_id"/>
                 <field name="ach_journal_id"/>
                 <field name="ach_payment_method_line_id"/>
+                <field name="processing_fee_enabled"/>
+                <field name="processing_fee_percentage"/>
+                <field name="processing_fee_fixed"/>
             </list>
         </field>
     </record>
@@ -36,8 +39,20 @@
                             <field name="ach_payment_method_line_id"/>
                         </group>
                     </group>
+                    <group string="Transaction Processing Fee">
+                        <field name="processing_fee_enabled"/>
+                        <field name="processing_fee_name" invisible="not processing_fee_enabled"/>
+                        <field name="processing_fee_percentage" invisible="not processing_fee_enabled"/>
+                        <field name="processing_fee_fixed" invisible="not processing_fee_enabled"/>
+                        <field name="currency_id" invisible="1"/>
+                        <field name="processing_fee_income_account_id" invisible="not processing_fee_enabled"/>
+                        <field name="processing_fee_tax_ids" widget="many2many_tags" invisible="not processing_fee_enabled"/>
+                    </group>
                     <div class="alert alert-info" role="status">
                         Cash and ACH open Odoo's native Register Payment wizard with the selected journal and incoming payment method. The operator reviews and confirms the payment before it is posted.
+                    </div>
+                    <div class="alert alert-info" role="status" invisible="not processing_fee_enabled">
+                        The transaction processing fee applies to every customer invoice regardless of payment route. It is calculated on the complete invoice total, including sales tax, before the fee itself.
                     </div>
                 </sheet>
             </form>

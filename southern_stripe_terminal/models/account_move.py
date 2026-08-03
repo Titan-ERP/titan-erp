@@ -1,9 +1,104 @@
-from odoo import _, models
+from odoo import Command, _, api, fields, models
 from odoo.exceptions import UserError
 
 
 class AccountMove(models.Model):
     _inherit = "account.move"
+
+    southern_processing_fee_amount = fields.Monetary(
+        string="Transaction Processing Fee",
+        compute="_compute_southern_processing_fee_amount",
+        currency_field="currency_id",
+    )
+
+    @api.depends(
+        "invoice_line_ids.price_total",
+        "invoice_line_ids.southern_is_processing_fee",
+    )
+    def _compute_southern_processing_fee_amount(self):
+        for move in self:
+            move.southern_processing_fee_amount = sum(
+                move.invoice_line_ids.filtered("southern_is_processing_fee").mapped("price_total")
+            )
+
+    def _southern_processing_fee_route(self):
+        self.ensure_one()
+        return self.env["southern.invoice.payment.route"].search(
+            [
+                ("company_id", "=", self.company_id.id),
+                ("processing_fee_enabled", "=", True),
+            ],
+            limit=1,
+        )
+
+    def _southern_sync_processing_fee(self, *, strict=False):
+        if self.env.context.get("southern_skip_processing_fee_sync"):
+            return
+        for move in self:
+            if move.move_type != "out_invoice" or move.state != "draft":
+                continue
+            route = move._southern_processing_fee_route()
+            fee_lines = move.invoice_line_ids.filtered("southern_is_processing_fee")
+            if not route:
+                if fee_lines:
+                    fee_lines.with_context(southern_skip_processing_fee_sync=True).unlink()
+                continue
+            if not route.processing_fee_income_account_id:
+                if strict:
+                    raise UserError(_("Configure the transaction processing fee income account before posting."))
+                continue
+
+            base_total = move.amount_total - sum(fee_lines.mapped("price_total"))
+            fee_amount = 0.0
+            if move.currency_id.compare_amounts(base_total, 0.0) > 0:
+                fee_amount = move.currency_id.round(
+                    (base_total * route.processing_fee_percentage / 100.0) + route.processing_fee_fixed
+                )
+
+            if move.currency_id.is_zero(fee_amount):
+                if fee_lines:
+                    fee_lines.with_context(southern_skip_processing_fee_sync=True).unlink()
+                continue
+
+            line_values = {
+                "name": route.processing_fee_name,
+                "quantity": 1.0,
+                "price_unit": fee_amount,
+                "account_id": route.processing_fee_income_account_id.id,
+                "tax_ids": [Command.set(route.processing_fee_tax_ids.ids)],
+                "southern_is_processing_fee": True,
+                "southern_manual_revenue_bucket": "fees",
+                "sequence": 999,
+            }
+            primary_line = fee_lines[:1]
+            if primary_line:
+                primary_line.with_context(southern_skip_processing_fee_sync=True).write(line_values)
+                if len(fee_lines) > 1:
+                    (fee_lines - primary_line).with_context(southern_skip_processing_fee_sync=True).unlink()
+            else:
+                move.with_context(southern_skip_processing_fee_sync=True).write(
+                    {"invoice_line_ids": [Command.create(line_values)]}
+                )
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        moves = super().create(vals_list)
+        moves._southern_sync_processing_fee()
+        return moves
+
+    def write(self, vals):
+        result = super().write(vals)
+        if "invoice_line_ids" in vals and not self.env.context.get("southern_skip_processing_fee_sync"):
+            self._southern_sync_processing_fee()
+        return result
+
+    def action_update_processing_fee(self):
+        self._southern_sync_processing_fee(strict=True)
+        return True
+
+    def action_post(self):
+        self._southern_sync_processing_fee(strict=True)
+        return super().action_post()
 
     def _southern_validate_payment_invoice(self):
         self.ensure_one()
@@ -90,3 +185,14 @@ class AccountMove(models.Model):
         )
         terminal_payment.action_send_to_reader()
         return terminal_payment.action_open_form()
+
+
+class AccountMoveLine(models.Model):
+    _inherit = "account.move.line"
+
+    southern_is_processing_fee = fields.Boolean(
+        string="Transaction Processing Fee Line",
+        default=False,
+        copy=False,
+        index=True,
+    )

@@ -39,9 +39,11 @@ Stripe's simulator is sandbox-only and does not move money. Live mode must remai
 
 The configured Odoo journal and incoming payment method control payment accounting. Depending on the journal's outstanding-receipts configuration, Odoo may show the invoice as **In Payment** until the Stripe payout/bank line is reconciled. The module intentionally does not force the invoice to **Paid**, because doing so would bypass Odoo's accounting controls.
 
-## Card convenience fees
+## Transaction processing fee
 
-This version does not add a surcharge. A card fee changes the legal invoice total, taxes, disclosures, and network-compliance requirements. If Southern Equipment adopts one, implement it as an explicit invoice line before the invoice is posted and enable it only after legal/accounting review for the applicable location and card type.
+The company payment-route configuration can apply one universal transaction processing fee to every customer invoice, regardless of whether the customer pays by Terminal, online Stripe, cash, or ACH. The default formula is 3.5% of the complete invoice total before the fee, including sales tax, plus $0.30. The fee is represented as a separate invoice line and posts to the explicitly configured fee-income account.
+
+The feature is disabled on module upgrade until an accountant selects the fee-income account and any applicable fee taxes. Draft invoices synchronize the line as they are edited, the operator can force an update with **Update Processing Fee**, and posting performs a final exact recalculation. Posted invoices are never silently changed.
 
 ## Hardware cutover
 

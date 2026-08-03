@@ -2,13 +2,16 @@
 
 {
     "name": "Southern Stripe Terminal",
-    "version": "19.0.1.1.0",
+    "version": "19.0.1.2.0",
     "category": "Accounting/Payment",
     "summary": "Collect invoice balances on Stripe Terminal and register native Odoo payments.",
+    "author": "Southern Equipment Company",
+    "website": "https://github.com/Titan-ERP/titan-erp",
     "depends": [
         "account",
         "mail",
         "payment_stripe",
+        "southern_accounting_guardrails",
     ],
     "data": [
         "security/ir.model.access.csv",

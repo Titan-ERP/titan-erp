@@ -88,6 +88,35 @@ class SouthernAccountingPolicy(models.Model):
         default=True,
         help="Flags saleable products without a Southern revenue bucket for accounting setup review.",
     )
+    commercial_order_guardrail_mode = fields.Selection(
+        [
+            ("off", "Off"),
+            ("warn", "Warn Only"),
+            ("enforce", "Block Unsafe Confirmation"),
+        ],
+        string="Sales / Purchase Guardrails",
+        default="warn",
+        required=True,
+        tracking=True,
+        help="Warns users while drafting. Enforce also blocks newly created orders with objective accounting errors.",
+    )
+    commercial_order_guardrail_effective_at = fields.Datetime(
+        string="Enforce For Orders Created On/After",
+        tracking=True,
+        help="Existing drafts created before this timestamp remain visible for cleanup but are not unexpectedly blocked.",
+    )
+    require_sale_tax_selection = fields.Boolean(
+        string="Require Sales Tax Selection",
+        default=True,
+        tracking=True,
+        help="A zero-percent tax is valid, but every sales line must have an explicit tax decision.",
+    )
+    require_purchase_tax_selection = fields.Boolean(
+        string="Require Purchase Tax Selection",
+        default=True,
+        tracking=True,
+        help="A zero-percent tax is valid, but every purchase line must have an explicit tax decision.",
+    )
     merchant_fee_tolerance = fields.Monetary(default=2.0)
     bank_match_tolerance = fields.Monetary(default=1.0)
     currency_id = fields.Many2one(related="company_id.currency_id", readonly=True)
@@ -154,6 +183,8 @@ class SouthernAccountingPolicy(models.Model):
             "parts_revenue_account_id": "Parts Revenue",
             "service_revenue_account_id": "Service Revenue",
             "rental_revenue_account_id": "Rental Revenue",
+            "equipment_revenue_account_id": "Equipment Sales Revenue",
+            "fees_revenue_account_id": "Card Processing Fee Income",
             "merchant_fee_account_id": "Bank Merchant Fees",
             "payment_clearing_account_id": "Shop Boss Payment Clearing",
             "check_review_account_id": "Checks Pending Payee Review",
