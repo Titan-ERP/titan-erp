@@ -41,6 +41,26 @@ class SouthernAccountingPolicy(models.Model):
         domain="[('account_type', '=', 'income')]",
         tracking=True,
     )
+    equipment_cost_account_id = fields.Many2one(
+        "account.account",
+        domain="[('account_type', '=', 'expense_direct_cost')]",
+        tracking=True,
+    )
+    parts_cost_account_id = fields.Many2one(
+        "account.account",
+        domain="[('account_type', '=', 'expense_direct_cost')]",
+        tracking=True,
+    )
+    service_cost_account_id = fields.Many2one(
+        "account.account",
+        domain="[('account_type', '=', 'expense_direct_cost')]",
+        tracking=True,
+    )
+    rental_cost_account_id = fields.Many2one(
+        "account.account",
+        domain="[('account_type', '=', 'expense_direct_cost')]",
+        tracking=True,
+    )
     merchant_fee_account_id = fields.Many2one(
         "account.account",
         string="Merchant Fee Expense Account",
@@ -108,9 +128,22 @@ class SouthernAccountingPolicy(models.Model):
             "fees": self.fees_revenue_account_id,
         }.get(bucket, self.env["account.account"])
 
+    def get_cost_account(self, bucket):
+        self.ensure_one()
+        return {
+            "equipment": self.equipment_cost_account_id,
+            "parts": self.parts_cost_account_id,
+            "service": self.service_cost_account_id,
+            "rental": self.rental_cost_account_id,
+        }.get(bucket, self.env["account.account"])
+
     def action_fill_from_chart(self):
         Account = self.env["account.account"]
         codes = {
+            "equipment_cost_account_id": "500000",
+            "parts_cost_account_id": "510000",
+            "service_cost_account_id": "520000",
+            "rental_cost_account_id": "530000",
             "parts_revenue_account_id": "410000",
             "service_revenue_account_id": "420000",
             "rental_revenue_account_id": "430000",

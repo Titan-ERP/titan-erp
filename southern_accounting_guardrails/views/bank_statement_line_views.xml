@@ -21,6 +21,8 @@
                 <field name="southern_review_status"/>
                 <field name="southern_missing_partner"/>
                 <field name="southern_is_merchant_settlement"/>
+                <field name="southern_settlement_direct_revenue"/>
+                <field name="southern_payroll_direct_expense"/>
                 <field name="southern_expected_merchant_fee"/>
                 <field name="southern_shop_boss_batch_ref"/>
                 <field name="southern_shop_boss_document_id"/>
