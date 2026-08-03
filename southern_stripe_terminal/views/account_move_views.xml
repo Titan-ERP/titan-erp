@@ -24,6 +24,12 @@
                 )</attribute>
             </xpath>
             <xpath expr="//header" position="inside">
+                <button name="action_update_processing_fee"
+                        string="Update Processing Fee"
+                        type="object"
+                        class="btn-secondary"
+                        groups="account.group_account_invoice"
+                        invisible="move_type != 'out_invoice' or state != 'draft'"/>
                 <button name="action_pay_with_stripe_terminal"
                         string="Pay with Terminal"
                         type="object"
@@ -42,6 +48,11 @@
                         class="btn-secondary"
                         groups="account.group_account_invoice"
                         invisible="move_type != 'out_invoice' or state != 'posted' or payment_state in ('paid', 'reversed') or amount_residual &lt;= 0"/>
+            </xpath>
+            <xpath expr="//field[@name='invoice_payment_term_id']" position="after">
+                <field name="southern_processing_fee_amount"
+                       readonly="1"
+                       invisible="move_type != 'out_invoice' or southern_processing_fee_amount == 0"/>
             </xpath>
         </field>
     </record>

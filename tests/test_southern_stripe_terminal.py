@@ -18,6 +18,7 @@ def test_manifest_requires_native_accounting_and_stripe_modules():
     manifest = (MODULE / "__manifest__.py").read_text(encoding="utf-8")
     assert '"account"' in manifest
     assert '"payment_stripe"' in manifest
+    assert '"southern_accounting_guardrails"' in manifest
 
 
 def test_webhook_signature_validation_accepts_only_current_matching_signature():
@@ -78,3 +79,40 @@ def test_odoo_19_views_and_constraints_use_current_syntax():
     for path in (MODULE / "models").glob("*.py"):
         source = path.read_text(encoding="utf-8")
         assert "_sql_constraints" not in source
+
+
+def test_universal_processing_fee_is_configurable_and_disabled_until_account_mapping():
+    route = (MODULE / "models" / "invoice_payment_route.py").read_text(encoding="utf-8")
+    assert 'processing_fee_enabled = fields.Boolean(' in route
+    assert 'default=False' in route
+    assert 'default=3.5' in route
+    assert 'default=0.30' in route
+    assert 'processing_fee_income_account_id = fields.Many2one(' in route
+    assert 'processing_fee_tax_ids = fields.Many2many(' in route
+
+
+def test_processing_fee_applies_to_every_customer_invoice_and_is_idempotent():
+    source = (MODULE / "models" / "account_move.py").read_text(encoding="utf-8")
+    assert 'move.move_type != "out_invoice"' in source
+    assert 'route.processing_fee_percentage / 100.0' in source
+    assert 'route.processing_fee_fixed' in source
+    assert 'move.amount_total - sum(fee_lines.mapped("price_total"))' in source
+    assert 'fee_lines[:1]' in source
+    assert 'len(fee_lines) > 1' in source
+    assert '"southern_is_processing_fee": True' in source
+    assert '"southern_manual_revenue_bucket": "fees"' in source
+
+
+def test_processing_fee_is_finalized_before_posting_and_never_mutates_posted_invoice():
+    source = (MODULE / "models" / "account_move.py").read_text(encoding="utf-8")
+    assert 'move.state != "draft"' in source
+    assert 'def action_post(self):' in source
+    assert 'self._southern_sync_processing_fee(strict=True)' in source
+    assert 'return super().action_post()' in source
+
+
+def test_processing_fee_is_not_tied_to_terminal_cash_or_ach_route():
+    source = (MODULE / "models" / "account_move.py").read_text(encoding="utf-8")
+    sync_method = source.split("def _southern_sync_processing_fee", 1)[1].split("def create", 1)[0]
+    assert "route_name" not in sync_method
+    assert "provider_state" not in sync_method
