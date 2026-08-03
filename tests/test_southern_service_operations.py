@@ -139,6 +139,11 @@ class SouthernServiceOperationsTests(unittest.TestCase):
             ],
             ["Parts", "Service", "Equipment Sale", "Rental"],
         )
+        list_attributes = document.xpath(
+            "//record[@id='view_quotation_list_southern_service']"
+            "/field[@name='arch']/xpath[@expr='//list']/attribute[@name='create']"
+        )
+        self.assertEqual([node.text for node in list_attributes], ["false"])
 
     def test_odoo_19_search_views_do_not_use_group_container(self):
         for path in (MODULE / "views").glob("*.xml"):
