@@ -71,10 +71,13 @@ def build_job_command(
         "--s3-bucket", s3_bucket,
     ]
     if claim.get("job_type") == "sparex_discovery":
+        run_key = request.get("run_key") or os.environ.get(
+            "SPAREX_DISCOVERY_RUN_KEY", "sparex-full-catalog-inventory-v3"
+        )
         return [
             python, "-m", "scripts.sparex_catalog_discovery",
             *common,
-            "--run-key", os.environ.get("SPAREX_DISCOVERY_RUN_KEY", "sparex-full-catalog-inventory-v3"),
+            "--run-key", str(run_key),
             "--max-pages-per-checkpoint", str(limit),
             "--throttle-seconds", str(throttle),
             "--apply",
@@ -95,6 +98,27 @@ def build_job_command(
             "--reason", "Odoo-approved catalog update and website publication",
         ]
     raise RuntimeError("Unsupported Odoo product dispatch job type.")
+
+
+def resolve_discovery_run_key(client: OdooClient, base_key: str, dispatch_run_id: int) -> str:
+    rows = client.call(
+        "southern.sparex.discovery.run",
+        "search_read",
+        domain=[
+            "|",
+            ("idempotency_key", "=", base_key),
+            ("idempotency_key", "=like", f"{base_key}-cycle-%"),
+        ],
+        fields=["idempotency_key", "state"],
+        limit=1,
+        order="id desc",
+    )
+    if not rows:
+        return base_key
+    latest = rows[0]
+    if latest.get("state") not in {"completed", "failed", "cancelled"}:
+        return str(latest["idempotency_key"])
+    return f"{base_key}-cycle-{int(dispatch_run_id)}"
 
 
 def _last_json(stdout: str) -> dict[str, Any]:
@@ -151,6 +175,11 @@ def main() -> int:
     if not claim.get("claimed"):
         print(json.dumps({"claimed": False}, sort_keys=True))
         return 0
+    if claim.get("job_type") == "sparex_discovery":
+        request = dict(claim.get("request") or {})
+        base_key = os.environ.get("SPAREX_DISCOVERY_RUN_KEY", "sparex-full-catalog-inventory-v3")
+        request["run_key"] = resolve_discovery_run_key(client, base_key, int(claim["run_id"]))
+        claim = {**claim, "request": request}
     command = build_job_command(
         claim,
         python=sys.executable,
