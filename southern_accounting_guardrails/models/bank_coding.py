@@ -3,6 +3,8 @@ import re
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
+from .merchant_guard import is_unsafe_merchant_target
+
 
 class SouthernBankCodingRule(models.Model):
     _name = "southern.bank.coding.rule"
@@ -387,6 +389,20 @@ class SouthernBankCodingCandidate(models.Model):
     error_message = fields.Text(readonly=True)
 
     def action_approve(self):
+        unsafe = self.filtered(
+            lambda candidate: is_unsafe_merchant_target(
+                candidate.bank_statement_line_id,
+                candidate.target_account_id,
+            )
+        )
+        if unsafe:
+            raise UserError(
+                _(
+                    "Merchant settlements cannot be approved directly to revenue, "
+                    "receivables, tax, or suspense. Match the card/payment batch to "
+                    "Outstanding Receipts and record merchant fees separately."
+                )
+            )
         self.write(
             {
                 "state": "approved",
@@ -403,6 +419,17 @@ class SouthernBankCodingCandidate(models.Model):
             if candidate.state != "approved":
                 raise UserError(_("Approve this candidate before applying it."))
             bank_line = candidate.bank_statement_line_id
+            if is_unsafe_merchant_target(bank_line, candidate.target_account_id):
+                candidate.write(
+                    {
+                        "state": "exception",
+                        "error_message": _(
+                            "Unsafe merchant-settlement target. Use Outstanding Receipts "
+                            "and a separately supported merchant-fee line."
+                        ),
+                    }
+                )
+                continue
             if bank_line.is_reconciled:
                 raise UserError(_("The bank line is already reconciled."))
             suspense_lines = bank_line.move_id.line_ids.filtered(

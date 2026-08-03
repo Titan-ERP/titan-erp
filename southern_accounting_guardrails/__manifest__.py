@@ -1,6 +1,6 @@
 {
     "name": "Southern Accounting Guardrails",
-    "version": "19.0.1.5.0",
+    "version": "19.0.1.5.1",
     "category": "Accounting/Accounting",
     "summary": "Odoo-native accounting controls, bank coding approvals, and historical migration audit.",
     "author": "Southern Equipment Company",
