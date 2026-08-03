@@ -1,3 +1,4 @@
+import importlib.util
 import sys
 import unittest
 from pathlib import Path
@@ -109,6 +110,34 @@ class OdooProductDispatchWorkerTests(unittest.TestCase):
         self.assertIn("OnUnitInactiveSec=1min", timer)
         self.assertIn("disable --now titan-catalog-agent.timer", installer)
         self.assertIn("enable --now titan-sparex-discovery.timer", installer)
+
+    def test_upgrade_migration_repairs_only_known_orchestration_records(self):
+        root = Path(__file__).resolve().parents[1]
+        migration_path = (
+            root
+            / "southern_parts_intelligence"
+            / "migrations"
+            / "19.0.1.13.0"
+            / "post-migrate.py"
+        )
+        spec = importlib.util.spec_from_file_location("parts_orchestration_migration", migration_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        calls = []
+
+        class Cursor:
+            def execute(self, query, params=None):
+                calls.append((query, params))
+
+        module.migrate(Cursor(), "19.0.1.12.0")
+
+        self.assertEqual(len(calls), 2)
+        self.assertIn("southern_parts_catalog_sync_sparex_updates", calls[0][0])
+        self.assertIn("mode = 'sparex_discovery'", calls[0][0])
+        self.assertIn("internal_cron_enabled = FALSE", calls[0][0])
+        self.assertIn("southern_parts_catalog_sync_snapshot_refresh", calls[1][0])
+        self.assertEqual(calls[1][1], ["%does not match format '%Y-%m-%d %H:%M:%S'%"])
 
 
 if __name__ == "__main__":
