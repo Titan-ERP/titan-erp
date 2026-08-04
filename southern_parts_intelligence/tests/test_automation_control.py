@@ -64,7 +64,7 @@ class TestAutomationControl(TransactionCase):
         self.assertTrue(self.sync.next_allowed_run_at)
 
     def test_release_dispatch_requires_odoo_approval(self):
-        self.sync.write({"mode": "sparex_discovery", "internal_cron_enabled": True})
+        self.sync.write({"mode": "sparex_discovery"})
         with self.assertRaises(UserError):
             self.sync.action_queue_approved_apply()
         self.sync.action_request_approval()
@@ -75,6 +75,9 @@ class TestAutomationControl(TransactionCase):
         run = self.env["southern.parts.automation.run"].browse(run_id)
         self.assertEqual(run.state, "queued")
         self.assertEqual(run.mode, "apply")
+        self.assertFalse(self.sync.internal_cron_enabled)
+        self.assertEqual(self.sync.state, "paused")
+        self.assertEqual(self.sync.approval_state, "approved")
 
     def test_dispatch_schedule_requires_approval_and_consumes_it(self):
         self.sync.write({"mode": "sparex_discovery"})
