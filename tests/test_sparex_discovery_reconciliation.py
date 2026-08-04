@@ -29,6 +29,7 @@ class SparexDiscoveryReconciliationContractTests(unittest.TestCase):
             "stale_not_seen",
             "consecutive_failure_count",
             "prepare_source_link_plan",
+            '("source_enrichment_candidate", "=", True)',
             "apply_source_link_plan",
             "rollback_source_links",
             "claim_cost_recovery_batch",
