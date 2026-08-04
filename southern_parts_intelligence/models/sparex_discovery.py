@@ -83,8 +83,17 @@ def _frontier_priority(value):
 
 
 def _primary_publication_blocker(
-    *, reconciliation_state, item_state, source_state, match_state, product_active,
-    currently_published, has_cost, has_sales_price, product_has_exact_url, product_has_image
+    *,
+    reconciliation_state,
+    item_state,
+    source_state,
+    match_state,
+    product_active,
+    currently_published,
+    has_cost,
+    has_sales_price,
+    product_has_exact_url,
+    product_has_image,
 ):
     if reconciliation_state != "current":
         return "stale"
@@ -231,7 +240,9 @@ class SouthernSparexDiscoveryRun(models.Model):
     def _compute_progress(self):
         for run in self:
             total = run.page_count + run.queued_url_count
-            run.progress_percent = (100.0 * run.page_count / total) if total else (100.0 if run.state == "completed" else 0.0)
+            run.progress_percent = (
+                (100.0 * run.page_count / total) if total else (100.0 if run.state == "completed" else 0.0)
+            )
             capacity = max(1, run.max_pages_per_checkpoint)
             checkpoints = (run.queued_url_count + capacity - 1) // capacity
             run.estimated_checkpoints_remaining = checkpoints
@@ -255,9 +266,7 @@ class SouthernSparexDiscoveryRun(models.Model):
             current_domain = [("last_seen_run_id", "=", run.id), ("reconciliation_state", "=", "current")]
             run.current_item_count = Item.search_count(current_domain)
             run.missing_product_count = Item.search_count(current_domain + [("odoo_match_state", "=", "missing")])
-            run.publication_candidate_count = Item.search_count(
-                current_domain + [("publication_candidate", "=", True)]
-            )
+            run.publication_candidate_count = Item.search_count(current_domain + [("publication_candidate", "=", True)])
             run.source_repair_candidate_count = Item.search_count(
                 current_domain + [("source_enrichment_candidate", "=", True)]
             )
@@ -268,9 +277,7 @@ class SouthernSparexDiscoveryRun(models.Model):
                 ("publication_candidate", "=", False),
             ]
             run.blocked_item_count = Item.search_count(blocked_domain)
-            run.published_product_count = Item.search_count(
-                current_domain + [("currently_published", "=", True)]
-            )
+            run.published_product_count = Item.search_count(current_domain + [("currently_published", "=", True)])
             run.readiness_refreshed_count = Item.search_count(
                 current_domain + [("readiness_refreshed_at", "!=", False)]
             )
@@ -493,9 +500,7 @@ class SouthernSparexDiscoveryRun(models.Model):
                 "publication_candidate": False,
             }
         )
-        current = Item.search(
-            [("company_id", "=", self.company_id.id), ("last_seen_run_id", "=", self.id)]
-        )
+        current = Item.search([("company_id", "=", self.company_id.id), ("last_seen_run_id", "=", self.id)])
         current.write({"reconciliation_state": "current"})
         self.write(
             {
@@ -1089,12 +1094,8 @@ class SouthernSparexDiscoveryItem(models.Model):
         return True
 
     def action_reset_creation_review(self):
-        self.filtered(lambda item: item.odoo_match_state == "missing").write(
-            {"creation_state": "review_required"}
-        )
-        self.filtered(lambda item: item.odoo_match_state != "missing").write(
-            {"creation_state": "not_authorized"}
-        )
+        self.filtered(lambda item: item.odoo_match_state == "missing").write({"creation_state": "review_required"})
+        self.filtered(lambda item: item.odoo_match_state != "missing").write({"creation_state": "not_authorized"})
         return True
 
     @api.constrains(
@@ -1168,9 +1169,7 @@ class SouthernSparexDiscoveryItem(models.Model):
             product = item.matched_product_id.sudo()
             has_cost = bool(item._positive_sparex_supplier())
             has_sales_price = bool(product and product.list_price > 0)
-            product_has_exact_url = bool(
-                product and exact_sparex_url(product.southern_source_url, item.normalized_sku)
-            )
+            product_has_exact_url = bool(product and exact_sparex_url(product.southern_source_url, item.normalized_sku))
             product_has_image = bool(product and product.image_1920)
             currently_published = bool(product and product.website_published)
             source_ready = bool(
@@ -1216,9 +1215,7 @@ class SouthernSparexDiscoveryItem(models.Model):
                 recovery_priority += 20 if product_has_exact_url else 0
                 recovery_priority += 10 if product_has_image else 0
                 claimed_until = (
-                    item.cost_recovery_claimed_at + timedelta(minutes=30)
-                    if item.cost_recovery_claimed_at
-                    else False
+                    item.cost_recovery_claimed_at + timedelta(minutes=30) if item.cost_recovery_claimed_at else False
                 )
                 if item.cost_recovery_state == "manual_review":
                     next_state = "manual_review"
@@ -1294,6 +1291,83 @@ class SouthernSparexDiscoveryItem(models.Model):
         return {"refreshed": len(items), "blockers": counts, "cost_recovery": recovery_counts}
 
     @api.model
+    def continuous_release_status(self):
+        """Return an Odoo-only gate for the next bounded release dispatch."""
+        now = fields.Datetime.now()
+        items = self.search(
+            [
+                ("company_id", "=", self.env.company.id),
+                ("reconciliation_state", "=", "current"),
+                ("odoo_match_state", "=", "matched_active"),
+                ("currently_published", "=", False),
+            ],
+            order="cost_recovery_priority desc, readiness_refreshed_at, id",
+        )
+        items._refresh_readiness()
+        actionable = self.browse()
+        waiting = self.browse()
+        manual = self.browse()
+        blocked = self.browse()
+        for item in items:
+            if item.publication_candidate or item.source_enrichment_candidate or item.cost_recovery_state == "queued":
+                actionable |= item
+            elif item.cost_recovery_state == "retry_wait":
+                if not item.cost_recovery_next_at or item.cost_recovery_next_at <= now:
+                    actionable |= item
+                else:
+                    waiting |= item
+            elif item.cost_recovery_state == "claimed":
+                waiting |= item
+            elif item.cost_recovery_state == "manual_review":
+                manual |= item
+            else:
+                blocked |= item
+        unlinked_count = self.search_count(
+            [
+                ("company_id", "=", self.env.company.id),
+                ("reconciliation_state", "=", "current"),
+                ("odoo_match_state", "!=", "matched_active"),
+            ]
+        )
+        tracked_product_ids = self.search(
+            [
+                ("company_id", "=", self.env.company.id),
+                ("reconciliation_state", "=", "current"),
+                ("matched_product_id", "!=", False),
+            ]
+        ).mapped("matched_product_id").ids
+        untracked_product_count = (
+            self.env["product.template"]
+            .with_context(active_test=False)
+            .search_count(
+                [
+                    ("active", "=", True),
+                    ("default_code", "=like", "S.%"),
+                    ("id", "not in", tracked_product_ids),
+                ]
+            )
+        )
+        waiting_dates = [value for value in waiting.mapped("cost_recovery_next_at") if value]
+        if actionable:
+            state = "actionable"
+        elif waiting:
+            state = "waiting"
+        elif manual or blocked or unlinked_count or untracked_product_count:
+            state = "needs_review"
+        else:
+            state = "complete"
+        return {
+            "state": state,
+            "actionable_count": len(actionable),
+            "waiting_count": len(waiting),
+            "manual_review_count": len(manual),
+            "blocked_count": len(blocked),
+            "unlinked_count": unlinked_count,
+            "untracked_product_count": untracked_product_count,
+            "next_attempt_at": min(waiting_dates) if waiting_dates else False,
+        }
+
+    @api.model
     def claim_cost_recovery_batch(self, worker_id, limit=MAX_COST_RECOVERY_BATCH):
         worker = (worker_id or "").strip()
         if not worker:
@@ -1326,12 +1400,16 @@ class SouthernSparexDiscoveryItem(models.Model):
         claimed = []
         for item in items:
             product = item.matched_product_id.sudo()
-            supplier_lines = self.env["product.supplierinfo"].sudo().search(
-                [
-                    ("product_tmpl_id", "=", product.id),
-                    ("partner_id.name", "=ilike", "Sparex"),
-                ],
-                limit=2,
+            supplier_lines = (
+                self.env["product.supplierinfo"]
+                .sudo()
+                .search(
+                    [
+                        ("product_tmpl_id", "=", product.id),
+                        ("partner_id.name", "=ilike", "Sparex"),
+                    ],
+                    limit=2,
+                )
             )
             supplier = supplier_lines if len(supplier_lines) == 1 else self.env["product.supplierinfo"]
             snapshot = {
@@ -1386,22 +1464,38 @@ class SouthernSparexDiscoveryItem(models.Model):
                 or item.source_url_sha256 != (record.get("evidence_url_sha256") or "").casefold()
             ):
                 raise UserError(_("Dealer-cost evidence does not match the exact active product and SKU."))
-            supplier_lines = self.env["product.supplierinfo"].sudo().search(
-                [
-                    ("product_tmpl_id", "=", product.id),
-                    ("partner_id.name", "=ilike", "Sparex"),
-                ],
-                limit=2,
+            supplier_lines = (
+                self.env["product.supplierinfo"]
+                .sudo()
+                .search(
+                    [
+                        ("product_tmpl_id", "=", product.id),
+                        ("partner_id.name", "=ilike", "Sparex"),
+                    ],
+                    limit=2,
+                )
             )
             if len(supplier_lines) != 1 or supplier_lines.id != int(record.get("supplierinfo_id") or 0):
                 raise UserError(_("Exactly one existing matching Sparex supplier line is required."))
             expected_snapshot = {
                 key: record.get(key)
                 for key in (
-                    "item_id", "product_id", "sku", "source_url", "source_url_sha256",
-                    "source_artifact_sha256", "priority", "attempt", "has_sales_price",
-                    "has_exact_product_url", "has_image", "supplierinfo_count", "supplierinfo_id",
-                    "supplier_price_before", "supplier_write_date", "product_write_date",
+                    "item_id",
+                    "product_id",
+                    "sku",
+                    "source_url",
+                    "source_url_sha256",
+                    "source_artifact_sha256",
+                    "priority",
+                    "attempt",
+                    "has_sales_price",
+                    "has_exact_product_url",
+                    "has_image",
+                    "supplierinfo_count",
+                    "supplierinfo_id",
+                    "supplier_price_before",
+                    "supplier_write_date",
+                    "product_write_date",
                 )
             }
             if _canonical_sha256(expected_snapshot) != (record.get("snapshot_sha256") or "").casefold():
@@ -1454,9 +1548,7 @@ class SouthernSparexDiscoveryItem(models.Model):
         rolled_back = []
         for record in records or []:
             item = self.browse(int(record.get("item_id") or 0)).exists()
-            supplier = self.env["product.supplierinfo"].sudo().browse(
-                int(record.get("supplierinfo_id") or 0)
-            ).exists()
+            supplier = self.env["product.supplierinfo"].sudo().browse(int(record.get("supplierinfo_id") or 0)).exists()
             if (
                 not item
                 or item.company_id != self.env.company
@@ -1487,9 +1579,7 @@ class SouthernSparexDiscoveryItem(models.Model):
         item = self.browse(int(item_id)).exists()
         if not item or item.company_id != self.env.company:
             raise UserError(_("The cost-recovery item does not exist in the active company."))
-        self.env.cr.execute(
-            "SELECT id FROM southern_sparex_discovery_item WHERE id = %s FOR UPDATE NOWAIT", [item.id]
-        )
+        self.env.cr.execute("SELECT id FROM southern_sparex_discovery_item WHERE id = %s FOR UPDATE NOWAIT", [item.id])
         item.invalidate_recordset()
         if item.cost_recovery_state != "claimed" or item.cost_recovery_worker_id != (worker_id or "").strip():
             raise UserError(_("The cost-recovery claim is no longer owned by this worker."))
