@@ -241,29 +241,36 @@ class SaleOrder(models.Model):
         self.ensure_one()
         messages = {
             "parts_review": (
-                "We received your parts order. The Southern Equipment parts desk "
-                "is reviewing availability, fitment, and pickup or shipping details."
+                "<p>We received your parts order.</p>"
+                "<p>The Southern Equipment parts desk is reviewing availability, "
+                "fitment, and pickup or shipping details. We will update you as "
+                "soon as the next step is confirmed.</p>"
             ),
             "supplier_verification": (
-                "Your parts order is being verified with our supplier. We will update "
-                "you when fulfillment details are confirmed."
+                "<p>Your parts order is being verified with our supplier.</p>"
+                "<p>We are confirming availability and fulfillment details before "
+                "pickup or shipment continues.</p>"
             ),
             "confirmed": (
-                "Your parts order has been confirmed. We will update you when it is "
-                "ready for pickup or shipment."
+                "<p>Your parts order has been confirmed.</p>"
+                "<p>We will update you when it is ready for pickup or shipment.</p>"
             ),
             "ready_for_pickup": (
-                "Your parts order is ready for pickup at Southern Equipment."
+                "<p>Your parts order is ready for pickup at Southern Equipment.</p>"
             ),
             "shipping_in_progress": (
-                "Your parts order is moving through shipping. Tracking or delivery "
-                "details will be shared when available."
+                "<p>Your parts order is moving through shipping.</p>"
+                "<p>Tracking or delivery details will be shared when available.</p>"
             ),
             "needs_customer_confirmation": (
-                "Your parts order needs confirmation before fulfillment. A Southern "
-                "Equipment team member will contact you with the next step."
+                "<p>Your parts order needs confirmation before fulfillment.</p>"
+                "<p>A Southern Equipment team member will contact you with the "
+                "next step.</p>"
             ),
-            "completed": "Your parts order is complete. Thank you for choosing Southern Equipment.",
+            "completed": (
+                "<p>Your parts order is complete.</p>"
+                "<p>Thank you for choosing Southern Equipment.</p>"
+            ),
         }
         return messages.get(state)
 
@@ -290,8 +297,9 @@ class SaleOrder(models.Model):
             if notify_customer and order.southern_customer_last_update_state != state:
                 body = customer_note or order._southern_customer_update_body(state)
                 if body:
+                    message_body = html_escape(body) if customer_note else body
                     order.message_post(
-                        body=html_escape(body),
+                        body=message_body,
                         partner_ids=order.partner_id.ids,
                         subtype_xmlid="mail.mt_comment",
                     )

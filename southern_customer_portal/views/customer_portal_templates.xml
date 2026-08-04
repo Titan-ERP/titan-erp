@@ -94,6 +94,9 @@
                             <p class="mb-0" t-else="">
                                 You can view account documents, pay invoices, and track open work. Premium benefits require an active membership.
                             </p>
+                            <p class="mb-0 mt-2 small" style="color:#d9dde3;">
+                                Parts orders show review, supplier confirmation, pickup, and shipping updates as they move through Southern.
+                            </p>
                         </div>
                         <div class="col-lg-auto d-flex flex-wrap gap-2">
                             <a class="btn" style="background:#f2b632;color:#111;font-weight:700;" href="/my/outstanding-invoices">View Invoices</a>

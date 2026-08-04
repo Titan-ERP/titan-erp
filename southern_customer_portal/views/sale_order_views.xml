@@ -1,5 +1,62 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
+    <record id="view_southern_parts_review_order_list" model="ir.ui.view">
+        <field name="name">sale.order.southern.parts.review.list</field>
+        <field name="model">sale.order</field>
+        <field name="arch" type="xml">
+            <list string="Website Parts Review" decoration-danger="southern_parts_review_state == 'needs_customer_confirmation'" decoration-warning="southern_cost_verification_status in ['review', 'loss_risk']" decoration-success="southern_parts_review_state in ['confirmed', 'ready_for_pickup', 'shipping_in_progress']">
+                <field name="name" string="Order"/>
+                <field name="create_date" string="Received"/>
+                <field name="partner_id" string="Customer"/>
+                <field name="carrier_id" string="Delivery"/>
+                <field name="amount_total" string="Total" sum="Total"/>
+                <field name="southern_parts_review_state" string="Review Status"/>
+                <field name="southern_cost_verification_status" string="Cost Check"/>
+                <field name="southern_customer_last_update_at" string="Customer Updated"/>
+                <field name="user_id" string="Salesperson"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_southern_parts_review_order_search" model="ir.ui.view">
+        <field name="name">sale.order.southern.parts.review.search</field>
+        <field name="model">sale.order</field>
+        <field name="arch" type="xml">
+            <search string="Website Parts Review">
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="carrier_id"/>
+                <filter string="Needs Review" name="needs_review" domain="[('southern_parts_review_state', 'in', ['parts_review', 'supplier_verification', 'needs_customer_confirmation'])]"/>
+                <filter string="Needs Customer Confirmation" name="needs_customer_confirmation" domain="[('southern_parts_review_state', '=', 'needs_customer_confirmation')]"/>
+                <filter string="Cost Review" name="cost_review" domain="[('southern_cost_verification_status', 'in', ['review', 'loss_risk'])]"/>
+                <filter string="Ready or Shipping" name="fulfillment" domain="[('southern_parts_review_state', 'in', ['ready_for_pickup', 'shipping_in_progress'])]"/>
+                <separator/>
+                <filter string="Group by Status" name="group_status" context="{'group_by': 'southern_parts_review_state'}"/>
+                <filter string="Group by Delivery" name="group_delivery" context="{'group_by': 'carrier_id'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_southern_parts_review_orders" model="ir.actions.act_window">
+        <field name="name">Parts Orders Needing Review</field>
+        <field name="res_model">sale.order</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_southern_parts_review_order_search"/>
+        <field name="domain">[('website_id', '!=', False), ('southern_parts_review_state', 'not in', ['not_parts', 'completed'])]</field>
+        <field name="context">{'search_default_needs_review': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No website parts orders need review.
+            </p>
+            <p>
+                Confirm supplier availability, freight, pickup or shipment details, then update the review status.
+            </p>
+        </field>
+    </record>
+
+    <menuitem id="menu_southern_parts_review_root" name="Southern Parts Review" sequence="64"/>
+    <menuitem id="menu_southern_parts_review_orders" name="Parts Orders Needing Review" parent="menu_southern_parts_review_root" action="action_southern_parts_review_orders" sequence="10"/>
+
     <record id="view_order_form_southern_parts_cost_check" model="ir.ui.view">
         <field name="name">sale.order.form.southern.parts.cost.check</field>
         <field name="model">sale.order</field>
