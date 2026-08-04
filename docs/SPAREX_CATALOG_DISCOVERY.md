@@ -12,8 +12,12 @@ pipeline; it does not replace the five Odoo catalog agents.
   duplicate classification.
 - Deterministic application code performs requests, hashing, archival,
   pagination, and exact SKU matching.
-- The discovery worker cannot create products, change prices, or publish
-  products. The deterministic release worker may fill only a missing exact
+- The discovery worker cannot write products directly. When the approved
+  **Create Missing Drafts** control is active, it may submit an archived exact
+  listing-page plan to Odoo's deterministic creation contract. Odoo creates at
+  most five categorized unpublished drafts per checkpoint. It does not invent
+  cost, sales price, image bytes, taxonomy, or publication state.
+- The deterministic release worker may fill only a missing exact
   verified source URL or missing listing image immediately before release;
   those writes have their own plan, rollback artifact, and exact confirmation.
 - Supplier URLs remain internal. User-facing status reports use hashes and
@@ -30,8 +34,8 @@ Each checkpoint:
    discovered product-detail URL.
 4. Waits at least three seconds between every portal request and performs no
    HTTP retries.
-5. Extracts exact `S.%` product links and the image located on the same listing
-   card.
+5. Extracts exact `S.%` product links, visible product titles, and the image
+   located on the same listing card.
 6. Archives the page result to the established private S3 bucket with verified
    SHA-256 metadata.
 7. Upserts `southern.sparex.discovery.item` and classifies the exact SKU as an
@@ -44,7 +48,10 @@ Each checkpoint:
 10. Prioritizes pagination/product-dense listing URLs before broad category
     expansion and adds only same-host listing links to a 10,000-URL frontier.
 11. Advances each cursor only after the archived page is recorded successfully.
-12. Marks every SKU seen by the current run as current evidence. When the run
+12. When draft creation is enabled, archives a separate SHA-256 creation plan
+    and creates at most five exact missing SKUs under **Sparex Pending
+    Enrichment** with zero cost, zero sales price, and website publication off.
+13. Marks every SKU seen by the current run as current evidence. When the run
     completes, records not seen by that run become stale, lose publication
     eligibility, and remain available for review rather than being deleted.
 
@@ -61,9 +68,14 @@ System administrators can inspect:
   missing products, duplicates, source review, and publication candidates.
 
 The Odoo menus include a progress dashboard and a separate missing-product
-approval queue. Missing records show **Creation Review Required** and can be
-approved or rejected for a future, separate creation workflow. Discovery alone
-never creates an unenumerated Odoo product.
+approval queue. Missing records show **Creation Review Required**. An approved
+continuous workflow can enable **Create Missing Drafts**, which is restricted
+to exact current listing evidence with a visible title and image, one exact
+Sparex supplier, an archived creation plan, and a five-product transaction
+limit. Duplicate, ambiguous, titleless, or imageless records remain in review.
+Created products remain unpublished until the normal cost, retail, image,
+source, taxonomy, and website checks pass. An unchanged created draft has a
+strict archival rollback contract.
 
 The dashboard also separates publication blockers for missing dealer cost,
 sales price, exact product URL, product image, and source review. Each release
@@ -127,7 +139,9 @@ After upgrading the Odoo module and deploying the worker runtime, install the
 units with `cloud/aws/install-product-dispatch-worker.sh`. In Odoo, open
 **Sparex Product Update Orchestrator**, select **Request Approval**, approve the
 request, and then select **Enable Schedule** only after a bounded read-only
-portal check. Parser version v3 collapses
+portal check. Enable **Create Missing Drafts** separately when page-driven
+creation is authorized. Parser version v4 captures a normalized visible listing
+title in addition to the v3 behavior, which collapses
 duplicate anchors for the same exact product URL and keeps the image-backed
 listing card, while genuine conflicting URLs, images, or explicit SKUs remain
 in review. The v3 run key replays the catalog so items previously classified by

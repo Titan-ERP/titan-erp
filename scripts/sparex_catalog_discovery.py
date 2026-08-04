@@ -1,8 +1,8 @@
-"""Throttled, resumable inventory of authenticated Sparex listing pages.
+"""Throttled, resumable reconciliation of authenticated Sparex listing pages.
 
-This worker never opens a product-detail page and never creates or updates an
-Odoo product. It captures exact SKU links and listing images, archives each
-page, and writes only the dedicated Odoo discovery run/page/item models.
+The worker never opens a product-detail page or uses Sparex search. It captures
+exact SKU links, listing titles, and images, archives each page, and can invoke
+Odoo's separately gated draft-product creation contract for exact missing SKUs.
 """
 
 from __future__ import annotations
@@ -32,11 +32,12 @@ DEFAULT_ODOO_ENV = ROOT / "odoo_connection.env"
 DEFAULT_ARTIFACT_ROOT = ROOT / "outputs" / "sparex-catalog-discovery"
 WORKFLOW = "sparex-discovery-queue"
 CONFIRMATION = "sparex-discovery-queue"
-PARSER_VERSION = "sparex-listing-frontier-v3"
+PARSER_VERSION = "sparex-listing-frontier-v4"
 SCHEMA_VERSION = "1.1"
 SPAREX_HOST = "us.sparex.com"
 MAX_PAGE_ITEMS = 100
 MAX_CHECKPOINT_PAGES = 10
+MAX_PRODUCT_CREATION_BATCH = 5
 PORTAL_COOLDOWN_STATUSES = {429, 500, 502, 503, 504}
 SKU_FROM_URL = re.compile(r"-(?P<digits>\d+)\.html(?:$|[?#])", re.IGNORECASE)
 SKU_IN_TEXT = re.compile(r"(?<![A-Z0-9])S[.\s-]?0*(?P<digits>\d+)(?!\d)", re.IGNORECASE)
@@ -132,6 +133,19 @@ def _image_url(container, page_url: str) -> str:
     return ""
 
 
+def _listing_title(container, page_url: str, source_url: str) -> str:
+    candidates: list[str] = []
+    for anchor in container.xpath(".//a[@href]"):
+        candidate_url = urljoin(page_url, unescape((anchor.get("href") or "").strip()))
+        if candidate_url != source_url:
+            continue
+        value = " ".join(" ".join(anchor.itertext()).split()).strip()
+        value = SKU_IN_TEXT.sub("", value).strip(" -|:/")
+        if value and re.search(r"[A-Za-z]", value):
+            candidates.append(value[:255])
+    return max(candidates, key=lambda value: (len(value.split()), len(value)), default="")
+
+
 def parse_listing_page(content: bytes | str, page_url: str) -> dict[str, Any]:
     """Extract exact product links and listing images without navigating them."""
     document = lxml_html.fromstring(content, base_url=page_url)
@@ -158,11 +172,13 @@ def parse_listing_page(content: bytes | str, page_url: str) -> dict[str, Any]:
         explicit_skus = text_skus | attribute_skus
         source_state = "ambiguous" if explicit_skus and explicit_skus != {sku} else "verified"
         image_url = _image_url(container, page_url)
+        listing_title = _listing_title(container, page_url, source_url)
         if not image_url and source_state == "verified":
             source_state = "missing_image"
         by_sku.setdefault(sku, []).append(
             {
                 "sku": sku,
+                "listing_title": listing_title,
                 "source_url": source_url,
                 "image_url": image_url,
                 "source_state": source_state,
@@ -178,6 +194,11 @@ def parse_listing_page(content: bytes | str, page_url: str) -> dict[str, Any]:
         source_urls = {row["source_url"] for row in candidates}
         image_urls = {row["image_url"] for row in candidates if row["image_url"]}
         selected = dict(next((row for row in candidates if row["image_url"]), candidates[0]))
+        selected["listing_title"] = max(
+            (row["listing_title"] for row in candidates if row["listing_title"]),
+            key=lambda value: (len(value.split()), len(value)),
+            default="",
+        )
         if (
             len(source_urls) > 1
             or len(image_urls) > 1
@@ -306,6 +327,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--throttle-seconds", type=float, default=3.0)
     parser.add_argument("--max-pages-per-checkpoint", type=int, default=5)
     parser.add_argument("--worker-id", default=socket.gethostname())
+    parser.add_argument("--create-missing-products", action="store_true")
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--confirm", default="")
     parser.add_argument("--reason", default="")
@@ -406,7 +428,7 @@ def main() -> int:
             "throttle_seconds": throttle_seconds,
             "max_pages_per_checkpoint": checkpoint_pages,
             "max_pages_total": 10000,
-            "product_creation_authorized": False,
+            "product_creation_authorized": bool(args.create_missing_products),
         }
         plan_record = _archive(store, "plan.json", plan, args.s3_bucket, archive_prefix)
         run = client.call(
@@ -442,7 +464,8 @@ def main() -> int:
         session = throttle = None
         pages = []
         aggregate_counts = {"matched": 0, "missing": 0, "duplicate": 0, "review": 0}
-        observed = corrected = stale = 0
+        observed = corrected = stale = created_count = creation_operations = 0
+        created_products: list[dict[str, Any]] = []
         terminal_state = str(run.get("state") or "ready")
         for _index in range(checkpoint_pages):
             current_claim = client.call(
@@ -500,6 +523,43 @@ def main() -> int:
                     "listing_urls": parsed["listing_urls"],
                 },
             )
+            if args.create_missing_products and creation_operations < MAX_PRODUCT_CREATION_BATCH:
+                creation_records = client.call(
+                    "southern.sparex.discovery.item",
+                    "prepare_product_creation_plan",
+                    item_ids=recorded.get("item_ids") or [],
+                    limit=MAX_PRODUCT_CREATION_BATCH - creation_operations,
+                )
+                if creation_records:
+                    creation_plan = {
+                        "schema_version": SCHEMA_VERSION,
+                        "workflow": WORKFLOW,
+                        "operation": "page_driven_draft_product_creation",
+                        "run_id": int(run["id"]),
+                        "page_number": page_number,
+                        "page_artifact_uri": page_record["artifact_uri"],
+                        "page_artifact_sha256": page_record["sha256"],
+                        "records": creation_records,
+                    }
+                    creation_plan_record = _archive(
+                        store,
+                        f"product-creation-plan-{page_number:05d}.json",
+                        creation_plan,
+                        args.s3_bucket,
+                        archive_prefix,
+                    )
+                    created = client.call(
+                        "southern.sparex.discovery.item",
+                        "apply_product_creation_plan",
+                        records=creation_records,
+                        plan_artifact_uri=creation_plan_record["artifact_uri"],
+                        plan_sha256=creation_plan_record["sha256"],
+                        confirmation="sparex-page-driven-draft-creation",
+                        reason="Odoo-approved exact listing-page draft product creation",
+                    )
+                    created_products.extend(created)
+                    creation_operations += len(created)
+                    created_count += sum(1 for row in created if row.get("created"))
             current_claim = None
             terminal_state = str(recorded.get("state") or terminal_state)
             observed += int(recorded.get("observed") or 0)
@@ -533,7 +593,9 @@ def main() -> int:
             "corrected": corrected,
             "stale": stale,
             "terminal_state": terminal_state,
-            "product_creation_authorized": False,
+            "product_creation_authorized": bool(args.create_missing_products),
+            "created_count": created_count,
+            "created_products": created_products,
         }
         result_record = _archive(store, "result.json", result, args.s3_bucket, archive_prefix)
         print(
@@ -546,6 +608,7 @@ def main() -> int:
                     "observed": observed,
                     "corrected": corrected,
                     "stale": stale,
+                    "created_count": created_count,
                     "counts": aggregate_counts,
                     "result_sha256": result_record["sha256"],
                     "result_uri": result_record["artifact_uri"],

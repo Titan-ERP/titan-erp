@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+  <data noupdate="1">
+    <record id="product_category_sparex_pending_enrichment" model="product.category">
+      <field name="name">Sparex Pending Enrichment</field>
+      <field name="parent_id" ref="product.product_category_all"/>
+    </record>
+  </data>
+</odoo>

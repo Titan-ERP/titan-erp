@@ -85,5 +85,6 @@ portal requests and no HTTP retry loop.
 Whole-catalog coverage is handled separately by
 `scripts/sparex_catalog_discovery.py`. It reuses the Discovery and Match agent
 ownership, walks only authenticated listing pages, stores a resumable Odoo
-cursor and match queue, and never creates products. See
+cursor and match queue, and can pass exact missing listing records to Odoo's
+separately approved unpublished-draft creation contract. See
 `docs/SPAREX_CATALOG_DISCOVERY.md`.

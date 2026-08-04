@@ -1,4 +1,5 @@
 import hashlib
+import json
 
 from odoo.exceptions import UserError
 from odoo.tests import tagged
@@ -95,19 +96,23 @@ class TestAutomationControl(TransactionCase):
         self.sync.action_request_approval()
         self.sync.action_approve()
         self.sync.action_enable_continuous_release()
+        self.sync.action_enable_page_driven_creation()
 
         cron = self.env.ref("southern_parts_intelligence.ir_cron_southern_parts_catalog_sync")
         run_id = self.sync._run_one_batch()
         run = self.env["southern.parts.automation.run"].browse(run_id)
 
         self.assertTrue(self.sync.continuous_release_enabled)
+        self.assertTrue(self.sync.page_driven_creation_enabled)
         self.assertTrue(self.sync.internal_cron_enabled)
         self.assertEqual(self.sync.approval_state, "approved")
         self.assertTrue(cron.active)
         self.assertEqual(cron.interval_number, 1)
         self.assertEqual(cron.interval_type, "minutes")
         self.assertEqual(run.job_type, "sparex_discovery")
+        self.assertEqual(run.mode, "apply")
         self.assertEqual(run.requested_count, 5)
+        self.assertTrue(json.loads(run.request_json)["create_missing_products"])
 
     def test_continuous_release_queues_apply_after_discovery_and_preserves_approval(self):
         product = self.env["product.template"].create(

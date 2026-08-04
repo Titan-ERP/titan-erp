@@ -79,7 +79,7 @@ def build_job_command(
         run_key = request.get("run_key") or os.environ.get(
             "SPAREX_DISCOVERY_RUN_KEY", "sparex-full-catalog-inventory-v3"
         )
-        return [
+        command = [
             python,
             "-m",
             "scripts.sparex_catalog_discovery",
@@ -96,6 +96,9 @@ def build_job_command(
             "--reason",
             "Odoo-dispatched throttled Sparex evidence checkpoint",
         ]
+        if request.get("create_missing_products"):
+            command.append("--create-missing-products")
+        return command
     if claim.get("job_type") == "catalog_release":
         if claim.get("mode") != "apply" or not request.get("publish"):
             raise RuntimeError("Catalog release dispatch is missing Odoo apply approval.")
@@ -157,12 +160,13 @@ def warning_cooldown_minutes(output: str) -> int:
 def finish_values(result: dict[str, Any]) -> dict[str, Any]:
     artifact_uri = result.get("result_uri") or ""
     cost_recovery = dict(result.get("cost_recovery") or {})
+    discovery_changed = int(result.get("corrected") or 0) + int(result.get("created_count") or 0)
     return {
         "processed_count": int(
             result.get("pages_processed") or cost_recovery.get("claimed") or result.get("prepared") or 0
         ),
         "changed_count": int(
-            result.get("corrected")
+            discovery_changed
             or cost_recovery.get("applied")
             or result.get("source_linked")
             or result.get("published")
@@ -183,6 +187,7 @@ def finish_values(result: dict[str, Any]) -> dict[str, Any]:
                     "pages_processed",
                     "observed",
                     "corrected",
+                    "created_count",
                     "prepared",
                     "published",
                     "cost_recovery",
