@@ -52,7 +52,7 @@
                         Cash and ACH open Odoo's native Register Payment wizard with the selected journal and incoming payment method. The operator reviews and confirms the payment before it is posted.
                     </div>
                     <div class="alert alert-info" role="status" invisible="not processing_fee_enabled">
-                        This fee is charged only when Pay with Terminal starts a Stripe Terminal payment. Cash, ACH, ordinary invoices, and online payment links do not receive this fee. It is calculated from the outstanding invoice balance, including sales tax.
+                        This fee is charged only when the invoice Payment Type is Stripe Terminal. Cash, ACH, ordinary invoices, and online payment links do not receive it. It is calculated from the invoice total, including sales tax.
                     </div>
                 </sheet>
             </form>
