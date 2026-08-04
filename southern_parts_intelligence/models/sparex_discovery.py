@@ -1937,6 +1937,7 @@ class SouthernSparexDiscoveryItem(models.Model):
                 ("currently_published", "=", False),
                 ("has_exact_sparex_url", "=", True),
                 ("has_image", "=", True),
+                ("source_enrichment_candidate", "=", True),
             ],
             order="last_seen_at, id",
             limit=bounded * 4,
