@@ -27,7 +27,7 @@
         <field name="model_id" ref="model_southern_parts_catalog_sync"/>
         <field name="state">code</field>
         <field name="code">model._cron_run_active_syncs()</field>
-        <field name="interval_number">10</field>
+        <field name="interval_number">1</field>
         <field name="interval_type">minutes</field>
         <field name="active">False</field>
     </record>
