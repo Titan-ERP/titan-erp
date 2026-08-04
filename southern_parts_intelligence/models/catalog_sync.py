@@ -214,6 +214,7 @@ class SouthernPartsCatalogSync(models.Model):
             return
         if self.mode == "sparex_discovery":
             mode = "evidence_only"
+            backlog = None
             if self.continuous_release_enabled:
                 discovery = (
                     self.env["southern.sparex.discovery.run"]
@@ -235,7 +236,28 @@ class SouthernPartsCatalogSync(models.Model):
                     return False
                 if discovery and discovery.state == "completed":
                     mode = "apply"
-            return self._queue_sparex_dispatch(mode)
+                elif discovery:
+                    now = fields.Datetime.now()
+                    gate = max(
+                        [value for value in (self.cooldown_until, self.next_allowed_run_at) if value],
+                        default=False,
+                    )
+                    last_run = self.env["southern.parts.automation.run"].sudo().search(
+                        [
+                            ("sync_id", "=", self.id),
+                            ("job_type", "in", ["sparex_discovery", "catalog_release"]),
+                            ("state", "=", "succeeded"),
+                        ],
+                        order="finished_at desc, id desc",
+                        limit=1,
+                    )
+                    if (not gate or gate <= now) and last_run.job_type == "sparex_discovery":
+                        backlog = self.env[
+                            "southern.sparex.discovery.item"
+                        ].continuous_release_status()
+                        if backlog.get("state") == "actionable":
+                            mode = "apply"
+            return self._queue_sparex_dispatch(mode, backlog=backlog)
         if self.mode != "snapshot_refresh":
             self.write(
                 {
@@ -333,7 +355,7 @@ class SouthernPartsCatalogSync(models.Model):
             )
             return False
 
-    def _queue_sparex_dispatch(self, mode):
+    def _queue_sparex_dispatch(self, mode, backlog=None):
         self.ensure_one()
         if self.mode != "sparex_discovery":
             return False
@@ -362,7 +384,9 @@ class SouthernPartsCatalogSync(models.Model):
             self.write({"last_message": "A %s dispatch is already queued or running." % job_type})
             return False
         if mode == "apply" and self.continuous_release_enabled:
-            backlog = self.env["southern.sparex.discovery.item"].continuous_release_status()
+            backlog = backlog or self.env[
+                "southern.sparex.discovery.item"
+            ].continuous_release_status()
             backlog_state = backlog.get("state")
             if backlog_state == "waiting":
                 next_attempt_at = backlog.get("next_attempt_at")
