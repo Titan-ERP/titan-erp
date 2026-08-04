@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -133,6 +134,21 @@ class OdooProductDispatchWorkerTests(unittest.TestCase):
         self.assertEqual(values["changed_count"], 3)
         self.assertTrue(values["artifact_archived"])
 
+    def test_finish_values_include_cost_recovery_progress(self):
+        values = finish_values(
+            {
+                "cost_recovery": {"state": "completed", "claimed": 5, "accepted": 4, "applied": 4},
+                "result_uri": "s3://bucket/result.json",
+                "result_sha256": "b" * 64,
+            }
+        )
+        self.assertEqual(values["processed_count"], 5)
+        self.assertEqual(values["changed_count"], 4)
+        self.assertEqual(
+            json.loads(values["evidence_summary"])["cost_recovery"]["accepted"],
+            4,
+        )
+
     def test_warning_signals_enforce_sixty_minute_cooldown(self):
         for warning in (
             "portal_http_429",
@@ -161,13 +177,7 @@ class OdooProductDispatchWorkerTests(unittest.TestCase):
 
     def test_upgrade_migration_repairs_only_known_orchestration_records(self):
         root = Path(__file__).resolve().parents[1]
-        migration_path = (
-            root
-            / "southern_parts_intelligence"
-            / "migrations"
-            / "19.0.1.13.0"
-            / "post-migrate.py"
-        )
+        migration_path = root / "southern_parts_intelligence" / "migrations" / "19.0.1.13.0" / "post-migrate.py"
         spec = importlib.util.spec_from_file_location("parts_orchestration_migration", migration_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)

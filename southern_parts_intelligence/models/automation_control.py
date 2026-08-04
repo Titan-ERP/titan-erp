@@ -1,7 +1,7 @@
-from datetime import timedelta
 import json
 import re
 import uuid
+from datetime import timedelta
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
@@ -46,6 +46,19 @@ class SouthernPartsCatalogSync(models.Model):
         tracking=True,
         help="Allows this workflow to run from Odoo cron. New and upgraded workflows remain disabled until reviewed.",
     )
+    continuous_release_enabled = fields.Boolean(
+        default=False,
+        readonly=True,
+        tracking=True,
+        help=(
+            "Keeps queuing bounded approved Sparex update and publication batches until "
+            "the actionable backlog is empty or a safety circuit breaker stops the workflow."
+        ),
+    )
+    continuous_release_started_at = fields.Datetime(readonly=True, copy=False)
+    continuous_release_completed_at = fields.Datetime(readonly=True, copy=False)
+    continuous_release_batch_count = fields.Integer(readonly=True, copy=False, default=0)
+    continuous_release_failure_streak = fields.Integer(readonly=True, copy=False, default=0)
     last_external_command_id = fields.Char(readonly=True, index=True)
     last_artifact_uri = fields.Char(readonly=True)
     last_artifact_sha256 = fields.Char(readonly=True)
@@ -75,6 +88,9 @@ class SouthernPartsCatalogSync(models.Model):
                 "approval_state": "rejected",
                 "approved_by_id": False,
                 "approved_at": False,
+                "continuous_release_enabled": False,
+                "internal_cron_enabled": False,
+                "state": "paused",
             }
         )
 
@@ -88,6 +104,26 @@ class SouthernPartsCatalogSync(models.Model):
             "domain": [("sync_id", "=", self.id)],
             "context": {"default_sync_id": self.id},
         }
+
+    def _continuous_warning_values(self):
+        self.ensure_one()
+        if not self.continuous_release_enabled:
+            return {}
+        failure_streak = self.continuous_release_failure_streak + 1
+        values = {"continuous_release_failure_streak": failure_streak}
+        if failure_streak >= 3:
+            values.update(
+                {
+                    "continuous_release_enabled": False,
+                    "internal_cron_enabled": False,
+                    "state": "paused",
+                    "last_message": _(
+                        "Continuous Sparex release stopped after three consecutive "
+                        "safety warnings. Manual review is required."
+                    ),
+                }
+            )
+        return values
 
     def assert_external_run_allowed(self, free_gb):
         self.ensure_one()
@@ -142,9 +178,7 @@ class SouthernPartsAutomationRun(models.Model):
         ondelete="cascade",
         index=True,
     )
-    company_id = fields.Many2one(
-        "res.company", related="sync_id.company_id", store=True, readonly=True, index=True
-    )
+    company_id = fields.Many2one("res.company", related="sync_id.company_id", store=True, readonly=True, index=True)
     external_run_id = fields.Char(index=True, copy=False)
     command_id = fields.Char(index=True, copy=False)
     job_type = fields.Selection(
@@ -387,15 +421,33 @@ class SouthernPartsAutomationRun(models.Model):
         cooldown_minutes = max(0, min(int(values.pop("cooldown_minutes", 0) or 0), 24 * 60))
         run.write({"lease_owner": False, "lease_expires_at": False})
         run.finish_run(state, values)
-        if state == "succeeded" and run.job_type == "sparex_discovery":
-            run.sync_id.write(
-                {"next_allowed_run_at": fields.Datetime.now() + timedelta(minutes=15)}
-            )
+        sync = run.sync_id
+        if state == "succeeded" and run.job_type in {"sparex_discovery", "catalog_release"}:
+            success_values = {"next_allowed_run_at": fields.Datetime.now() + timedelta(minutes=15)}
+            if sync.continuous_release_enabled:
+                success_values.update(
+                    {
+                        "continuous_release_batch_count": sync.continuous_release_batch_count + 1,
+                        "continuous_release_failure_streak": 0,
+                    }
+                )
+            sync.write(success_values)
         if cooldown_minutes:
-            run.sync_id.write(
+            cooldown_values = {
+                "cooldown_until": fields.Datetime.now() + timedelta(minutes=cooldown_minutes),
+                "next_allowed_run_at": fields.Datetime.now() + timedelta(minutes=cooldown_minutes),
+            }
+            if sync.continuous_release_enabled:
+                cooldown_values.update(sync._continuous_warning_values())
+            sync.write(cooldown_values)
+        elif state == "failed" and sync.continuous_release_enabled:
+            sync.write(
                 {
-                    "cooldown_until": fields.Datetime.now() + timedelta(minutes=cooldown_minutes),
-                    "next_allowed_run_at": fields.Datetime.now() + timedelta(minutes=cooldown_minutes),
+                    "continuous_release_enabled": False,
+                    "internal_cron_enabled": False,
+                    "state": "error",
+                    "continuous_release_failure_streak": sync.continuous_release_failure_streak + 1,
+                    "last_message": _("Continuous Sparex release stopped after a non-retryable worker failure."),
                 }
             )
         return True
@@ -419,12 +471,12 @@ class SouthernPartsAutomationRun(models.Model):
                     "error_message": _("AWS worker lease expired before completion."),
                 },
             )
-            run.sync_id.write(
-                {
-                    "cooldown_until": fields.Datetime.now() + timedelta(minutes=60),
-                    "next_allowed_run_at": fields.Datetime.now() + timedelta(minutes=60),
-                }
-            )
+            cooldown_values = {
+                "cooldown_until": fields.Datetime.now() + timedelta(minutes=60),
+                "next_allowed_run_at": fields.Datetime.now() + timedelta(minutes=60),
+            }
+            cooldown_values.update(run.sync_id._continuous_warning_values())
+            run.sync_id.write(cooldown_values)
         return len(expired)
 
     @api.model
@@ -494,10 +546,7 @@ class SouthernPartsAutomationRun(models.Model):
                     )
                 ):
                     raise UserError(
-                        _(
-                            "Successful apply runs require a versioned, SHA-256 hashed, "
-                            "and verified archived artifact."
-                        )
+                        _("Successful apply runs require a versioned, SHA-256 hashed, and verified archived artifact.")
                     )
             update.update({"state": state, "finished_at": fields.Datetime.now()})
             run.write(update)
@@ -508,7 +557,7 @@ class SouthernPartsAutomationRun(models.Model):
                 "last_artifact_uri": run.artifact_uri,
                 "last_artifact_sha256": run.artifact_sha256,
             }
-            if run.mode == "apply" and state == "succeeded":
+            if run.mode == "apply" and state == "succeeded" and not run.sync_id.continuous_release_enabled:
                 sync_values.update(
                     {
                         "approval_state": "not_required",

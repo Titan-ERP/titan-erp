@@ -64,38 +64,58 @@ def build_job_command(
     request = dict(claim.get("request") or {})
     limit, throttle = _bounded_request(request)
     common = [
-        "--odoo-env-file", str(odoo_env_file),
-        "--dealer-env-file", str(dealer_env_file),
-        "--artifact-root", str(artifact_root),
-        "--worker-id", worker_id,
-        "--s3-bucket", s3_bucket,
+        "--odoo-env-file",
+        str(odoo_env_file),
+        "--dealer-env-file",
+        str(dealer_env_file),
+        "--artifact-root",
+        str(artifact_root),
+        "--worker-id",
+        worker_id,
+        "--s3-bucket",
+        s3_bucket,
     ]
     if claim.get("job_type") == "sparex_discovery":
         run_key = request.get("run_key") or os.environ.get(
             "SPAREX_DISCOVERY_RUN_KEY", "sparex-full-catalog-inventory-v3"
         )
         return [
-            python, "-m", "scripts.sparex_catalog_discovery",
+            python,
+            "-m",
+            "scripts.sparex_catalog_discovery",
             *common,
-            "--run-key", str(run_key),
-            "--max-pages-per-checkpoint", str(limit),
-            "--throttle-seconds", str(throttle),
+            "--run-key",
+            str(run_key),
+            "--max-pages-per-checkpoint",
+            str(limit),
+            "--throttle-seconds",
+            str(throttle),
             "--apply",
-            "--confirm", "sparex-discovery-queue",
-            "--reason", "Odoo-dispatched throttled Sparex evidence checkpoint",
+            "--confirm",
+            "sparex-discovery-queue",
+            "--reason",
+            "Odoo-dispatched throttled Sparex evidence checkpoint",
         ]
     if claim.get("job_type") == "catalog_release":
         if claim.get("mode") != "apply" or not request.get("publish"):
             raise RuntimeError("Catalog release dispatch is missing Odoo apply approval.")
         return [
-            python, "-m", "scripts.sparex_catalog_agents.orchestrator",
+            python,
+            "-m",
+            "scripts.sparex_catalog_agents.orchestrator",
             *common,
-            "--limit", str(limit),
-            "--cost-recovery-limit", str(limit),
-            "--throttle-seconds", str(throttle),
-            "--apply", "--publish",
-            "--confirm", "catalog-agent-automation",
-            "--reason", "Odoo-approved catalog update and website publication",
+            "--limit",
+            str(limit),
+            "--cost-recovery-limit",
+            str(limit),
+            "--throttle-seconds",
+            str(throttle),
+            "--apply",
+            "--publish",
+            "--confirm",
+            "catalog-agent-automation",
+            "--reason",
+            "Odoo-approved catalog update and website publication",
         ]
     raise RuntimeError("Unsupported Odoo product dispatch job type.")
 
@@ -136,9 +156,18 @@ def warning_cooldown_minutes(output: str) -> int:
 
 def finish_values(result: dict[str, Any]) -> dict[str, Any]:
     artifact_uri = result.get("result_uri") or ""
+    cost_recovery = dict(result.get("cost_recovery") or {})
     return {
-        "processed_count": int(result.get("pages_processed") or result.get("prepared") or 0),
-        "changed_count": int(result.get("corrected") or result.get("source_linked") or result.get("published") or 0),
+        "processed_count": int(
+            result.get("pages_processed") or cost_recovery.get("claimed") or result.get("prepared") or 0
+        ),
+        "changed_count": int(
+            result.get("corrected")
+            or cost_recovery.get("applied")
+            or result.get("source_linked")
+            or result.get("published")
+            or 0
+        ),
         "error_count": int(bool(result.get("failed"))),
         "http_request_count": int(result.get("pages_processed") or 0),
         "artifact_uri": artifact_uri,
@@ -149,7 +178,15 @@ def finish_values(result: dict[str, Any]) -> dict[str, Any]:
         "evidence_summary": json.dumps(
             {
                 key: result.get(key)
-                for key in ("state", "pages_processed", "observed", "corrected", "prepared", "published")
+                for key in (
+                    "state",
+                    "pages_processed",
+                    "observed",
+                    "corrected",
+                    "prepared",
+                    "published",
+                    "cost_recovery",
+                )
                 if key in result
             },
             sort_keys=True,
@@ -163,7 +200,7 @@ def main() -> int:
         raise RuntimeError("An S3 artifact bucket is required.")
     args.artifact_root.mkdir(parents=True, exist_ok=True)
     client = OdooClient(OdooConfig.from_env(args.odoo_env_file)).connect()
-    free_gb = shutil.disk_usage(args.artifact_root.parent).free / (1024 ** 3)
+    free_gb = shutil.disk_usage(args.artifact_root.parent).free / (1024**3)
     claim = client.call(
         "southern.parts.automation.run",
         "claim_queued_run",
@@ -214,6 +251,21 @@ def main() -> int:
             )
             sys.stderr.write(completed.stderr)
             return completed.returncode
+        result_cooldown = warning_cooldown_minutes(json.dumps(result, sort_keys=True))
+        if result_cooldown:
+            client.call(
+                "southern.parts.automation.run",
+                "finish_claimed_run",
+                run_id=claim["run_id"],
+                worker_id=args.worker_id,
+                state="blocked",
+                values={
+                    "error_count": 1,
+                    "error_message": "Product worker reported a portal safety warning.",
+                    "cooldown_minutes": result_cooldown,
+                },
+            )
+            return 1
         values = finish_values(result)
         client.call(
             "southern.parts.automation.run",

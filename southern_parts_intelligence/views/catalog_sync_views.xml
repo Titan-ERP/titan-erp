@@ -39,6 +39,11 @@
                     <button name="action_enable_dispatch_schedule" string="Enable Schedule" type="object"
                             class="btn-primary"
                             invisible="mode != 'sparex_discovery' or internal_cron_enabled or approval_state != 'approved'"/>
+                    <button name="action_enable_continuous_release" string="Start Continuous Release" type="object"
+                            class="btn-primary"
+                            invisible="mode != 'sparex_discovery' or continuous_release_enabled or approval_state != 'approved'"/>
+                    <button name="action_disable_continuous_release" string="Stop Continuous Release" type="object"
+                            invisible="mode != 'sparex_discovery' or not continuous_release_enabled"/>
                     <button name="action_disable_dispatch_schedule" string="Disable Schedule" type="object"
                             invisible="mode != 'sparex_discovery' or not internal_cron_enabled"/>
                     <button name="action_request_approval" string="Request Approval" type="object"
@@ -76,6 +81,9 @@
                         <group>
                             <field name="minimum_free_gb"/>
                             <field name="internal_cron_enabled"/>
+                            <field name="continuous_release_enabled"/>
+                            <field name="continuous_release_started_at"/>
+                            <field name="continuous_release_completed_at"/>
                             <field name="cooldown_until"/>
                             <field name="next_allowed_run_at"/>
                             <field name="last_external_command_id"/>
@@ -85,6 +93,8 @@
                             <field name="approved_by_id"/>
                             <field name="approved_at"/>
                             <field name="approval_note"/>
+                            <field name="continuous_release_batch_count"/>
+                            <field name="continuous_release_failure_streak"/>
                         </group>
                     </group>
                     <group string="Latest Artifact">
