@@ -95,7 +95,7 @@ class SouthernAccountingPolicy(models.Model):
             ("enforce", "Block Unsafe Confirmation"),
         ],
         string="Sales / Purchase Guardrails",
-        default="warn",
+        default="off",
         required=True,
         tracking=True,
         help="Warns users while drafting. Enforce also blocks newly created orders with objective accounting errors.",

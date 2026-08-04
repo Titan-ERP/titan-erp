@@ -34,18 +34,32 @@ def test_purchase_confirmation_and_vendor_bill_account_are_guarded():
     assert "require_purchase_tax_selection" in purchase_source
 
 
-def test_commercial_views_are_valid_xml_and_show_line_routing():
+def test_commercial_views_are_valid_xml_and_inactive():
     view_path = MODULE / "views" / "commercial_order_views.xml"
-    etree.parse(str(view_path))
+    tree = etree.parse(str(view_path))
     source = view_path.read_text(encoding="utf-8")
+    records = tree.xpath("//record")
+    assert len(records) == 4
+    assert all(record.xpath("./field[@name='active'][@eval='False']") for record in records)
     assert "southern_revenue_bucket" in source
     assert "southern_revenue_account_id" in source
     assert "southern_purchase_purpose" in source
     assert "southern_expense_account_id" in source
 
 
-def test_legacy_orders_can_be_warned_before_enforcement():
+def test_commercial_guardrails_default_off_and_are_hidden_from_policy_form():
     policy = (MODULE / "models" / "accounting_policy.py").read_text(encoding="utf-8")
+    policy_view = (MODULE / "views" / "accounting_policy_views.xml").read_text(encoding="utf-8")
     assert "commercial_order_guardrail_mode = fields.Selection(" in policy
     assert "commercial_order_guardrail_effective_at = fields.Datetime(" in policy
-    assert 'default="warn"' in policy
+    assert 'default="off"' in policy
+    assert 'field name="commercial_order_guardrail_mode"' not in policy_view
+    assert 'field name="commercial_order_guardrail_effective_at"' not in policy_view
+
+
+def test_guardrail_retirement_migration_is_present():
+    migration = MODULE / "migrations" / "19.0.1.8.0" / "post-migrate.py"
+    source = migration.read_text(encoding="utf-8")
+    assert "commercial_order_guardrail_mode = 'off'" in source
+    assert "commercial_order_guardrail_effective_at = NULL" in source
+    assert "SET active = FALSE" in source
