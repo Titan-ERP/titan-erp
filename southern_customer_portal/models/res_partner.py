@@ -4,6 +4,13 @@ from odoo import fields, models
 class ResPartner(models.Model):
     _inherit = "res.partner"
 
+    southern_synchrony_account_number = fields.Char(
+        string="Synchrony Account Number",
+        copy=False,
+        index=True,
+        tracking=True,
+        help="Customer's Synchrony financing account number.",
+    )
     southern_account_type = fields.Selection(
         [
             ("standard", "Standard Customer"),

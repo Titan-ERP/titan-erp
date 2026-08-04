@@ -6,6 +6,14 @@
         <field name="inherit_id" ref="base.view_partner_form"/>
         <field name="arch" type="xml">
             <xpath expr="//notebook" position="inside">
+                <page string="Financing" name="southern_customer_financing">
+                    <group>
+                        <group string="Synchrony Financing">
+                            <field name="southern_synchrony_account_number"
+                                   placeholder="Enter Synchrony account number"/>
+                        </group>
+                    </group>
+                </page>
                 <page string="Southern Access" name="southern_customer_access">
                     <group>
                         <group string="Account Type">
