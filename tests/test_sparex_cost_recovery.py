@@ -18,6 +18,20 @@ def test_rejects_generic_and_wrong_sku_prices():
     assert parse_exact_priceb(page, "S.165551")["status"] == "price_container_absent"
 
 
+def test_accepts_one_magento_final_price_when_legacy_container_is_absent():
+    page = _page('<script>{"final_price": 14.99}</script>')
+    assert parse_exact_priceb(page, "S.165551") == {
+        "status": "accepted",
+        "price": 14.99,
+        "currency": "USD",
+    }
+
+
+def test_rejects_conflicting_magento_final_prices():
+    page = _page('<script>{"final_price": 14.99, "other": {"final_price": 12.50}}</script>')
+    assert parse_exact_priceb(page, "S.165551")["status"] == "price_ambiguous"
+
+
 def test_rejects_ambiguous_exact_container():
     page = _page("<div id='priceb_165551'><span>$14.99</span><span>$12.50</span></div>")
     assert parse_exact_priceb(page, "S.165551")["status"] == "price_ambiguous"

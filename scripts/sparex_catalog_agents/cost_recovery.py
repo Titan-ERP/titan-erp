@@ -49,8 +49,24 @@ def parse_exact_priceb(content: bytes | str, sku: str) -> dict[str, Any]:
     if len(titles) != 1 or not " ".join(titles[0].itertext()).strip():
         return {"status": "identity_incomplete"}
     containers = document.xpath(f"//*[@id='priceb_{digits}']")
-    if len(containers) != 1:
-        return {"status": "price_container_absent" if not containers else "price_container_ambiguous"}
+    if len(containers) > 1:
+        return {"status": "price_container_ambiguous"}
+    if not containers:
+        html = content.decode("utf-8", errors="replace") if isinstance(content, bytes) else content
+        prices = {
+            round(float(match.group("price").replace(",", "")), 2)
+            for match in re.finditer(
+                r'["\']final_price["\']\s*:\s*(?P<price>[0-9][0-9,]*(?:\.\d+)?)',
+                html,
+                flags=re.IGNORECASE,
+            )
+            if float(match.group("price").replace(",", "")) > 0
+        }
+        if not prices:
+            return {"status": "price_container_absent"}
+        if len(prices) != 1:
+            return {"status": "price_ambiguous"}
+        return {"status": "accepted", "price": next(iter(prices)), "currency": "USD"}
     container = containers[0]
     values: set[float] = set()
     for node in [container, *container.xpath(".//*")]:
