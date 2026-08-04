@@ -1,6 +1,6 @@
 {
     "name": "Southern Service",
-    "version": "19.0.1.24.1",
+    "version": "19.0.1.25.0",
     "author": "Southern Equipment",
     "category": "Services",
     "summary": "One Service workflow across Sales, customer equipment, field work, shop work, maintenance, and purchasing.",
@@ -9,6 +9,7 @@
         "sale_management",
         "sale_stock",
         "sale_purchase",
+        "sale_stock_renting",
         "industry_fsm",
         "industry_fsm_sale",
         "industry_fsm_stock",
@@ -19,6 +20,7 @@
         "maintenance",
         "cs_client_equipment",
         "dmc_fieldservice",
+        "cs_rental_inspection",
     ],
     "data": [
         "security/service_security.xml",
@@ -28,6 +30,7 @@
         "views/service_ai_suggestion_views.xml",
         "views/service_case_views.xml",
         "views/sale_order_views.xml",
+        "views/sales_workspaces.xml",
         "views/project_task_views.xml",
         "views/service_inspection_views.xml",
         "views/repair_order_views.xml",
