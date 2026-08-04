@@ -1,6 +1,7 @@
 import hashlib
 import json
 
+from odoo import fields
 from odoo.exceptions import UserError
 from odoo.tests import tagged
 from odoo.tests.common import TransactionCase
@@ -113,6 +114,89 @@ class TestAutomationControl(TransactionCase):
         self.assertEqual(run.mode, "apply")
         self.assertEqual(run.requested_count, 5)
         self.assertTrue(json.loads(run.request_json)["create_missing_products"])
+
+    def test_continuous_release_interleaves_actionable_products_during_discovery(self):
+        product = self.env["product.template"].create(
+            {"name": "Interleaved release part", "default_code": "S.700002", "list_price": 25}
+        )
+        seed_url = "https://us.sparex.com/products?p=1"
+        next_url = "https://us.sparex.com/products?p=2"
+        discovery = self.env["southern.sparex.discovery.run"].start_discovery_run(
+            {
+                "idempotency_key": "continuous-release-interleaved",
+                "seed_url": seed_url,
+                "seed_url_sha256": hashlib.sha256(seed_url.encode()).hexdigest(),
+                "plan_artifact_uri": "s3://test/interleaved/plan.json",
+                "plan_sha256": "a" * 64,
+                "parser_version": "test-interleaved-v1",
+                "throttle_seconds": 3,
+            }
+        )
+        claim = self.env["southern.sparex.discovery.run"].claim_discovery_checkpoint(
+            discovery["id"], "interleaved-test-worker", 180
+        )
+        self.assertTrue(claim["claimed"])
+        self.env["southern.sparex.discovery.run"].record_discovery_page(
+            discovery["id"],
+            "interleaved-test-worker",
+            {
+                "page_url": seed_url,
+                "page_sha256": "b" * 64,
+                "artifact_uri": "s3://test/interleaved/page.json",
+                "artifact_sha256": "c" * 64,
+                "next_url": next_url,
+                "items": [
+                    {
+                        "sku": product.default_code,
+                        "source_url": "https://us.sparex.com/filter-700002.html",
+                        "image_url": "https://cdn.example.com/700002.jpg",
+                        "source_state": "verified",
+                    }
+                ],
+            },
+        )
+        self.sync.write({"mode": "sparex_discovery", "batch_size": 5})
+        self.sync.action_request_approval()
+        self.sync.action_approve()
+        self.sync.action_enable_continuous_release()
+        Run = self.env["southern.parts.automation.run"]
+        Run.create(
+            {
+                "name": "Prior successful discovery",
+                "sync_id": self.sync.id,
+                "idempotency_key": "prior-interleaved-discovery",
+                "job_type": "sparex_discovery",
+                "worker": "aws",
+                "mode": "evidence_only",
+                "state": "succeeded",
+                "finished_at": fields.Datetime.now(),
+            }
+        )
+
+        release_id = self.sync._run_one_batch()
+        release = Run.browse(release_id)
+        self.assertEqual(release.job_type, "catalog_release")
+        self.assertEqual(release.mode, "apply")
+        Run.claim_queued_run(["catalog_release"], "interleaved-aws-worker", 3.0, 900)
+        Run.finish_claimed_run(
+            release.id,
+            "interleaved-aws-worker",
+            "succeeded",
+            {
+                "processed_count": 1,
+                "changed_count": 1,
+                "artifact_uri": "s3://test/interleaved/result.json",
+                "artifact_sha256": "d" * 64,
+                "artifact_schema_version": "1.1",
+                "archive_uri": "s3://test/interleaved/result.json",
+                "artifact_archived": True,
+            },
+        )
+        self.sync.write({"cooldown_until": False, "next_allowed_run_at": False})
+
+        discovery_id = self.sync._run_one_batch()
+        next_dispatch = Run.browse(discovery_id)
+        self.assertEqual(next_dispatch.job_type, "sparex_discovery")
 
     def test_continuous_release_queues_apply_after_discovery_and_preserves_approval(self):
         product = self.env["product.template"].create(
