@@ -141,6 +141,11 @@ class SouthernServiceOperationsTests(unittest.TestCase):
             ],
             ["Parts", "Service", "Equipment Sale", "Rental"],
         )
+        list_attributes = document.xpath(
+            "//record[@id='view_quotation_list_southern_service']"
+            "/field[@name='arch']/xpath[@expr='//list']/attribute[@name='create']"
+        )
+        self.assertEqual([node.text for node in list_attributes], ["false"])
 
     def test_parts_equipment_and_rental_are_sales_workspaces(self):
         document = etree.parse(str(MODULE / "views" / "sales_workspaces.xml"))

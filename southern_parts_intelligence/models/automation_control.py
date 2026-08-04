@@ -1,3 +1,5 @@
+from datetime import timedelta
+import json
 import re
 import uuid
 
@@ -145,6 +147,17 @@ class SouthernPartsAutomationRun(models.Model):
     )
     external_run_id = fields.Char(index=True, copy=False)
     command_id = fields.Char(index=True, copy=False)
+    job_type = fields.Selection(
+        [
+            ("snapshot_refresh", "Snapshot Refresh"),
+            ("sparex_discovery", "Sparex Evidence Discovery"),
+            ("catalog_release", "Approved Product Update and Release"),
+        ],
+        index=True,
+    )
+    request_json = fields.Text(readonly=True)
+    lease_owner = fields.Char(readonly=True, copy=False, index=True)
+    lease_expires_at = fields.Datetime(readonly=True, copy=False, index=True)
     idempotency_key = fields.Char(
         required=True,
         copy=False,
@@ -279,6 +292,140 @@ class SouthernPartsAutomationRun(models.Model):
             }
         )
         return run.id
+
+    @api.model
+    def queue_external_run(self, sync_id, values=None):
+        values = dict(values or {})
+        sync = self.env["southern.parts.catalog.sync"].browse(sync_id).exists()
+        if not sync:
+            raise UserError(_("The catalog sync configuration no longer exists."))
+        if not sync.internal_cron_enabled:
+            raise UserError(_("External dispatch is disabled for this workflow."))
+        idempotency_key = (values.get("idempotency_key") or "").strip()
+        job_type = (values.get("job_type") or "").strip()
+        if not idempotency_key or job_type not in {"sparex_discovery", "catalog_release"}:
+            raise UserError(_("A valid job type and idempotency key are required."))
+        existing = self.search([("idempotency_key", "=", idempotency_key)], limit=1)
+        if existing:
+            return existing.id
+        mode = values.get("mode") or "evidence_only"
+        if mode == "apply" and sync.approval_state != "approved":
+            raise UserError(_("Apply dispatches require an approved catalog workflow."))
+        try:
+            request = json.loads(values.get("request_json") or "{}")
+        except (TypeError, ValueError) as error:
+            raise UserError(_("The external dispatch request is not valid JSON.")) from error
+        if request.get("job_type") != job_type:
+            raise UserError(_("The dispatch job type does not match its request contract."))
+        values.update(
+            {
+                "sync_id": sync.id,
+                "worker": "odoo",
+                "state": "queued",
+                "started_at": fields.Datetime.now(),
+            }
+        )
+        return self.create(values).id
+
+    @api.model
+    def claim_queued_run(self, job_types, worker_id, free_gb, lease_seconds=900):
+        worker_id = (worker_id or "").strip()
+        allowed_types = {"sparex_discovery", "catalog_release"}
+        requested_types = [value for value in (job_types or []) if value in allowed_types]
+        if not worker_id or not requested_types:
+            raise UserError(_("A worker and supported job type are required."))
+        lease_seconds = max(60, min(int(lease_seconds or 900), 1800))
+        self.env.cr.execute(
+            """
+            SELECT id
+              FROM southern_parts_automation_run
+             WHERE state = 'queued'
+               AND job_type = ANY(%s)
+             ORDER BY started_at, id
+             FOR UPDATE SKIP LOCKED
+             LIMIT 1
+            """,
+            [requested_types],
+        )
+        row = self.env.cr.fetchone()
+        if not row:
+            return {"claimed": False}
+        run = self.browse(row[0]).exists()
+        run.sync_id.assert_external_run_allowed(float(free_gb or 0.0))
+        if run.mode == "apply" and run.sync_id.approval_state != "approved":
+            raise UserError(_("The queued apply dispatch is no longer approved."))
+        now = fields.Datetime.now()
+        run.write(
+            {
+                "state": "running",
+                "worker": "aws",
+                "free_gb": float(free_gb or 0.0),
+                "lease_owner": worker_id,
+                "lease_expires_at": now + timedelta(seconds=lease_seconds),
+            }
+        )
+        run.sync_id.write(
+            {
+                "state": "running",
+                "last_message": _("AWS worker %s claimed dispatch %s.") % (worker_id, run.id),
+            }
+        )
+        return {
+            "claimed": True,
+            "run_id": run.id,
+            "job_type": run.job_type,
+            "mode": run.mode,
+            "request": json.loads(run.request_json or "{}"),
+        }
+
+    @api.model
+    def finish_claimed_run(self, run_id, worker_id, state, values=None):
+        run = self.browse(int(run_id or 0)).exists()
+        if not run or run.state != "running" or run.lease_owner != (worker_id or "").strip():
+            raise UserError(_("The claimed dispatch is unavailable or owned by another worker."))
+        values = dict(values or {})
+        cooldown_minutes = max(0, min(int(values.pop("cooldown_minutes", 0) or 0), 24 * 60))
+        run.write({"lease_owner": False, "lease_expires_at": False})
+        run.finish_run(state, values)
+        if state == "succeeded" and run.job_type == "sparex_discovery":
+            run.sync_id.write(
+                {"next_allowed_run_at": fields.Datetime.now() + timedelta(minutes=15)}
+            )
+        if cooldown_minutes:
+            run.sync_id.write(
+                {
+                    "cooldown_until": fields.Datetime.now() + timedelta(minutes=cooldown_minutes),
+                    "next_allowed_run_at": fields.Datetime.now() + timedelta(minutes=cooldown_minutes),
+                }
+            )
+        return True
+
+    @api.model
+    def recover_expired_claims(self):
+        expired = self.search(
+            [
+                ("state", "=", "running"),
+                ("lease_expires_at", "!=", False),
+                ("lease_expires_at", "<", fields.Datetime.now()),
+            ],
+            limit=20,
+        )
+        for run in expired:
+            run.write({"lease_owner": False, "lease_expires_at": False})
+            run.finish_run(
+                "blocked",
+                {
+                    "error_count": 1,
+                    "error_message": _("AWS worker lease expired before completion."),
+                },
+            )
+            run.sync_id.write(
+                {
+                    "cooldown_until": fields.Datetime.now() + timedelta(minutes=60),
+                    "next_allowed_run_at": fields.Datetime.now() + timedelta(minutes=60),
+                }
+            )
+        return len(expired)
 
     @api.model
     def begin_internal_run(self, sync_id, values=None):

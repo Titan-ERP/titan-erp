@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_stripe_terminal_config_list" model="ir.ui.view">
+        <field name="name">southern.stripe.terminal.config.list</field>
+        <field name="model">southern.stripe.terminal.config</field>
+        <field name="arch" type="xml">
+            <list decoration-success="active and webhook_ready" decoration-warning="active and not webhook_ready">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="provider_id"/>
+                <field name="reader_id"/>
+                <field name="location_id" optional="hide"/>
+                <field name="journal_id"/>
+                <field name="is_default"/>
+                <field name="webhook_ready"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_stripe_terminal_config_form" model="ir.ui.view">
+        <field name="name">southern.stripe.terminal.config.form</field>
+        <field name="model">southern.stripe.terminal.config</field>
+        <field name="arch" type="xml">
+            <form string="Stripe Terminal Reader">
+                <header>
+                    <button name="action_create_simulated_reader" string="Create Simulated S710" type="object" class="oe_highlight" invisible="provider_state != 'test' or reader_id"/>
+                    <button name="action_test_reader" string="Test Reader" type="object" class="oe_highlight" invisible="not reader_id"/>
+                    <button name="action_create_terminal_webhook" string="Configure Terminal Webhook" type="object" invisible="webhook_ready"/>
+                </header>
+                <sheet>
+                    <widget name="web_ribbon" title="Archived" bg_color="text-bg-danger" invisible="active"/>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group string="Stripe">
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="provider_id" options="{'no_create': True}"/>
+                            <field name="provider_state" readonly="1"/>
+                            <field name="currency_id" readonly="1"/>
+                            <field name="reader_id"/>
+                            <field name="location_id"/>
+                            <field name="webhook_ready" readonly="1"/>
+                        </group>
+                        <group string="Odoo Accounting">
+                            <field name="journal_id"/>
+                            <field name="available_payment_method_line_ids" invisible="1"/>
+                            <field name="payment_method_line_id"/>
+                            <field name="is_default"/>
+                            <field name="active"/>
+                        </group>
+                    </group>
+                    <div class="alert alert-info" role="alert">
+                        Stripe success is registered through Odoo's native payment wizard. The selected journal controls whether the invoice shows Paid immediately or In Payment until bank reconciliation.
+                    </div>
+                    <div class="alert alert-warning" role="alert" invisible="provider_state != 'test'">
+                        Test Mode supports a simulated S710, so the full workflow can be validated before physical hardware arrives.
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_stripe_terminal_config" model="ir.actions.act_window">
+        <field name="name">Stripe Terminal Readers</field>
+        <field name="res_model">southern.stripe.terminal.config</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>

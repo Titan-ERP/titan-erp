@@ -1,19 +1,17 @@
 [Unit]
-Description=Titan throttled Sparex listing discovery and Odoo match queue
+Description=Titan worker for Odoo-owned product dispatches
 Wants=network-online.target
 After=network-online.target
-OnSuccess=titan-catalog-agent.service
 
 [Service]
 Type=oneshot
 User=root
 Group=root
 WorkingDirectory=/opt/southern-parts/catalog-agent/current
-ExecStart=/opt/southern-parts/catalog-agent/current/scripts/run_sparex_catalog_discovery.sh
+ExecStart=/bin/bash /opt/southern-parts/catalog-agent/current/scripts/run_sparex_catalog_discovery.sh
 Environment=CATALOG_AGENT_INSTALL_ROOT=/opt/southern-parts/catalog-agent
 Environment=ODOO_ENV_FILE=/opt/southern-parts/Odoo/odoo_connection.env
 Environment=ODOO_COMPANY_ID=1
-Environment=SPAREX_DISCOVERY_RUN_KEY=sparex-full-catalog-inventory-v3
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
@@ -21,7 +19,7 @@ ProtectSystem=strict
 ReadWritePaths=/opt/southern-parts/catalog-agent/artifacts
 StandardOutput=journal
 StandardError=journal
-TimeoutStartSec=8min
+TimeoutStartSec=12min
 
 [Install]
 WantedBy=multi-user.target

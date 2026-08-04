@@ -10,6 +10,8 @@
                 <field name="parts_revenue_account_id"/>
                 <field name="service_revenue_account_id"/>
                 <field name="rental_revenue_account_id"/>
+                <field name="parts_cost_account_id"/>
+                <field name="service_cost_account_id"/>
                 <field name="merchant_fee_account_id"/>
                 <field name="payment_clearing_account_id"/>
                 <field name="check_review_account_id"/>
@@ -46,6 +48,19 @@
                         <field name="rental_revenue_account_id"/>
                         <field name="equipment_revenue_account_id"/>
                         <field name="fees_revenue_account_id"/>
+                    </group>
+                    <group string="Cost Accounts">
+                        <field name="equipment_cost_account_id"/>
+                        <field name="parts_cost_account_id"/>
+                        <field name="service_cost_account_id"/>
+                        <field name="rental_cost_account_id"/>
+                    </group>
+                    <group string="Sales and Purchase Entry Controls">
+                        <field name="commercial_order_guardrail_mode"/>
+                        <field name="commercial_order_guardrail_effective_at"
+                               invisible="commercial_order_guardrail_mode != 'enforce'"/>
+                        <field name="require_sale_tax_selection"/>
+                        <field name="require_purchase_tax_selection"/>
                     </group>
                     <group string="Bank Matching Accounts">
                         <field name="merchant_fee_account_id"/>

@@ -101,29 +101,33 @@ python -m scripts.sparex_catalog_discovery `
   --run-key sparex-full-catalog-inventory-v1
 ```
 
-Supervised adaptive queue checkpoint (five pages while new/recovering, up to
-ten when healthy):
+Supervised bounded queue checkpoint (at most five pages):
 
 ```powershell
 $env:ODOO_WRITE_ENABLED = "true"
 python -m scripts.sparex_catalog_discovery `
   --odoo-env-file odoo_connection.env `
   --dealer-env-file odoo_connection.env `
-  --run-key sparex-full-catalog-inventory-v1 `
-  --max-pages-per-checkpoint 10 `
+  --run-key sparex-full-catalog-inventory-v3 `
+  --max-pages-per-checkpoint 5 `
   --apply `
   --confirm sparex-discovery-queue `
   --reason "Approved throttled Sparex listing inventory and Odoo match classification"
 ```
 
 Production uses `titan-sparex-discovery.service` and
-`titan-sparex-discovery.timer`. Both the discovery and publication services use
-the same non-blocking lock, so they cannot overlap. Install the unit files only
-after the Odoo module upgrade and a bounded read-only portal check.
+`titan-sparex-discovery.timer` as an Odoo dispatch worker. The timer only polls
+for an Odoo-owned `southern.parts.automation.run`; it performs no portal access
+when no run is queued. Odoo limits evidence checkpoints to five pages, enforces
+cooldown and next-run timing, and requires an approved workflow before it can
+queue product application or publication. The standalone catalog-agent timer
+must remain disabled so there is one non-overlapping execution path.
 
-Every successful discovery service completion triggers
-`titan-catalog-agent.service`. The independent publication timer remains
-disabled so there is one non-overlapping discovery-to-release path. Parser version v3 collapses
+After upgrading the Odoo module and deploying the worker runtime, install the
+units with `cloud/aws/install-product-dispatch-worker.sh`. In Odoo, open
+**Sparex Product Update Orchestrator**, select **Request Approval**, approve the
+request, and then select **Enable Schedule** only after a bounded read-only
+portal check. Parser version v3 collapses
 duplicate anchors for the same exact product URL and keeps the image-backed
 listing card, while genuine conflicting URLs, images, or explicit SKUs remain
 in review. The v3 run key replays the catalog so items previously classified by

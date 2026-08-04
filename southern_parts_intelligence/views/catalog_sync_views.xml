@@ -33,6 +33,14 @@
                     <button name="action_pause" string="Pause" type="object" invisible="state == 'paused'"/>
                     <button name="action_resume" string="Resume" type="object" invisible="state != 'paused'"/>
                     <button name="action_reset_cursor" string="Reset Cursor" type="object"/>
+                    <button name="action_queue_approved_apply" string="Queue Approved Update" type="object"
+                            class="btn-primary"
+                            invisible="mode != 'sparex_discovery' or approval_state != 'approved'"/>
+                    <button name="action_enable_dispatch_schedule" string="Enable Schedule" type="object"
+                            class="btn-primary"
+                            invisible="mode != 'sparex_discovery' or internal_cron_enabled or approval_state != 'approved'"/>
+                    <button name="action_disable_dispatch_schedule" string="Disable Schedule" type="object"
+                            invisible="mode != 'sparex_discovery' or not internal_cron_enabled"/>
                     <button name="action_request_approval" string="Request Approval" type="object"
                             invisible="approval_state == 'requested'"/>
                     <button name="action_approve" string="Approve" type="object" class="btn-primary"
@@ -105,6 +113,7 @@
                 <field name="worker"/>
                 <field name="mode"/>
                 <field name="command_id"/>
+                <field name="job_type"/>
                 <field name="state"/>
                 <field name="processed_count"/>
                 <field name="changed_count"/>
@@ -133,6 +142,7 @@
                             <field name="mode"/>
                             <field name="external_run_id"/>
                             <field name="command_id"/>
+                            <field name="job_type"/>
                             <field name="idempotency_key"/>
                             <field name="free_gb"/>
                         </group>
@@ -156,6 +166,11 @@
                     </group>
                     <field name="evidence_summary"/>
                     <field name="error_message"/>
+                    <group string="Dispatch Contract">
+                        <field name="lease_owner"/>
+                        <field name="lease_expires_at"/>
+                        <field name="request_json"/>
+                    </group>
                 </sheet>
                 <chatter/>
             </form>

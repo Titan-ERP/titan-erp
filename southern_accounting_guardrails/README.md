@@ -11,6 +11,8 @@ Adds non-blocking accounting review fields and queues for Southern Equipment.
 - Adds company-level Accounting Policies so revenue and clearing accounts are configured in Odoo instead of hard-coded in scripts.
 - Adds Revenue Rules so the team can keep classifications native in Odoo after Shop Boss is phased out.
 - Adds product-level income account review so product/category setup errors can be fixed upstream.
+- Reviews both revenue and cost accounts on saleable products so COGS cannot silently fall into miscellaneous expense.
+- Separates bank exceptions from ordinary review counts and blocks direct-to-revenue merchant settlements and direct-expense payroll withdrawals from being approved.
 - Adds Daily Controls with scheduled refresh counts for bank lines, reconciliation review, merchant batches, draft invoices, product setup issues, and revenue bucket exceptions.
 - Adds accounting review status fields for invoices and bank statement lines.
 - Adds manual bank-line bucket overrides and reviewed/exception controls without changing reconciliation.

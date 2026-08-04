@@ -11,6 +11,17 @@
   </data>
 
   <data noupdate="1">
+    <record id="southern_parts_catalog_sync_sparex_updates" model="southern.parts.catalog.sync">
+        <field name="name">Sparex Product Update Orchestrator</field>
+        <field name="sequence">5</field>
+        <field name="active">True</field>
+        <field name="mode">sparex_discovery</field>
+        <field name="batch_size">5</field>
+        <field name="internal_cron_enabled">False</field>
+    </record>
+  </data>
+
+  <data noupdate="1">
     <record id="ir_cron_southern_parts_catalog_sync" model="ir.cron">
         <field name="name">Southern Parts Catalog Sync</field>
         <field name="model_id" ref="model_southern_parts_catalog_sync"/>
