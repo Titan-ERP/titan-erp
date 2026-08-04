@@ -52,7 +52,7 @@
         <xpath expr="//div[hasclass('o_wsale_product_details_content_section_price')]" position="after">
             <div t-if="product.type != 'service' and product.default_code != 'SEC-MEMBERSHIP-STANDARD'" class="se-product-fulfillment-note">
                 <strong>Parts fulfillment:</strong>
-                <span>Shipping and handling may vary by weight, destination, and supplier freight. Southern Equipment reviews each parts order and confirms pickup or shipping details before fulfillment.</span>
+                <span>Southern confirms availability, fitment, and pickup or shipping details before fulfillment.</span>
             </div>
         </xpath>
     </template>

@@ -2,19 +2,52 @@
 <odoo>
     <template id="southern_sale_order_portal_parts_review_status" inherit_id="sale.sale_order_portal_content" name="Southern Parts Order Portal Status">
         <xpath expr="//div[@id='informations']" position="before">
-            <div t-if="sale_order.southern_parts_review_state != 'not_parts'" class="alert border mb-4" style="background:#f6f4ed;border-left:4px solid #f2b632!important;color:#141719;">
+            <div t-if="sale_order.southern_parts_review_state != 'not_parts'" class="border rounded mb-4 p-4" style="background:#f6f4ed;border-left:4px solid #f2b632!important;color:#141719;">
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
                     <div>
-                        <strong>Southern parts order status:</strong>
+                        <p class="mb-1 text-uppercase" style="color:#b88912;font-weight:800;letter-spacing:.08em;font-size:.75rem;">Parts Order</p>
+                        <strong>Status:</strong>
                         <span t-field="sale_order.southern_parts_review_state"/>
                     </div>
                     <span t-if="sale_order.southern_customer_last_update_at" class="small text-muted">
                         Updated <span t-field="sale_order.southern_customer_last_update_at"/>
                     </span>
                 </div>
-                <p class="mb-0 mt-2">
-                    Southern Equipment reviews parts orders before fulfillment and confirms pickup or shipping details after review.
+                <p class="mb-3 mt-2">
+                    Southern Equipment is confirming availability, fitment, and fulfillment details before pickup or shipment.
                 </p>
+                <div class="row g-2 mb-3">
+                    <div class="col-6 col-lg">
+                        <div t-att-class="'h-100 border rounded p-2 ' + ('bg-white' if sale_order.southern_parts_review_state in ['parts_review', 'supplier_verification', 'confirmed', 'ready_for_pickup', 'shipping_in_progress', 'needs_customer_confirmation', 'completed'] else '')">
+                            <small class="text-uppercase text-muted d-block">Step 1</small>
+                            <strong>Received</strong>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg">
+                        <div t-att-class="'h-100 border rounded p-2 ' + ('bg-white' if sale_order.southern_parts_review_state in ['supplier_verification', 'confirmed', 'ready_for_pickup', 'shipping_in_progress', 'needs_customer_confirmation', 'completed'] else '')">
+                            <small class="text-uppercase text-muted d-block">Step 2</small>
+                            <strong>Supplier Review</strong>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg">
+                        <div t-att-class="'h-100 border rounded p-2 ' + ('bg-white' if sale_order.southern_parts_review_state in ['confirmed', 'ready_for_pickup', 'shipping_in_progress', 'completed'] else '')">
+                            <small class="text-uppercase text-muted d-block">Step 3</small>
+                            <strong>Confirmed</strong>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg">
+                        <div t-att-class="'h-100 border rounded p-2 ' + ('bg-white' if sale_order.southern_parts_review_state in ['ready_for_pickup', 'shipping_in_progress', 'completed'] else '')">
+                            <small class="text-uppercase text-muted d-block">Step 4</small>
+                            <strong>Fulfillment</strong>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg">
+                        <div t-att-class="'h-100 border rounded p-2 ' + ('bg-white' if sale_order.southern_parts_review_state == 'completed' else '')">
+                            <small class="text-uppercase text-muted d-block">Step 5</small>
+                            <strong>Complete</strong>
+                        </div>
+                    </div>
+                </div>
                 <p t-if="sale_order.southern_pickup_or_shipping_note" class="mb-0 mt-2">
                     <strong>Pickup/shipping:</strong>
                     <span t-field="sale_order.southern_pickup_or_shipping_note"/>

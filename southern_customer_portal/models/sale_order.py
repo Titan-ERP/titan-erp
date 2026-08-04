@@ -11,8 +11,11 @@ class SaleOrder(models.Model):
     SOUTHERN_CARD_FEE_FIXED = 0.30
     SOUTHERN_PICKUP_CARRIER = "Pickup at Southern Equipment"
     SOUTHERN_SHIP_CARRIER = "Shipping reviewed after order confirmation"
-    SOUTHERN_DIRECT_SHIP_CARRIER = "Direct shipping reviewed after order confirmation"
-    SOUTHERN_LEGACY_SHIP_CARRIERS = ("Flat-rate shipping from Southern Equipment",)
+    SOUTHERN_DIRECT_SHIP_CARRIER = "Ship to my address"
+    SOUTHERN_LEGACY_SHIP_CARRIERS = (
+        "Direct shipping reviewed after order confirmation",
+        "Flat-rate shipping from Southern Equipment",
+    )
     SOUTHERN_PARTS_PORTAL_TAG = "Website Parts Order"
     SOUTHERN_MIN_PARTS_MARGIN_RATE = 0.15
     SOUTHERN_PARTS_FAILURE_EMAIL = "raymy@southernequipment.co"
