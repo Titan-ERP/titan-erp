@@ -11,6 +11,7 @@ from odoo.tests.common import TransactionCase
 class TestCatalogAgents(TransactionCase):
     def setUp(self):
         super().setUp()
+        self.website_category = self.env["product.public.category"].create({"name": "Test Parts"})
         self.agent = self.env["southern.catalog.agent"].search(
             [
                 ("code", "=", "product_verification"),
@@ -75,7 +76,7 @@ class TestCatalogAgents(TransactionCase):
             },
         )
 
-    def test_ready_snapshot_uses_only_four_business_requirements(self):
+    def test_ready_snapshot_requires_customer_ready_product_data(self):
         product = self.env["product.template"].create(
             {
                 "name": "Ready Sparex part",
@@ -84,6 +85,8 @@ class TestCatalogAgents(TransactionCase):
                 "list_price": 25.0,
                 "southern_source_url": "https://us.sparex.com/example-146.html",
                 "image_1920": base64.b64encode(b"test-image"),
+                "public_categ_ids": [(6, 0, self.website_category.ids)],
+                "description_ecommerce": "Customer-ready replacement part description.",
                 "website_published": False,
             }
         )
@@ -117,6 +120,38 @@ class TestCatalogAgents(TransactionCase):
         self.assertFalse(task.ready_to_publish)
         self.assertIn("missing_exact_sparex_url", task.readiness_blockers)
 
+    def test_native_publication_gate_blocks_placeholder_and_below_cost_prices(self):
+        product = self.env["product.template"].create(
+            {
+                "name": "Guarded Sparex part",
+                "default_code": "S.880000",
+                "active": True,
+                "list_price": 1.0,
+                "southern_source_url": "https://us.sparex.com/example-880000.html",
+                "image_1920": base64.b64encode(b"guarded-image"),
+                "public_categ_ids": [(6, 0, self.website_category.ids)],
+                "description_ecommerce": "Customer-ready replacement part description.",
+                "website_published": False,
+            }
+        )
+        supplier = self.env["res.partner"].create({"name": "Sparex", "supplier_rank": 1})
+        self.env["product.supplierinfo"].create(
+            {"partner_id": supplier.id, "product_tmpl_id": product.id, "price": 5.0, "min_qty": 1.0}
+        )
+        with self.assertRaises(ValidationError), self.env.cr.savepoint():
+            product.website_published = True
+        product.invalidate_recordset()
+        product.list_price = 4.99
+        with self.assertRaises(ValidationError), self.env.cr.savepoint():
+            product.website_published = True
+        product.invalidate_recordset()
+        product.list_price = 9.99
+        product.description_ecommerce = (
+            "Internal catalog record. Not published to the website until pricing is reviewed."
+        )
+        with self.assertRaises(ValidationError), self.env.cr.savepoint():
+            product.website_published = True
+
     def test_missing_sku_is_recorded_without_product_creation(self):
         before = self.env["product.template"].search_count([])
         task_id = self.env["southern.catalog.agent.task"].queue_candidate(
@@ -147,6 +182,8 @@ class TestCatalogAgents(TransactionCase):
                 "standard_price": 11.0,
                 "southern_source_url": "https://us.sparex.com/example-880001.html",
                 "image_1920": base64.b64encode(b"release-image"),
+                "public_categ_ids": [(6, 0, self.website_category.ids)],
+                "description_ecommerce": "Customer-ready release description.",
                 "website_published": False,
             }
         )

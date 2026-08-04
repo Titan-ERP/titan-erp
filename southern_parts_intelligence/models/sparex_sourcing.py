@@ -5,6 +5,7 @@ from urllib.parse import urlsplit
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
+from .catalog_agents import customer_description_ready, sales_price_blocker
 
 SPAREX_SOURCE_HOSTS = {"us.sparex.com"}
 
@@ -128,7 +129,9 @@ class SouthernSparexSourcingQueue(models.Model):
         "product_tmpl_id.sale_ok",
         "product_tmpl_id.public_categ_ids",
         "product_tmpl_id.image_1920",
+        "product_tmpl_id.list_price",
         "product_tmpl_id.description_ecommerce",
+        "product_tmpl_id.website_description",
         "product_tmpl_id.description_sale",
     )
     def _compute_publication_eligible(self):
@@ -159,6 +162,9 @@ class SouthernSparexSourcingQueue(models.Model):
                 blockers.append("Approved retail price is not customer-ready")
             elif required_price and row.approved_retail_price + 0.005 < required_price:
                 blockers.append("Approved retail price is below the required margin")
+            price_blocker = sales_price_blocker(product, row.supplier_price)
+            if price_blocker:
+                blockers.append(price_blocker.replace("_", " ").capitalize())
             if not product.active:
                 blockers.append("Product is archived")
             if not product.sale_ok:
@@ -167,7 +173,7 @@ class SouthernSparexSourcingQueue(models.Model):
                 blockers.append("Missing website category")
             if not product.image_1920:
                 blockers.append("Missing image")
-            if not (product.description_ecommerce or product.description_sale):
+            if not customer_description_ready(product):
                 blockers.append("Missing customer-facing description")
             row.publication_eligible = not blockers
             row.publication_blockers = "; ".join(blockers)

@@ -2,6 +2,7 @@ from collections import Counter
 
 from odoo import _, api, fields, models
 
+from .catalog_agents import customer_description_ready
 
 ISSUE_TYPES = [
     ("placeholder_price", "Placeholder Price"),
@@ -131,9 +132,7 @@ class SouthernProductQualityIssue(models.Model):
             codes.append("duplicate_reference")
         if product.website_published and not product.image_128:
             codes.append("published_missing_image")
-        if product.website_published and not (
-            product.description_ecommerce or product.description_sale
-        ):
+        if product.website_published and not customer_description_ready(product):
             codes.append("published_missing_description")
         if is_sparex and product.website_published and not product.southern_sparex_publication_eligible:
             codes.append("publication_gate_blocked")
@@ -144,7 +143,7 @@ class SouthernProductQualityIssue(models.Model):
             and product.public_categ_ids
             and product.image_128
             and (product.southern_source_url or evidence_count)
-            and (product.description_ecommerce or product.description_sale)
+            and customer_description_ready(product)
             and sourcing_ready
         ):
             codes.append("publication_ready")

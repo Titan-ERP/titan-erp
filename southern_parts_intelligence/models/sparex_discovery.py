@@ -8,7 +8,13 @@ from urllib.parse import parse_qs, urlsplit
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
-from .catalog_agents import SHA256_PATTERN, exact_sparex_url, normalized_sparex_sku
+from .catalog_agents import (
+    SHA256_PATTERN,
+    customer_description_ready,
+    exact_sparex_url,
+    normalized_sparex_sku,
+    sales_price_blocker,
+)
 
 SPAREX_DISCOVERY_HOSTS = {"us.sparex.com"}
 MAX_DISCOVERY_PAGE_ITEMS = 100
@@ -96,6 +102,8 @@ def _primary_publication_blocker(
     has_sales_price,
     product_has_exact_url,
     product_has_image,
+    product_has_category,
+    product_has_description,
 ):
     if reconciliation_state != "current":
         return "stale"
@@ -117,6 +125,10 @@ def _primary_publication_blocker(
         return "missing_product_url"
     if not product_has_image:
         return "missing_product_image"
+    if not product_has_category:
+        return "missing_website_category"
+    if not product_has_description:
+        return "missing_customer_description"
     return "ready"
 
 
@@ -644,7 +656,7 @@ class SouthernSparexDiscoveryRun(models.Model):
                 )
             queue_state = "verified" if source_state == "verified" and image_url else "review"
             has_cost = bool(positive_supplier)
-            has_sales_price = bool(matched_product and matched_product.list_price > 0)
+            has_sales_price = bool(matched_product and not sales_price_blocker(matched_product, positive_supplier))
             has_exact_url = exact_sparex_url(source_url, normalized)
             has_image = bool(image_url)
             currently_published = bool(matched_product and matched_product.website_published)
@@ -652,6 +664,8 @@ class SouthernSparexDiscoveryRun(models.Model):
                 matched_product and exact_sparex_url(matched_product.southern_source_url, normalized)
             )
             product_has_image = bool(matched_product and matched_product.image_1920)
+            product_has_category = bool(matched_product and matched_product.public_categ_ids)
+            product_has_description = bool(matched_product and customer_description_ready(matched_product))
             source_enrichment_candidate = bool(
                 matched_product
                 and matched_product.active
@@ -674,6 +688,8 @@ class SouthernSparexDiscoveryRun(models.Model):
                 and queue_state == "verified"
                 and product_has_exact_url
                 and product_has_image
+                and product_has_category
+                and product_has_description
             )
             item = Item.search([("company_id", "=", run.company_id.id), ("normalized_sku", "=", normalized)], limit=1)
             review_reason = False
@@ -696,6 +712,8 @@ class SouthernSparexDiscoveryRun(models.Model):
                 has_sales_price=has_sales_price,
                 product_has_exact_url=product_has_exact_url,
                 product_has_image=product_has_image,
+                product_has_category=product_has_category,
+                product_has_description=product_has_description,
             )
             corrected = bool(
                 item
@@ -1457,10 +1475,13 @@ class SouthernSparexDiscoveryItem(models.Model):
         now = fields.Datetime.now()
         for item in self:
             product = item.matched_product_id.sudo()
-            has_cost = bool(item._positive_sparex_supplier())
-            has_sales_price = bool(product and product.list_price > 0)
+            supplier = item._positive_sparex_supplier()
+            has_cost = bool(supplier)
+            has_sales_price = bool(product and not sales_price_blocker(product, supplier))
             product_has_exact_url = bool(product and exact_sparex_url(product.southern_source_url, item.normalized_sku))
             product_has_image = bool(product and product.image_1920)
+            product_has_category = bool(product and product.public_categ_ids)
+            product_has_description = bool(product and customer_description_ready(product))
             currently_published = bool(product and product.website_published)
             source_ready = bool(
                 item.reconciliation_state == "current"
@@ -1488,6 +1509,8 @@ class SouthernSparexDiscoveryItem(models.Model):
                 has_sales_price=has_sales_price,
                 product_has_exact_url=product_has_exact_url,
                 product_has_image=product_has_image,
+                product_has_category=product_has_category,
+                product_has_description=product_has_description,
             )
             recovery_priority = 0
             recovery_values = {}
@@ -1557,6 +1580,8 @@ class SouthernSparexDiscoveryItem(models.Model):
                         and has_sales_price
                         and product_has_exact_url
                         and product_has_image
+                        and product_has_category
+                        and product_has_description
                     ),
                     **recovery_values,
                 }

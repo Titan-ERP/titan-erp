@@ -9,6 +9,7 @@ from odoo.tests.common import TransactionCase
 class TestSparexDiscovery(TransactionCase):
     def setUp(self):
         super().setUp()
+        self.website_category = self.env["product.public.category"].create({"name": "Test Parts"})
         Agent = self.env["southern.catalog.agent"]
         for code, name in (("sparex_discovery", "Sparex Discovery Agent"), ("odoo_match", "Odoo Match Agent")):
             if not Agent.search([("code", "=", code), ("company_id", "=", self.env.company.id)], limit=1):
@@ -324,6 +325,8 @@ class TestSparexDiscovery(TransactionCase):
                 "active": True,
                 "list_price": 30.0,
                 "image_1920": base64.b64encode(b"product-image"),
+                "public_categ_ids": [(6, 0, self.website_category.ids)],
+                "description_ecommerce": "Customer-ready source-link description.",
                 "website_published": False,
             }
         )
@@ -503,6 +506,8 @@ class TestSparexDiscovery(TransactionCase):
                 "list_price": 45.0,
                 "southern_source_url": "https://us.sparex.com/part-720002.html",
                 "image_1920": base64.b64encode(b"cost-recovery-image"),
+                "public_categ_ids": [(6, 0, self.website_category.ids)],
+                "description_ecommerce": "Customer-ready dealer-cost description.",
                 "website_published": False,
             }
         )
