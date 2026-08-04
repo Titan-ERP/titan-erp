@@ -66,6 +66,22 @@ class OdooProductDispatchWorkerTests(unittest.TestCase):
             "sparex-full-catalog-inventory-v3-cycle-25",
         )
 
+    def test_discovery_creation_flag_requires_odoo_request(self):
+        ordinary = self.command(
+            {
+                "job_type": "sparex_discovery",
+                "request": {"job_type": "sparex_discovery", "create_missing_products": False},
+            }
+        )
+        enabled = self.command(
+            {
+                "job_type": "sparex_discovery",
+                "request": {"job_type": "sparex_discovery", "create_missing_products": True},
+            }
+        )
+        self.assertNotIn("--create-missing-products", ordinary)
+        self.assertIn("--create-missing-products", enabled)
+
     def test_discovery_cycle_key_continues_active_and_rotates_terminal_run(self):
         class Client:
             def __init__(self, rows):
@@ -133,6 +149,19 @@ class OdooProductDispatchWorkerTests(unittest.TestCase):
         self.assertEqual(values["processed_count"], 4)
         self.assertEqual(values["changed_count"], 3)
         self.assertTrue(values["artifact_archived"])
+
+    def test_finish_values_counts_discovery_corrections_and_created_drafts(self):
+        values = finish_values(
+            {
+                "pages_processed": 5,
+                "corrected": 2,
+                "created_count": 3,
+                "result_uri": "s3://bucket/discovery-result.json",
+                "result_sha256": "c" * 64,
+            }
+        )
+        self.assertEqual(values["changed_count"], 5)
+        self.assertIn('"created_count": 3', values["evidence_summary"])
 
     def test_finish_values_include_cost_recovery_progress(self):
         values = finish_values(

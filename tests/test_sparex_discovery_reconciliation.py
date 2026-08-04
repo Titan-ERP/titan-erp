@@ -37,10 +37,13 @@ class SparexDiscoveryReconciliationContractTests(unittest.TestCase):
             "rollback_cost_recovery",
             "cost_recovery_next_at",
             "review_required",
+            "prepare_product_creation_plan",
+            "apply_product_creation_plan",
+            "rollback_created_products",
+            "page_driven_creation_enabled",
             'updates["max_pages_total"] = MAX_DISCOVERY_TOTAL_PAGES',
         ):
             self.assertIn(contract, source)
-        self.assertNotIn('self.env["product.template"].create', source)
 
     def test_dashboard_and_missing_product_views_are_valid_xml(self):
         path = ROOT / "southern_parts_intelligence" / "views" / "sparex_discovery_views.xml"

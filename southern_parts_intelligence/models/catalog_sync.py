@@ -137,6 +137,7 @@ class SouthernPartsCatalogSync(models.Model):
         self.filtered(lambda sync: sync.mode == "sparex_discovery").write(
             {
                 "continuous_release_enabled": False,
+                "page_driven_creation_enabled": False,
                 "internal_cron_enabled": False,
                 "state": "paused",
                 "approval_state": "not_required",
@@ -147,10 +148,41 @@ class SouthernPartsCatalogSync(models.Model):
         )
         return True
 
+    def action_enable_page_driven_creation(self):
+        for sync in self.sudo():
+            if (
+                sync.mode != "sparex_discovery"
+                or sync.approval_state != "approved"
+                or not sync.continuous_release_enabled
+            ):
+                raise UserError(
+                    "Page-driven product creation requires an approved active continuous Sparex workflow."
+                )
+            sync.write(
+                {
+                    "page_driven_creation_enabled": True,
+                    "last_message": (
+                        "Exact products encountered on Sparex listing pages may be created as "
+                        "categorized unpublished drafts."
+                    ),
+                }
+            )
+        return True
+
+    def action_disable_page_driven_creation(self):
+        self.filtered(lambda sync: sync.mode == "sparex_discovery").write(
+            {
+                "page_driven_creation_enabled": False,
+                "last_message": "Page-driven Sparex product creation disabled.",
+            }
+        )
+        return True
+
     def action_disable_dispatch_schedule(self):
         self.filtered(lambda sync: sync.mode == "sparex_discovery").write(
             {
                 "continuous_release_enabled": False,
+                "page_driven_creation_enabled": False,
                 "internal_cron_enabled": False,
                 "state": "paused",
                 "last_message": "Odoo product dispatch scheduling disabled.",
@@ -192,6 +224,7 @@ class SouthernPartsCatalogSync(models.Model):
                     self.write(
                         {
                             "continuous_release_enabled": False,
+                            "page_driven_creation_enabled": False,
                             "internal_cron_enabled": False,
                             "state": "paused",
                             "last_message": (
@@ -347,6 +380,7 @@ class SouthernPartsCatalogSync(models.Model):
                 self.write(
                     {
                         "continuous_release_enabled": False,
+                        "page_driven_creation_enabled": False,
                         "internal_cron_enabled": False,
                         "state": "paused",
                         "continuous_release_completed_at": (
@@ -373,6 +407,8 @@ class SouthernPartsCatalogSync(models.Model):
                 )
                 return False
         requested_count = max(1, min(int(self.batch_size or 5), 5))
+        creates_drafts = bool(mode == "evidence_only" and self.page_driven_creation_enabled)
+        run_mode = "apply" if creates_drafts else mode
         request = {
             "schema_version": "1.0",
             "job_type": job_type,
@@ -380,18 +416,23 @@ class SouthernPartsCatalogSync(models.Model):
             "throttle_seconds": 3.0,
             "http_retries": 0,
             "publish": mode == "apply",
+            "create_missing_products": creates_drafts,
         }
         run_id = Run.queue_external_run(
             self.id,
             {
                 "name": (
-                    "Sparex evidence checkpoint"
-                    if mode == "evidence_only"
-                    else "Approved Sparex product update and release"
+                    "Sparex listing reconciliation and draft creation"
+                    if creates_drafts
+                    else (
+                        "Sparex evidence checkpoint"
+                        if mode == "evidence_only"
+                        else "Approved Sparex product update and release"
+                    )
                 ),
                 "idempotency_key": "%s:%s:%s" % (job_type, self.id, uuid.uuid4().hex),
                 "job_type": job_type,
-                "mode": mode,
+                "mode": run_mode,
                 "requested_count": requested_count,
                 "request_json": json.dumps(request, sort_keys=True),
             },

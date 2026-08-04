@@ -136,6 +136,99 @@ class TestSparexDiscovery(TransactionCase):
         self.assertEqual(active_run.visited_url_count, 2)
         self.assertEqual(active_run.queued_url_count, 0)
 
+    def test_page_driven_creation_makes_one_categorized_unpublished_draft(self):
+        supplier = self.env["res.partner"].search([("name", "=ilike", "Sparex")])
+        self.assertLessEqual(len(supplier), 1)
+        if supplier:
+            supplier.supplier_rank = 1
+        else:
+            supplier = self.env["res.partner"].create({"name": "Sparex", "supplier_rank": 1})
+        sync = self.env["southern.parts.catalog.sync"].create(
+            {"name": "Page-driven creation test", "mode": "sparex_discovery", "batch_size": 5}
+        )
+        sync.action_request_approval()
+        sync.action_approve()
+        sync.action_enable_continuous_release()
+        sync.action_enable_page_driven_creation()
+        seed_url = "https://us.sparex.com/products?p=1"
+        run = self.env["southern.sparex.discovery.run"].start_discovery_run(
+            {
+                "idempotency_key": "test-page-driven-product-creation",
+                "seed_url": seed_url,
+                "seed_url_sha256": hashlib.sha256(seed_url.encode()).hexdigest(),
+                "plan_artifact_uri": "s3://test-bucket/discovery/plan.json",
+                "plan_sha256": "a" * 64,
+                "parser_version": "test-listing-v4",
+                "throttle_seconds": 3,
+            }
+        )
+        self.env["southern.sparex.discovery.run"].claim_discovery_checkpoint(
+            run["id"], "creation-test-worker", 180
+        )
+        recorded = self.env["southern.sparex.discovery.run"].record_discovery_page(
+            run["id"],
+            "creation-test-worker",
+            {
+                "page_url": seed_url,
+                "page_sha256": "b" * 64,
+                "artifact_uri": "s3://test-bucket/discovery/listing-page.json",
+                "artifact_sha256": "c" * 64,
+                "items": [
+                    {
+                        "sku": "S.999998",
+                        "listing_title": "Hydraulic Filter",
+                        "source_url": "https://us.sparex.com/hydraulic-filter-999998.html",
+                        "image_url": "https://cdn.example.com/999998.jpg",
+                        "source_state": "verified",
+                    }
+                ],
+                "next_url": "",
+            },
+        )
+        plans = self.env["southern.sparex.discovery.item"].prepare_product_creation_plan(
+            recorded["item_ids"], limit=5
+        )
+        self.assertEqual(len(plans), 1)
+        applied = self.env["southern.sparex.discovery.item"].apply_product_creation_plan(
+            plans,
+            "s3://test-bucket/discovery/product-creation-plan.json",
+            "d" * 64,
+            "sparex-page-driven-draft-creation",
+            "Create exact listing-page product as an unpublished draft",
+        )
+        self.assertEqual(len(applied), 1)
+        self.assertTrue(applied[0]["created"])
+        product = self.env["product.template"].browse(applied[0]["product_id"])
+        item = self.env["southern.sparex.discovery.item"].browse(recorded["item_ids"][0])
+        self.assertEqual(product.default_code, "S.999998")
+        self.assertEqual(product.name, "Hydraulic Filter")
+        self.assertEqual(
+            product.categ_id,
+            self.env.ref("southern_parts_intelligence.product_category_sparex_pending_enrichment"),
+        )
+        self.assertEqual(product.southern_source_url, "https://us.sparex.com/hydraulic-filter-999998.html")
+        self.assertFalse(product.website_published)
+        self.assertEqual(product.list_price, 0.0)
+        self.assertEqual(product.standard_price, 0.0)
+        vendor = self.env["product.supplierinfo"].search([("product_tmpl_id", "=", product.id)])
+        self.assertEqual(len(vendor), 1)
+        self.assertEqual(vendor.partner_id, supplier)
+        self.assertEqual(vendor.price, 0.0)
+        self.assertEqual(item.matched_product_id, product)
+        self.assertEqual(item.creation_state, "created")
+        self.assertEqual(item.primary_blocker, "missing_cost")
+        self.assertEqual(
+            self.env["southern.sparex.discovery.item"].prepare_product_creation_plan([item.id], limit=5),
+            [],
+        )
+        rolled_back = self.env["southern.sparex.discovery.item"].rollback_created_products(
+            applied, "Rollback unchanged unpublished test draft"
+        )
+        self.assertEqual(rolled_back, [{"item_id": item.id, "product_id": product.id, "active": False}])
+        self.assertFalse(product.active)
+        self.assertEqual(item.odoo_match_state, "matched_archived")
+        self.assertEqual(item.creation_state, "rejected")
+
     def test_current_run_corrects_old_review_and_marks_unseen_items_stale(self):
         old_seed = "https://us.sparex.com/old-listing.html"
         old_run = self.env["southern.sparex.discovery.run"].start_discovery_run(

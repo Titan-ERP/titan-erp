@@ -15,7 +15,7 @@ class CatalogAgentsContractTests(unittest.TestCase):
         self.assertIn("views/catalog_agent_views.xml", manifest["data"])
         self.assertIn("views/sparex_discovery_views.xml", manifest["data"])
 
-    def test_discovery_queue_is_inventory_only(self):
+    def test_discovery_queue_uses_gated_odoo_draft_creation(self):
         model_source = (ROOT / "southern_parts_intelligence" / "models" / "sparex_discovery.py").read_text(
             encoding="utf-8"
         )
@@ -23,7 +23,9 @@ class CatalogAgentsContractTests(unittest.TestCase):
         self.assertIn('_name = "southern.sparex.discovery.run"', model_source)
         self.assertIn('_name = "southern.sparex.discovery.item"', model_source)
         self.assertIn('(\"not_authorized\", \"Product Creation Not Authorized\")', model_source)
-        self.assertNotIn('self.env["product.template"].create', model_source)
+        self.assertIn("prepare_product_creation_plan", model_source)
+        self.assertIn("apply_product_creation_plan", model_source)
+        self.assertIn("PRODUCT_CREATION_CONFIRMATION", model_source)
         self.assertNotIn('client.call("product.template", "create"', worker_source)
 
     def test_five_named_agents_are_seeded(self):

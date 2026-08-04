@@ -204,6 +204,7 @@
         <field name="arch" type="xml">
             <list decoration-success="odoo_match_state == 'matched_active' and state == 'verified'" decoration-warning="odoo_match_state == 'missing'" decoration-danger="odoo_match_state == 'duplicate'">
                 <field name="normalized_sku"/>
+                <field name="listing_title"/>
                 <field name="state"/>
                 <field name="source_state"/>
                 <field name="reconciliation_state"/>
@@ -242,6 +243,7 @@
                 </header>
                 <sheet>
                     <div class="oe_title"><h1><field name="normalized_sku"/></h1></div>
+                    <div class="oe_title"><h2><field name="listing_title"/></h2></div>
                     <group>
                         <group>
                             <field name="state"/>

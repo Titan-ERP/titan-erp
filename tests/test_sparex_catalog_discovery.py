@@ -28,6 +28,8 @@ class SparexCatalogDiscoveryParserTests(unittest.TestCase):
         """
         parsed = parse_listing_page(page, "https://us.sparex.com/products?p=1")
         self.assertEqual([row["sku"] for row in parsed["items"]], ["S.165551", "S.165552"])
+        self.assertEqual(parsed["items"][0]["listing_title"], "Oil Filter")
+        self.assertEqual(parsed["items"][1]["listing_title"], "Filter")
         self.assertEqual(parsed["items"][0]["source_state"], "verified")
         self.assertEqual(parsed["items"][1]["source_state"], "missing_image")
         self.assertEqual(parsed["next_url"], "https://us.sparex.com/products?p=2")
@@ -93,21 +95,23 @@ class SparexCatalogDiscoveryParserTests(unittest.TestCase):
         self.assertEqual(parsed["items"][0]["sku"], "S.156811")
         self.assertEqual(parsed["items"][0]["source_state"], "verified")
         self.assertEqual(parsed["items"][0]["image_url"], "https://cdn.example.com/156811.jpg")
+        self.assertEqual(parsed["items"][0]["listing_title"], "Engine Block Heater")
 
     def test_rejects_non_sparex_and_mismatched_product_urls(self):
         self.assertFalse(exact_sparex_product_url("https://example.com/filter-165551.html", "S.165551"))
         self.assertFalse(exact_sparex_product_url("https://us.sparex.com/filter-165552.html", "S.165551"))
         self.assertTrue(exact_sparex_product_url("https://us.sparex.com/filter-165551.html", "S.165551"))
 
-    def test_worker_contract_forbids_product_mutation_and_detail_fetches(self):
+    def test_worker_contract_uses_odoo_creation_gate_and_forbids_detail_fetches(self):
         source = (ROOT / "scripts" / "sparex_catalog_discovery.py").read_text(encoding="utf-8")
         self.assertIn('WORKFLOW = "sparex-discovery-queue"', source)
-        self.assertIn('product_creation_authorized": False', source)
         self.assertNotIn('client.call("product.template", "create"', source)
         self.assertNotIn('client.call("product.template", "write"', source)
+        self.assertIn('"apply_product_creation_plan"', source)
+        self.assertIn('parser.add_argument("--create-missing-products"', source)
         self.assertNotIn("session.get(source_url", source)
         self.assertIn("RequestThrottle(max(3.0, throttle_seconds))", source)
-        self.assertIn('PARSER_VERSION = "sparex-listing-frontier-v3"', source)
+        self.assertIn('PARSER_VERSION = "sparex-listing-frontier-v4"', source)
 
     def test_adaptive_checkpoint_expands_only_for_healthy_mature_runs(self):
         self.assertEqual(adaptive_checkpoint_pages(10, None), 5)

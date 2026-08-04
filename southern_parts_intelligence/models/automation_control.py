@@ -55,6 +55,15 @@ class SouthernPartsCatalogSync(models.Model):
             "the actionable backlog is empty or a safety circuit breaker stops the workflow."
         ),
     )
+    page_driven_creation_enabled = fields.Boolean(
+        default=False,
+        readonly=True,
+        tracking=True,
+        help=(
+            "Allows exact verified products encountered on Sparex listing pages to be "
+            "created as categorized unpublished drafts. Search and product-detail fallback remain disabled."
+        ),
+    )
     continuous_release_started_at = fields.Datetime(readonly=True, copy=False)
     continuous_release_completed_at = fields.Datetime(readonly=True, copy=False)
     continuous_release_batch_count = fields.Integer(readonly=True, copy=False, default=0)
@@ -89,6 +98,7 @@ class SouthernPartsCatalogSync(models.Model):
                 "approved_by_id": False,
                 "approved_at": False,
                 "continuous_release_enabled": False,
+                "page_driven_creation_enabled": False,
                 "internal_cron_enabled": False,
                 "state": "paused",
             }
@@ -115,6 +125,7 @@ class SouthernPartsCatalogSync(models.Model):
             values.update(
                 {
                     "continuous_release_enabled": False,
+                    "page_driven_creation_enabled": False,
                     "internal_cron_enabled": False,
                     "state": "paused",
                     "last_message": _(
@@ -444,6 +455,7 @@ class SouthernPartsAutomationRun(models.Model):
             sync.write(
                 {
                     "continuous_release_enabled": False,
+                    "page_driven_creation_enabled": False,
                     "internal_cron_enabled": False,
                     "state": "error",
                     "continuous_release_failure_streak": sync.continuous_release_failure_streak + 1,
