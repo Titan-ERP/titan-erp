@@ -1,6 +1,6 @@
 import uuid
 
-from odoo import _, api, fields, models
+from odoo import Command, _, api, fields, models
 from odoo.addons.payment import utils as payment_utils
 from odoo.exceptions import UserError, ValidationError
 
@@ -35,6 +35,51 @@ class SouthernStripeTerminalPayment(models.Model):
         readonly=True,
     )
     reader_id = fields.Char(related="config_id.reader_id", store=True)
+    invoice_amount = fields.Monetary(
+        string="Invoice Balance",
+        readonly=True,
+        copy=False,
+        tracking=True,
+    )
+    processing_fee_amount = fields.Monetary(
+        string="Stripe Terminal Processing Fee",
+        readonly=True,
+        copy=False,
+        tracking=True,
+    )
+    processing_fee_embedded = fields.Boolean(
+        string="Fee Already on Invoice",
+        readonly=True,
+        copy=False,
+    )
+    processing_fee_percentage = fields.Float(readonly=True, copy=False, digits=(16, 4))
+    processing_fee_fixed = fields.Monetary(readonly=True, copy=False)
+    processing_fee_name = fields.Char(readonly=True, copy=False)
+    processing_fee_income_account_id = fields.Many2one(
+        "account.account",
+        readonly=True,
+        copy=False,
+        check_company=True,
+        ondelete="restrict",
+    )
+    processing_fee_tax_ids = fields.Many2many(
+        "account.tax",
+        relation="southern_terminal_payment_fee_tax_rel",
+        column1="payment_id",
+        column2="tax_id",
+        readonly=True,
+        copy=False,
+        check_company=True,
+    )
+    fee_invoice_id = fields.Many2one(
+        "account.move",
+        string="Processing Fee Invoice",
+        readonly=True,
+        copy=False,
+        check_company=True,
+        ondelete="restrict",
+        tracking=True,
+    )
     amount = fields.Monetary(required=True, tracking=True)
     currency_id = fields.Many2one("res.currency", required=True, check_company=True)
     state = fields.Selection(
@@ -87,7 +132,16 @@ class SouthernStripeTerminalPayment(models.Model):
         "The Stripe PaymentIntent is already linked.",
     )
 
-    @api.constrains("invoice_id", "config_id", "currency_id", "amount")
+    @api.constrains(
+        "invoice_id",
+        "config_id",
+        "currency_id",
+        "invoice_amount",
+        "processing_fee_amount",
+        "processing_fee_embedded",
+        "processing_fee_income_account_id",
+        "amount",
+    )
     def _check_payment_identity(self):
         for payment in self:
             if payment.invoice_id.move_type != "out_invoice" or payment.invoice_id.state != "posted":
@@ -100,6 +154,21 @@ class SouthernStripeTerminalPayment(models.Model):
                 raise ValidationError(_("Stripe Terminal payments must use the company's local currency."))
             if payment.amount <= 0:
                 raise ValidationError(_("The terminal payment amount must be positive."))
+            if payment.invoice_amount <= 0:
+                raise ValidationError(_("The invoice balance captured for the terminal must be positive."))
+            if payment.processing_fee_amount < 0:
+                raise ValidationError(_("The Stripe Terminal processing fee cannot be negative."))
+            if (
+                payment.processing_fee_amount
+                and not payment.processing_fee_embedded
+                and not payment.processing_fee_income_account_id
+            ):
+                raise ValidationError(_("The Stripe Terminal processing fee requires an income account."))
+            expected_amount = payment.invoice_amount
+            if not payment.processing_fee_embedded:
+                expected_amount += payment.processing_fee_amount
+            if payment.currency_id.compare_amounts(payment.amount, expected_amount):
+                raise ValidationError(_("The terminal total must equal the invoice balance plus its terminal fee."))
 
     def action_open_form(self):
         self.ensure_one()
@@ -125,6 +194,8 @@ class SouthernStripeTerminalPayment(models.Model):
                 "capture_method": "automatic",
                 "metadata[odoo_terminal_payment_id]": str(self.id),
                 "metadata[odoo_company_id]": str(self.company_id.id),
+                "metadata[odoo_invoice_amount]": str(self.invoice_amount),
+                "metadata[odoo_terminal_fee]": str(self.processing_fee_amount),
             },
             idempotency_key=f"odoo-terminal-intent-{self.idempotency_key}",
         )
@@ -154,7 +225,7 @@ class SouthernStripeTerminalPayment(models.Model):
             raise UserError(_("Only a draft terminal payment can be sent to a reader."))
         if self.invoice_id.payment_state in ("paid", "reversed"):
             raise UserError(_("The invoice is already settled."))
-        if self.currency_id.compare_amounts(self.amount, self.invoice_id.amount_residual):
+        if self.currency_id.compare_amounts(self.invoice_amount, self.invoice_id.amount_residual):
             raise UserError(_("The invoice balance changed. Start a new terminal payment."))
 
         try:
@@ -194,7 +265,7 @@ class SouthernStripeTerminalPayment(models.Model):
         self.ensure_one()
         if self.state != "failed":
             raise UserError(_("Only a failed terminal payment can be retried."))
-        if self.currency_id.compare_amounts(self.amount, self.invoice_id.amount_residual):
+        if self.currency_id.compare_amounts(self.invoice_amount, self.invoice_id.amount_residual):
             raise UserError(_("The invoice balance changed. Cancel this attempt and start a new payment."))
         busy_reader = self.search(
             [("id", "!=", self.id), ("config_id", "=", self.config_id.id), ("state", "=", "in_progress")],
@@ -229,6 +300,52 @@ class SouthernStripeTerminalPayment(models.Model):
             raise UserError(_("No Stripe PaymentIntent is linked to this record."))
         return self.provider_id.sudo()._send_api_request("GET", f"payment_intents/{self.payment_intent_id}")
 
+    def _ensure_processing_fee_invoice(self):
+        self.ensure_one()
+        if self.processing_fee_embedded or self.currency_id.is_zero(self.processing_fee_amount):
+            return self.env["account.move"]
+        fee_invoice = self.fee_invoice_id
+        if not fee_invoice:
+            fee_invoice = self.env["account.move"].search(
+                [("southern_terminal_fee_payment_id", "=", self.id)],
+                limit=1,
+            )
+        if not fee_invoice:
+            fee_invoice = self.env["account.move"].create(
+                {
+                    "move_type": "out_invoice",
+                    "company_id": self.company_id.id,
+                    "journal_id": self.invoice_id.journal_id.id,
+                    "partner_id": self.partner_id.id,
+                    "currency_id": self.currency_id.id,
+                    "invoice_date": fields.Date.context_today(self),
+                    "invoice_origin": self.invoice_id.name,
+                    "ref": _("Stripe Terminal fee for %(invoice)s", invoice=self.invoice_id.name),
+                    "southern_terminal_fee_payment_id": self.id,
+                    "invoice_line_ids": [
+                        Command.create(
+                            {
+                                "name": self.processing_fee_name
+                                or _("Stripe Terminal Processing Fee"),
+                                "quantity": 1.0,
+                                "price_unit": self.processing_fee_amount,
+                                "account_id": self.processing_fee_income_account_id.id,
+                                "tax_ids": [Command.set(self.processing_fee_tax_ids.ids)],
+                                "southern_is_processing_fee": True,
+                                "southern_manual_revenue_bucket": "fees",
+                            }
+                        )
+                    ],
+                }
+            )
+        if fee_invoice.state == "draft":
+            fee_invoice.action_post()
+        if fee_invoice.state != "posted":
+            raise UserError(_("The Stripe Terminal fee invoice could not be posted."))
+        if self.fee_invoice_id != fee_invoice:
+            self.fee_invoice_id = fee_invoice
+        return fee_invoice
+
     def _register_odoo_payment(self):
         self.ensure_one()
         if self.account_payment_id:
@@ -242,7 +359,7 @@ class SouthernStripeTerminalPayment(models.Model):
                 }
             )
             return self.env["account.payment"]
-        if self.currency_id.compare_amounts(self.amount, invoice.amount_residual):
+        if self.currency_id.compare_amounts(self.invoice_amount, invoice.amount_residual):
             self.write(
                 {
                     "state": "needs_review",
@@ -253,10 +370,24 @@ class SouthernStripeTerminalPayment(models.Model):
             )
             return self.env["account.payment"]
 
+        fee_invoice = self._ensure_processing_fee_invoice()
+        invoices = invoice | fee_invoice
+        total_residual = sum(invoices.mapped("amount_residual"))
+        if self.currency_id.compare_amounts(self.amount, total_residual):
+            self.write(
+                {
+                    "state": "needs_review",
+                    "stripe_failure_message": _(
+                        "Stripe succeeded, but the combined invoice and terminal-fee balance changed."
+                    ),
+                }
+            )
+            return self.env["account.payment"]
+
         wizard = (
             self.env["account.payment.register"]
             .with_company(self.company_id)
-            .with_context(active_model="account.move", active_ids=invoice.ids)
+            .with_context(active_model="account.move", active_ids=invoices.ids)
             .create(
                 {
                     "journal_id": self.config_id.journal_id.id,
@@ -284,8 +415,9 @@ class SouthernStripeTerminalPayment(models.Model):
         )
         invoice.message_post(
             body=_(
-                "Stripe Terminal payment completed and registered as %(payment)s.",
+                "Stripe Terminal payment completed and registered as %(payment)s, including a processing fee of %(fee)s.",
                 payment=account_payment.display_name,
+                fee=self.processing_fee_amount,
             )
         )
         return account_payment
@@ -299,7 +431,15 @@ class SouthernStripeTerminalPayment(models.Model):
             payment.write({"stripe_status": status})
             if status == "succeeded":
                 payment.state = "stripe_succeeded"
-                payment._register_odoo_payment()
+                try:
+                    payment._register_odoo_payment()
+                except (UserError, ValidationError) as error:
+                    payment.write(
+                        {
+                            "state": "needs_review",
+                            "stripe_failure_message": str(error),
+                        }
+                    )
             elif status == "canceled":
                 payment.write({"state": "canceled", "completed_at": fields.Datetime.now()})
             elif status in ("requires_payment_method", "requires_confirmation") and payment.state != "in_progress":

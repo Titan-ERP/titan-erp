@@ -8,6 +8,8 @@
                 <field name="invoice_id"/>
                 <field name="partner_id"/>
                 <field name="config_id"/>
+                <field name="invoice_amount" optional="show"/>
+                <field name="processing_fee_amount" optional="show"/>
                 <field name="amount"/>
                 <field name="currency_id" column_invisible="True"/>
                 <field name="state"/>
@@ -37,11 +39,15 @@
                     <group>
                         <group string="Payment">
                             <field name="partner_id" readonly="1"/>
+                            <field name="invoice_amount" readonly="1"/>
+                            <field name="processing_fee_amount" readonly="1"/>
+                            <field name="processing_fee_embedded" readonly="1"/>
                             <field name="amount" readonly="1"/>
                             <field name="currency_id" readonly="1"/>
                             <field name="config_id" readonly="1"/>
                             <field name="provider_state" readonly="1"/>
                             <field name="account_payment_id" readonly="1"/>
+                            <field name="fee_invoice_id" readonly="1"/>
                         </group>
                         <group string="Stripe Status">
                             <field name="payment_intent_id" readonly="1"/>

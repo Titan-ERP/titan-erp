@@ -81,7 +81,7 @@ def test_odoo_19_views_and_constraints_use_current_syntax():
         assert "_sql_constraints" not in source
 
 
-def test_universal_processing_fee_is_configurable_and_disabled_until_account_mapping():
+def test_terminal_processing_fee_is_configurable_and_disabled_until_account_mapping():
     route = (MODULE / "models" / "invoice_payment_route.py").read_text(encoding="utf-8")
     assert 'processing_fee_enabled = fields.Boolean(' in route
     assert 'default=False' in route
@@ -91,28 +91,54 @@ def test_universal_processing_fee_is_configurable_and_disabled_until_account_map
     assert 'processing_fee_tax_ids = fields.Many2many(' in route
 
 
-def test_processing_fee_applies_to_every_customer_invoice_and_is_idempotent():
+def test_processing_fee_is_snapshotted_only_by_terminal_action():
     source = (MODULE / "models" / "account_move.py").read_text(encoding="utf-8")
-    assert 'move.move_type != "out_invoice"' in source
-    assert 'route.processing_fee_percentage / 100.0' in source
+    assert "def _southern_terminal_fee_snapshot(self):" in source
+    assert "fee_snapshot = self._southern_terminal_fee_snapshot()" in source
+    assert "self.amount_residual * route.processing_fee_percentage / 100.0" in source
     assert 'route.processing_fee_fixed' in source
-    assert 'move.amount_total - sum(fee_lines.mapped("price_total"))' in source
-    assert 'fee_lines[:1]' in source
-    assert 'len(fee_lines) > 1' in source
+    assert 'def action_pay_with_cash(self):' in source
+    assert 'def action_pay_with_ach(self):' in source
+    assert "_southern_terminal_fee_snapshot" not in source.split(
+        "def action_pay_with_cash(self):", 1
+    )[1].split("def action_pay_with_ach(self):", 1)[0]
+
+
+def test_ordinary_invoice_lifecycle_never_adds_a_processing_fee():
+    source = (MODULE / "models" / "account_move.py").read_text(encoding="utf-8")
+    assert "def _southern_sync_processing_fee" not in source
+    assert "def action_update_processing_fee" not in source
+    assert "def action_post(self):" not in source
+    assert "@api.model_create_multi" not in source
+
+
+def test_terminal_fee_uses_linked_supplemental_invoice_and_one_native_payment():
+    source = (MODULE / "models" / "stripe_terminal_payment.py").read_text(encoding="utf-8")
+    assert "def _ensure_processing_fee_invoice(self):" in source
+    assert '"southern_terminal_fee_payment_id": self.id' in source
     assert '"southern_is_processing_fee": True' in source
     assert '"southern_manual_revenue_bucket": "fees"' in source
+    assert "fee_invoice.action_post()" in source
+    assert "invoices = invoice | fee_invoice" in source
+    assert 'active_ids=invoices.ids' in source
 
 
-def test_processing_fee_is_finalized_before_posting_and_never_mutates_posted_invoice():
-    source = (MODULE / "models" / "account_move.py").read_text(encoding="utf-8")
-    assert 'move.state != "draft"' in source
-    assert 'def action_post(self):' in source
-    assert 'self._southern_sync_processing_fee(strict=True)' in source
-    assert 'return super().action_post()' in source
+def test_terminal_payment_snapshots_fee_and_prevents_double_charge():
+    source = (MODULE / "models" / "stripe_terminal_payment.py").read_text(encoding="utf-8")
+    assert "processing_fee_embedded = fields.Boolean(" in source
+    assert "processing_fee_percentage = fields.Float(" in source
+    assert "processing_fee_income_account_id = fields.Many2one(" in source
+    assert "if self.processing_fee_embedded or self.currency_id.is_zero(" in source
+    assert "UNIQUE(southern_terminal_fee_payment_id)" in (
+        MODULE / "models" / "account_move.py"
+    ).read_text(encoding="utf-8")
 
 
-def test_processing_fee_is_not_tied_to_terminal_cash_or_ach_route():
-    source = (MODULE / "models" / "account_move.py").read_text(encoding="utf-8")
-    sync_method = source.split("def _southern_sync_processing_fee", 1)[1].split("def create", 1)[0]
-    assert "route_name" not in sync_method
-    assert "provider_state" not in sync_method
+def test_upgrade_removes_only_draft_universal_fee_lines():
+    migration = (
+        MODULE / "migrations" / "19.0.1.3.0" / "post-migrate.py"
+    ).read_text(encoding="utf-8")
+    assert '("move_id.state", "=", "draft")' in migration
+    assert "draft_fee_lines.unlink()" in migration
+    assert "button_draft" not in migration
+    assert "posted" not in migration

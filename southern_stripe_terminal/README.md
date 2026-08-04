@@ -41,9 +41,9 @@ The configured Odoo journal and incoming payment method control payment accounti
 
 ## Transaction processing fee
 
-The company payment-route configuration can apply one universal transaction processing fee to every customer invoice, regardless of whether the customer pays by Terminal, online Stripe, cash, or ACH. The default formula is 3.5% of the complete invoice total before the fee, including sales tax, plus $0.30. The fee is represented as a separate invoice line and posts to the explicitly configured fee-income account.
+The company payment-route configuration applies the fee only when an employee clicks **Pay with Terminal**. Cash, ACH, ordinary invoices, and online payment links do not receive it. The default formula is 3.5% of the outstanding invoice balance, including sales tax, plus $0.30.
 
-The feature is disabled on module upgrade until an accountant selects the fee-income account and any applicable fee taxes. Draft invoices synchronize the line as they are edited, the operator can force an update with **Update Processing Fee**, and posting performs a final exact recalculation. Posted invoices are never silently changed.
+The terminal payment snapshots the percentage, fixed amount, income account, and tax selection before sending the total to Stripe. After Stripe succeeds, Odoo creates and posts one linked fee-only invoice, then registers one native payment across the original invoice and the fee invoice. This keeps the posted customer invoice immutable while giving the fee a separate revenue line and an idempotent accounting trail. If a legacy posted invoice already contains a processing-fee line, the terminal reuses that amount and does not charge a second fee.
 
 ## Hardware cutover
 

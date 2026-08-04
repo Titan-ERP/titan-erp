@@ -1,4 +1,4 @@
-from odoo import Command, _, api, fields, models
+from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
 
@@ -9,6 +9,20 @@ class AccountMove(models.Model):
         string="Transaction Processing Fee",
         compute="_compute_southern_processing_fee_amount",
         currency_field="currency_id",
+    )
+    southern_terminal_fee_payment_id = fields.Many2one(
+        "southern.stripe.terminal.payment",
+        string="Stripe Terminal Fee Payment",
+        readonly=True,
+        copy=False,
+        index=True,
+        ondelete="restrict",
+        help="Terminal payment that created this supplemental processing-fee invoice.",
+    )
+
+    _southern_terminal_fee_payment_unique = models.Constraint(
+        "UNIQUE(southern_terminal_fee_payment_id)",
+        "A Stripe Terminal payment can create only one processing-fee invoice.",
     )
 
     @api.depends(
@@ -31,74 +45,44 @@ class AccountMove(models.Model):
             limit=1,
         )
 
-    def _southern_sync_processing_fee(self, *, strict=False):
-        if self.env.context.get("southern_skip_processing_fee_sync"):
-            return
-        for move in self:
-            if move.move_type != "out_invoice" or move.state != "draft":
-                continue
-            route = move._southern_processing_fee_route()
-            fee_lines = move.invoice_line_ids.filtered("southern_is_processing_fee")
-            if not route:
-                if fee_lines:
-                    fee_lines.with_context(southern_skip_processing_fee_sync=True).unlink()
-                continue
-            if not route.processing_fee_income_account_id:
-                if strict:
-                    raise UserError(_("Configure the transaction processing fee income account before posting."))
-                continue
-
-            base_total = move.amount_total - sum(fee_lines.mapped("price_total"))
-            fee_amount = 0.0
-            if move.currency_id.compare_amounts(base_total, 0.0) > 0:
-                fee_amount = move.currency_id.round(
-                    (base_total * route.processing_fee_percentage / 100.0) + route.processing_fee_fixed
-                )
-
-            if move.currency_id.is_zero(fee_amount):
-                if fee_lines:
-                    fee_lines.with_context(southern_skip_processing_fee_sync=True).unlink()
-                continue
-
-            line_values = {
-                "name": route.processing_fee_name,
-                "quantity": 1.0,
-                "price_unit": fee_amount,
-                "account_id": route.processing_fee_income_account_id.id,
-                "tax_ids": [Command.set(route.processing_fee_tax_ids.ids)],
-                "southern_is_processing_fee": True,
-                "southern_manual_revenue_bucket": "fees",
-                "sequence": 999,
-            }
+    def _southern_terminal_fee_snapshot(self):
+        """Return the fee captured only when a Stripe Terminal payment starts."""
+        self.ensure_one()
+        fee_lines = self.invoice_line_ids.filtered("southern_is_processing_fee")
+        embedded_fee = sum(fee_lines.mapped("price_total"))
+        if not self.currency_id.is_zero(embedded_fee):
             primary_line = fee_lines[:1]
-            if primary_line:
-                primary_line.with_context(southern_skip_processing_fee_sync=True).write(line_values)
-                if len(fee_lines) > 1:
-                    (fee_lines - primary_line).with_context(southern_skip_processing_fee_sync=True).unlink()
-            else:
-                move.with_context(southern_skip_processing_fee_sync=True).write(
-                    {"invoice_line_ids": [Command.create(line_values)]}
-                )
+            return {
+                "processing_fee_amount": embedded_fee,
+                "processing_fee_embedded": True,
+                "processing_fee_name": primary_line.name or _("Stripe Terminal Processing Fee"),
+                "processing_fee_income_account_id": primary_line.account_id.id,
+                "processing_fee_tax_ids": primary_line.tax_ids.ids,
+                "processing_fee_percentage": 0.0,
+                "processing_fee_fixed": 0.0,
+            }
 
-    @api.model_create_multi
-    def create(self, vals_list):
-        moves = super().create(vals_list)
-        moves._southern_sync_processing_fee()
-        return moves
-
-    def write(self, vals):
-        result = super().write(vals)
-        if "invoice_line_ids" in vals and not self.env.context.get("southern_skip_processing_fee_sync"):
-            self._southern_sync_processing_fee()
-        return result
-
-    def action_update_processing_fee(self):
-        self._southern_sync_processing_fee(strict=True)
-        return True
-
-    def action_post(self):
-        self._southern_sync_processing_fee(strict=True)
-        return super().action_post()
+        route = self._southern_processing_fee_route()
+        if not route:
+            return {
+                "processing_fee_amount": 0.0,
+                "processing_fee_embedded": False,
+            }
+        if not route.processing_fee_income_account_id:
+            raise UserError(_("Configure the Stripe Terminal fee income account before collecting payment."))
+        fee_amount = self.currency_id.round(
+            (self.amount_residual * route.processing_fee_percentage / 100.0)
+            + route.processing_fee_fixed
+        )
+        return {
+            "processing_fee_amount": fee_amount,
+            "processing_fee_embedded": False,
+            "processing_fee_name": route.processing_fee_name,
+            "processing_fee_income_account_id": route.processing_fee_income_account_id.id,
+            "processing_fee_tax_ids": route.processing_fee_tax_ids.ids,
+            "processing_fee_percentage": route.processing_fee_percentage,
+            "processing_fee_fixed": route.processing_fee_fixed,
+        }
 
     def _southern_validate_payment_invoice(self):
         self.ensure_one()
@@ -175,11 +159,29 @@ class AccountMove(models.Model):
                 )
             )
 
+        fee_snapshot = self._southern_terminal_fee_snapshot()
+        invoice_amount = self.amount_residual
+        fee_amount = fee_snapshot.get("processing_fee_amount", 0.0)
+        terminal_amount = invoice_amount
+        if not fee_snapshot.get("processing_fee_embedded"):
+            terminal_amount += fee_amount
         terminal_payment = self.env["southern.stripe.terminal.payment"].create(
             {
                 "invoice_id": self.id,
                 "config_id": config.id,
-                "amount": self.amount_residual,
+                "invoice_amount": invoice_amount,
+                "processing_fee_amount": fee_amount,
+                "processing_fee_embedded": fee_snapshot.get("processing_fee_embedded", False),
+                "processing_fee_name": fee_snapshot.get("processing_fee_name"),
+                "processing_fee_income_account_id": fee_snapshot.get(
+                    "processing_fee_income_account_id"
+                ),
+                "processing_fee_tax_ids": [
+                    (6, 0, fee_snapshot.get("processing_fee_tax_ids", []))
+                ],
+                "processing_fee_percentage": fee_snapshot.get("processing_fee_percentage", 0.0),
+                "processing_fee_fixed": fee_snapshot.get("processing_fee_fixed", 0.0),
+                "amount": self.currency_id.round(terminal_amount),
                 "currency_id": self.currency_id.id,
             }
         )
