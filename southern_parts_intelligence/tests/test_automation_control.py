@@ -96,12 +96,16 @@ class TestAutomationControl(TransactionCase):
         self.sync.action_approve()
         self.sync.action_enable_continuous_release()
 
+        cron = self.env.ref("southern_parts_intelligence.ir_cron_southern_parts_catalog_sync")
         run_id = self.sync._run_one_batch()
         run = self.env["southern.parts.automation.run"].browse(run_id)
 
         self.assertTrue(self.sync.continuous_release_enabled)
         self.assertTrue(self.sync.internal_cron_enabled)
         self.assertEqual(self.sync.approval_state, "approved")
+        self.assertTrue(cron.active)
+        self.assertEqual(cron.interval_number, 1)
+        self.assertEqual(cron.interval_type, "minutes")
         self.assertEqual(run.job_type, "sparex_discovery")
         self.assertEqual(run.requested_count, 5)
 

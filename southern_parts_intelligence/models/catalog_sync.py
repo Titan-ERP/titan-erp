@@ -130,7 +130,7 @@ class SouthernPartsCatalogSync(models.Model):
                 }
             )
         if cron:
-            cron.sudo().write({"active": True, "interval_number": 5, "interval_type": "minutes"})
+            cron.sudo().write({"active": True, "interval_number": 1, "interval_type": "minutes"})
         return True
 
     def action_disable_continuous_release(self):
