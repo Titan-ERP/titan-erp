@@ -157,6 +157,18 @@ def warning_cooldown_minutes(output: str) -> int:
     return 60 if any(re.search(pattern, normalized) for pattern in WARNING_PATTERNS) else 0
 
 
+def result_cooldown_minutes(result: dict[str, Any]) -> int:
+    """Inspect only explicit warning fields in a successful structured result."""
+    cost_recovery = dict(result.get("cost_recovery") or {})
+    if cost_recovery.get("state") == "portal_cooldown" or cost_recovery.get("write_blocked") is True:
+        return 60
+    warning_text = " ".join(
+        str(result.get(key) or "")
+        for key in ("error", "error_code", "warning", "warning_code")
+    )
+    return warning_cooldown_minutes(warning_text)
+
+
 def finish_values(result: dict[str, Any]) -> dict[str, Any]:
     artifact_uri = result.get("result_uri") or ""
     cost_recovery = dict(result.get("cost_recovery") or {})
@@ -256,7 +268,7 @@ def main() -> int:
             )
             sys.stderr.write(completed.stderr)
             return completed.returncode
-        result_cooldown = warning_cooldown_minutes(json.dumps(result, sort_keys=True))
+        result_cooldown = result_cooldown_minutes(result)
         if result_cooldown:
             client.call(
                 "southern.parts.automation.run",
