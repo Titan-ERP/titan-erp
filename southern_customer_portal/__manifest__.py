@@ -1,6 +1,6 @@
 {
     "name": "Southern Customer Portal",
-    "version": "19.0.1.0.20",
+    "version": "19.0.1.0.21",
     "category": "Website/Portal",
     "summary": "Customer portal pages for memberships, outstanding repair orders, and invoices.",
     "author": "Southern Equipment Company",
