@@ -8,6 +8,7 @@ from scripts.odoo_product_dispatch_worker import (
     build_job_command,
     finish_values,
     resolve_discovery_run_key,
+    result_cooldown_minutes,
     warning_cooldown_minutes,
 )
 
@@ -191,6 +192,28 @@ class OdooProductDispatchWorkerTests(unittest.TestCase):
             with self.subTest(warning=warning):
                 self.assertEqual(warning_cooldown_minutes(warning), 60)
         self.assertEqual(warning_cooldown_minutes("validation error"), 0)
+
+    def test_success_result_ignores_warning_like_candidate_values(self):
+        result = {
+            "cost_recovery": {"state": "completed", "claimed": 5, "applied": 5},
+            "candidates": [
+                {
+                    "product_id": 500,
+                    "public_url": "https://example.com/shop/part-503",
+                    "http_status": 200,
+                }
+            ],
+            "published": 5,
+            "failed": False,
+        }
+        self.assertEqual(result_cooldown_minutes(result), 0)
+
+    def test_structured_result_warning_enforces_cooldown(self):
+        self.assertEqual(
+            result_cooldown_minutes({"cost_recovery": {"state": "portal_cooldown"}}),
+            60,
+        )
+        self.assertEqual(result_cooldown_minutes({"error_code": "portal_http_503"}), 60)
 
     def test_systemd_worker_is_poll_only_and_installer_disables_old_timer(self):
         root = Path(__file__).resolve().parents[1]
