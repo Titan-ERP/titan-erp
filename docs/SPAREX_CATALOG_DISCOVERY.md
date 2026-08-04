@@ -135,6 +135,13 @@ cooldown and next-run timing, and requires an approved workflow before it can
 queue product application or publication. The standalone catalog-agent timer
 must remain disabled so there is one non-overlapping execution path.
 
+While a full discovery run is still in progress, Odoo alternates a successful
+five-page discovery checkpoint with one eligible five-product update and
+release batch whenever the current queue contains actionable products. The
+next turn returns to discovery. This keeps verified products moving to the
+website without waiting for the entire catalog frontier, while retaining the
+same source, cost, price, image, readiness, cooldown, and publication gates.
+
 After upgrading the Odoo module and deploying the worker runtime, install the
 units with `cloud/aws/install-product-dispatch-worker.sh`. In Odoo, open
 **Sparex Product Update Orchestrator**, select **Request Approval**, approve the
