@@ -54,7 +54,7 @@ class SouthernInvoicePaymentRoute(models.Model):
     processing_fee_enabled = fields.Boolean(
         string="Apply Stripe Terminal Processing Fee",
         default=False,
-        help="Adds the processing fee only when Pay with Terminal starts a Stripe Terminal payment.",
+        help="Adds the processing fee only when an invoice's Payment Type is Stripe Terminal.",
     )
     processing_fee_percentage = fields.Float(
         string="Processing Fee Percentage",

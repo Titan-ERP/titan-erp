@@ -44,6 +44,9 @@
                         invisible="move_type != 'out_invoice' or state != 'posted' or payment_state in ('paid', 'reversed') or amount_residual &lt;= 0"/>
             </xpath>
             <xpath expr="//field[@name='invoice_payment_term_id']" position="after">
+                <field name="southern_payment_type"
+                       readonly="state != 'draft'"
+                       invisible="move_type != 'out_invoice'"/>
                 <field name="southern_processing_fee_amount"
                        readonly="1"
                        invisible="move_type != 'out_invoice' or southern_processing_fee_amount == 0"/>

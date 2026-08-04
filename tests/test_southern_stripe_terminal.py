@@ -61,6 +61,8 @@ def test_invoice_replaces_pay_with_three_explicit_payment_routes():
     assert 'string="Pay with Terminal"' in view
     assert 'string="Pay with Cash"' in view
     assert 'string="Pay with ACH"' in view
+    assert 'name="southern_payment_type"' in view
+    assert 'readonly="state != \'draft\'"' in view
 
 
 def test_cash_and_ach_reuse_native_payment_registration():
@@ -104,12 +106,29 @@ def test_processing_fee_is_snapshotted_only_by_terminal_action():
     )[1].split("def action_pay_with_ach(self):", 1)[0]
 
 
-def test_ordinary_invoice_lifecycle_never_adds_a_processing_fee():
+def test_manual_payment_type_controls_the_draft_fee_line():
     source = (MODULE / "models" / "account_move.py").read_text(encoding="utf-8")
-    assert "def _southern_sync_processing_fee" not in source
+    assert "southern_payment_type = fields.Selection(" in source
+    assert '("stripe_terminal", "Stripe Terminal")' in source
+    assert '("cash", "Cash")' in source
+    assert '("ach", "ACH")' in source
+    assert '("online_link", "Online Payment Link")' in source
+    assert "def _southern_sync_terminal_fee_line" in source
+    assert "if move.southern_terminal_fee_payment_id:" in source
+    assert 'move.southern_payment_type != "stripe_terminal"' in source
+    assert "fee_lines.with_context(southern_skip_processing_fee_sync=True).unlink()" in source
+    assert '"southern_is_processing_fee": True' in source
     assert "def action_update_processing_fee" not in source
-    assert "def action_post(self):" not in source
-    assert "@api.model_create_multi" not in source
+    assert "def action_post(self):" in source
+    assert "self._southern_sync_terminal_fee_line(strict=True)" in source
+    assert "@api.model_create_multi" in source
+
+
+def test_payment_buttons_honor_the_manual_payment_type():
+    source = (MODULE / "models" / "account_move.py").read_text(encoding="utf-8")
+    assert "def _southern_validate_selected_payment_type(self, payment_type):" in source
+    assert 'self._southern_validate_selected_payment_type("stripe_terminal")' in source
+    assert 'self._southern_validate_selected_payment_type(route_name)' in source
 
 
 def test_terminal_fee_uses_linked_supplemental_invoice_and_one_native_payment():
