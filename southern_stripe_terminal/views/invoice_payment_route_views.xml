@@ -39,7 +39,7 @@
                             <field name="ach_payment_method_line_id"/>
                         </group>
                     </group>
-                    <group string="Transaction Processing Fee">
+                    <group string="Stripe Terminal Processing Fee">
                         <field name="processing_fee_enabled"/>
                         <field name="processing_fee_name" invisible="not processing_fee_enabled"/>
                         <field name="processing_fee_percentage" invisible="not processing_fee_enabled"/>
@@ -52,7 +52,7 @@
                         Cash and ACH open Odoo's native Register Payment wizard with the selected journal and incoming payment method. The operator reviews and confirms the payment before it is posted.
                     </div>
                     <div class="alert alert-info" role="status" invisible="not processing_fee_enabled">
-                        The transaction processing fee applies to every customer invoice regardless of payment route. It is calculated on the complete invoice total, including sales tax, before the fee itself.
+                        This fee is charged only when Pay with Terminal starts a Stripe Terminal payment. Cash, ACH, ordinary invoices, and online payment links do not receive this fee. It is calculated from the outstanding invoice balance, including sales tax.
                     </div>
                 </sheet>
             </form>

@@ -52,9 +52,9 @@ class SouthernInvoicePaymentRoute(models.Model):
         relation="southern_invoice_payment_route_ach_method_rel",
     )
     processing_fee_enabled = fields.Boolean(
-        string="Apply Transaction Processing Fee",
+        string="Apply Stripe Terminal Processing Fee",
         default=False,
-        help="Adds one transaction processing fee to every draft customer invoice for this company.",
+        help="Adds the processing fee only when Pay with Terminal starts a Stripe Terminal payment.",
     )
     processing_fee_percentage = fields.Float(
         string="Processing Fee Percentage",
@@ -76,7 +76,7 @@ class SouthernInvoicePaymentRoute(models.Model):
         string="Processing Fee Income Account",
         check_company=True,
         domain="[('account_type', 'in', ['income', 'income_other']), ('company_ids', 'in', company_id)]",
-        help="Revenue account used for the separately itemized transaction processing fee.",
+        help="Revenue account used for the separately itemized Stripe Terminal processing fee.",
     )
     processing_fee_tax_ids = fields.Many2many(
         "account.tax",

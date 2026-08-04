@@ -24,12 +24,6 @@
                 )</attribute>
             </xpath>
             <xpath expr="//header" position="inside">
-                <button name="action_update_processing_fee"
-                        string="Update Processing Fee"
-                        type="object"
-                        class="btn-secondary"
-                        groups="account.group_account_invoice"
-                        invisible="move_type != 'out_invoice' or state != 'draft'"/>
                 <button name="action_pay_with_stripe_terminal"
                         string="Pay with Terminal"
                         type="object"
