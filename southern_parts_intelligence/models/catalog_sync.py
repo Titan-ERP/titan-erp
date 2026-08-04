@@ -65,7 +65,23 @@ class SouthernPartsCatalogSync(models.Model):
 
     def action_queue_approved_apply(self):
         for sync in self:
-            sync.sudo()._queue_sparex_dispatch("apply")
+            sync = sync.sudo()
+            if sync.mode != "sparex_discovery" or sync.approval_state != "approved":
+                raise UserError("Sparex apply and publication require an approved workflow.")
+            schedule_was_enabled = sync.internal_cron_enabled
+            if not schedule_was_enabled:
+                sync.write({"internal_cron_enabled": True, "state": "idle"})
+            try:
+                sync._queue_sparex_dispatch("apply")
+            finally:
+                if not schedule_was_enabled:
+                    sync.write(
+                        {
+                            "internal_cron_enabled": False,
+                            "state": "paused",
+                            "last_message": "Approved product release queued; recurring scheduling remains disabled.",
+                        }
+                    )
         return True
 
     def action_enable_dispatch_schedule(self):
