@@ -11,6 +11,7 @@ class SaleOrder(models.Model):
     SOUTHERN_CARD_FEE_FIXED = 0.30
     SOUTHERN_PICKUP_CARRIER = "Pickup at Southern Equipment"
     SOUTHERN_SHIP_CARRIER = "Shipping reviewed after order confirmation"
+    SOUTHERN_DIRECT_SHIP_CARRIER = "Direct shipping reviewed after order confirmation"
     SOUTHERN_LEGACY_SHIP_CARRIERS = ("Flat-rate shipping from Southern Equipment",)
     SOUTHERN_PARTS_PORTAL_TAG = "Website Parts Order"
     SOUTHERN_MIN_PARTS_MARGIN_RATE = 0.15
@@ -486,6 +487,7 @@ class SaleOrder(models.Model):
         Route = self.env["stock.route"].sudo()
         buy_route = Route.search([("name", "=", "Buy")], limit=1)
         mto_route = Route.search([("name", "=", "Replenish on Order (MTO)")], limit=1)
+        dropship_route = Route.search([("name", "=", "Dropship")], limit=1)
 
         vendor_to_southern_routes = (mto_route | buy_route).ids
 
@@ -501,16 +503,19 @@ class SaleOrder(models.Model):
             is_pickup = order.carrier_id.name == self.SOUTHERN_PICKUP_CARRIER
             is_ship = order.carrier_id.name in (
                 self.SOUTHERN_SHIP_CARRIER,
+                self.SOUTHERN_DIRECT_SHIP_CARRIER,
                 *self.SOUTHERN_LEGACY_SHIP_CARRIERS,
             )
             if not is_pickup and not is_ship:
                 continue
 
-            if not vendor_to_southern_routes:
+            is_direct_ship = is_ship and bool(dropship_route)
+            target_routes = dropship_route.ids if is_direct_ship else vendor_to_southern_routes
+            if not target_routes:
                 order.message_post(
                     body=(
                         "Website parts order could not be routed to purchasing because "
-                        "the Buy and Replenish on Order routes were not found."
+                        "the required fulfillment routes were not found."
                     )
                 )
                 continue
@@ -527,16 +532,21 @@ class SaleOrder(models.Model):
                 if not product.purchase_ok or not product.seller_ids:
                     skipped_lines |= line
                     continue
-                line.route_ids = [(6, 0, vendor_to_southern_routes)]
+                line.route_ids = [(6, 0, target_routes)]
                 routed_lines |= line
 
             if routed_lines:
+                route_note = (
+                    "direct supplier shipment to the customer delivery address"
+                    if is_direct_ship
+                    else "receipt at Southern Equipment before customer fulfillment"
+                )
                 order.message_post(
                     body=(
                         "Website parts fulfillment: routed %s line(s) to vendor purchasing "
-                        "for receipt at Southern Equipment before customer fulfillment."
+                        "for %s."
                     )
-                    % len(routed_lines)
+                    % (len(routed_lines), route_note)
                 )
             if skipped_lines:
                 order.message_post(
@@ -558,13 +568,45 @@ class SaleOrder(models.Model):
                 continue
 
             carrier_note = order.carrier_id.name or "No delivery method selected"
+            is_direct_ship = carrier_note in (
+                self.SOUTHERN_SHIP_CARRIER,
+                self.SOUTHERN_DIRECT_SHIP_CARRIER,
+                *self.SOUTHERN_LEGACY_SHIP_CARRIERS,
+            )
+            shipping_partner = order.partner_shipping_id
+            shipping_lines = [
+                shipping_partner.display_name,
+                shipping_partner.street,
+                shipping_partner.street2,
+                ", ".join(
+                    part
+                    for part in [
+                        shipping_partner.city,
+                        shipping_partner.state_id.code,
+                        shipping_partner.zip,
+                    ]
+                    if part
+                ),
+                shipping_partner.country_id.name,
+                shipping_partner.phone,
+                shipping_partner.email,
+            ]
+            shipping_note = "\n".join(line for line in shipping_lines if line)
+            fulfillment_rule = (
+                "Fulfillment rule: after Southern review, supplier should ship directly "
+                "to the customer delivery address below when supplier direct shipment "
+                "is available."
+                if is_direct_ship
+                else "Fulfillment rule: order vendor stock to Southern Equipment first; "
+                "then fulfill pickup from Southern."
+            )
             note = (
                 "Website Parts Order\n"
                 f"Customer order: {order.name}\n"
                 f"Customer: {order.partner_id.display_name}\n"
                 f"Delivery choice: {carrier_note}\n"
-                "Fulfillment rule: order vendor stock to Southern Equipment first; "
-                "then fulfill pickup or customer shipment from Southern."
+                f"{fulfillment_rule}\n"
+                f"Customer delivery address:\n{shipping_note}"
             )
             note_html = "<br/>".join(html_escape(line) for line in note.splitlines())
             for purchase_order in purchase_orders:

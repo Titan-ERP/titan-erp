@@ -35,6 +35,7 @@ class StockPicking(models.Model):
                 is_pickup = sale_order.carrier_id.name == sale_order.SOUTHERN_PICKUP_CARRIER
                 is_reviewed_shipping = sale_order.carrier_id.name in (
                     sale_order.SOUTHERN_SHIP_CARRIER,
+                    sale_order.SOUTHERN_DIRECT_SHIP_CARRIER,
                     *sale_order.SOUTHERN_LEGACY_SHIP_CARRIERS,
                 )
 
@@ -59,7 +60,7 @@ class StockPicking(models.Model):
                         )
                     continue
 
-                if picking_type == "outgoing" and is_reviewed_shipping:
+                if picking_type in ("outgoing", "dropship") and is_reviewed_shipping:
                     if picking.state == "assigned":
                         sale_order._southern_set_parts_review_state(
                             "shipping_in_progress",
