@@ -40,7 +40,7 @@ class ProductTemplate(models.Model):
     southern_source_url = fields.Char(string="Source URL", index=True)
     southern_source_name = fields.Char(string="Source Name", index=True)
     southern_partner_price = fields.Float(
-        string="Partner Cost",
+        string="Partner Price",
         digits="Product Price",
         company_dependent=True,
         help=(
@@ -173,7 +173,7 @@ class ProductTemplate(models.Model):
     def _check_southern_partner_price(self):
         for product in self:
             if product.southern_partner_price < 0:
-                raise ValidationError("Partner Cost cannot be negative.")
+                raise ValidationError("Partner Price cannot be negative.")
 
     @api.model_create_multi
     def create(self, vals_list):
