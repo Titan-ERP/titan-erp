@@ -32,6 +32,14 @@ class SparexPublicationSafeguardTests(unittest.TestCase):
         product["southern_source_url"] = "https://example.com/sparex"
         self.assertIn("missing_verified_sparex_source", publication_blockers(product, [10.0]))
 
+    def test_placeholder_customer_description_is_blocked(self):
+        product = self.base_product()
+        product["description_ecommerce"] = (
+            "Internal catalog record. Not published to the website until pricing, "
+            "description, and product media are reviewed."
+        )
+        self.assertIn("placeholder_customer_description", publication_blockers(product, [10.0]))
+
 
 if __name__ == "__main__":
     unittest.main()

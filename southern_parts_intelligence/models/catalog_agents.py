@@ -33,6 +33,11 @@ MAX_AGENT_BATCH = 50
 SPAREX_HOSTS = {"us.sparex.com"}
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 SPAREX_SKU_PATTERN = re.compile(r"^S[.\s-]?0*(\d+)$", re.IGNORECASE)
+MIN_CUSTOMER_READY_PRICE = 1.49
+PLACEHOLDER_DESCRIPTION_MARKERS = (
+    "internal catalog record",
+    "not published to the website until",
+)
 
 
 def normalized_sparex_sku(value):
@@ -58,6 +63,82 @@ def exact_sparex_url(value, normalized_sku):
 def canonical_sha256(value):
     canonical = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def customer_description_ready(product):
+    descriptions = " ".join(
+        str(product[field_name] or "")
+        for field_name in ("description_ecommerce", "website_description", "description_sale")
+        if field_name in product._fields
+    )
+    plain_text = re.sub(r"<[^>]+>", " ", descriptions)
+    normalized = " ".join(plain_text.casefold().split())
+    return bool(normalized) and not any(marker in normalized for marker in PLACEHOLDER_DESCRIPTION_MARKERS)
+
+
+def sales_price_blocker(product, supplier):
+    sale_price = float(product.list_price or 0.0)
+    if isinstance(supplier, (int, float)):
+        supplier_cost = float(supplier)
+    else:
+        supplier_cost = float(supplier.price or 0.0) if supplier else 0.0
+    if sale_price <= MIN_CUSTOMER_READY_PRICE:
+        return "placeholder_sales_price"
+    if supplier_cost > 0 and sale_price <= supplier_cost:
+        return "sales_price_not_above_supplier_cost"
+    return ""
+
+
+def sparex_publication_blockers(product, supplier, normalized_sku=None):
+    normalized = normalized_sparex_sku(normalized_sku or product.default_code)
+    blockers = []
+    if not normalized:
+        blockers.append("invalid_sparex_sku")
+    if not product.active:
+        blockers.append("product_archived")
+    if not product.sale_ok:
+        blockers.append("product_not_saleable")
+    if not supplier:
+        blockers.append("missing_positive_sparex_cost")
+    price_blocker = sales_price_blocker(product, supplier)
+    if price_blocker:
+        blockers.append(price_blocker)
+    if not exact_sparex_url(product.southern_source_url, normalized):
+        blockers.append("missing_exact_sparex_url")
+    if not product.image_1920:
+        blockers.append("missing_image")
+    if not product.public_categ_ids:
+        blockers.append("missing_website_category")
+    if not customer_description_ready(product):
+        blockers.append("missing_customer_description")
+    return blockers
+
+
+class ProductTemplate(models.Model):
+    _inherit = "product.template"
+
+    @api.constrains("is_published", "website_published")
+    def _check_sparex_publication_readiness(self):
+        SupplierInfo = self.env["product.supplierinfo"].sudo()
+        for product in self.filtered(
+            lambda record: (record.website_published or record.is_published)
+            and bool(normalized_sparex_sku(record.default_code))
+        ):
+            supplier = SupplierInfo.search(
+                [
+                    ("product_tmpl_id", "=", product.id),
+                    ("partner_id.name", "=ilike", "Sparex"),
+                    ("price", ">", 0),
+                ],
+                order="id",
+                limit=1,
+            )
+            blockers = sparex_publication_blockers(product, supplier)
+            if blockers:
+                raise ValidationError(
+                    _("Sparex product %(sku)s cannot be published: %(blockers)s")
+                    % {"sku": product.default_code, "blockers": ", ".join(blockers)}
+                )
 
 
 class SouthernCatalogAgent(models.Model):
@@ -324,8 +405,10 @@ class SouthernCatalogAgentTask(models.Model):
 
             has_cost = has_sales_price = has_url = has_image = is_hidden = False
             if product:
-                has_cost = bool(task._positive_sparex_supplier(product))
-                has_sales_price = product.list_price > 0
+                supplier = task._positive_sparex_supplier(product)
+                has_cost = bool(supplier)
+                price_blocker = sales_price_blocker(product, supplier)
+                has_sales_price = not bool(price_blocker)
                 has_url = exact_sparex_url(product.southern_source_url, normalized)
                 has_image = bool(product.image_1920)
                 is_hidden = not bool(product.website_published)
@@ -335,12 +418,16 @@ class SouthernCatalogAgentTask(models.Model):
                     blockers.append("already_published")
                 if not has_cost:
                     blockers.append("missing_positive_sparex_cost")
-                if not has_sales_price:
-                    blockers.append("missing_positive_sales_price")
+                if price_blocker:
+                    blockers.append(price_blocker)
                 if not has_url:
                     blockers.append("missing_exact_sparex_url")
                 if not has_image:
                     blockers.append("missing_image")
+                if not product.public_categ_ids:
+                    blockers.append("missing_website_category")
+                if not customer_description_ready(product):
+                    blockers.append("missing_customer_description")
                 if not task._current_discovery_item(product, normalized):
                     blockers.append("missing_current_discovery_evidence")
 
@@ -352,6 +439,8 @@ class SouthernCatalogAgentTask(models.Model):
                 and has_sales_price
                 and has_url
                 and has_image
+                and product.public_categ_ids
+                and customer_description_ready(product)
                 and task._current_discovery_item(product, normalized)
             )
             snapshot = {

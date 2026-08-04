@@ -10,7 +10,7 @@ import argparse
 import csv
 import json
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -51,6 +51,7 @@ def publication_blockers(product: dict[str, Any], supplier_prices: list[float]) 
         for field in ("description_ecommerce", "website_description", "description_sale")
         if field in product
     ]
+    normalized_descriptions = " ".join(descriptions).casefold()
 
     if verified_cost <= 0:
         blockers.append("missing_positive_supplier_cost")
@@ -64,8 +65,10 @@ def publication_blockers(product: dict[str, Any], supplier_prices: list[float]) 
         blockers.append("missing_website_category")
     if not product.get("image_1920"):
         blockers.append("missing_image")
-    if descriptions and not any(descriptions):
+    if not any(descriptions):
         blockers.append("missing_customer_description")
+    elif "internal catalog record" in normalized_descriptions or "not published to the website until" in normalized_descriptions:
+        blockers.append("placeholder_customer_description")
     return blockers
 
 
@@ -221,7 +224,7 @@ def write_snapshot(path: Path, target: list[dict[str, Any]], *, scope: str) -> N
         "schema_version": "1.0",
         "workflow": WORKFLOW,
         "scope": scope,
-        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "created_at_utc": datetime.now(UTC).isoformat(),
         "records": target,
     }
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -295,7 +298,7 @@ def main() -> int:
         return restore_from_snapshot(args, models, db, uid, key)
 
     target, publish_fields = collect_target(models, db, uid, key, scope=args.scope)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     snapshot = REPORT_DIR / f"sparex_publication_snapshot_{args.scope}_{stamp}.json"
     report = REPORT_DIR / f"sparex_publication_safeguard_{args.scope}_{stamp}.csv"
     write_snapshot(snapshot, target, scope=args.scope)
