@@ -80,6 +80,58 @@ class TestSparexDiscovery(TransactionCase):
         self.assertEqual(by_sku["S.999999"].creation_state, "review_required")
         self.assertEqual(self.env["product.template"].with_context(active_test=False).search_count([]), product_count)
 
+    def test_dashboard_uses_live_product_publication_instead_of_stale_item_flag(self):
+        product = self.env["product.template"].create(
+            {"name": "Live publication state test", "default_code": "S.165552", "active": True}
+        )
+        seed_url = "https://us.sparex.com/products?p=1"
+        run_values = self.env["southern.sparex.discovery.run"].start_discovery_run(
+            {
+                "idempotency_key": "test-live-dashboard-publication-state",
+                "seed_url": seed_url,
+                "seed_url_sha256": hashlib.sha256(seed_url.encode()).hexdigest(),
+                "plan_artifact_uri": "s3://test-bucket/discovery/live-dashboard-plan.json",
+                "plan_sha256": "d" * 64,
+                "parser_version": "test-listing-v1",
+                "throttle_seconds": 3,
+            }
+        )
+        self.env["southern.sparex.discovery.run"].claim_discovery_checkpoint(
+            run_values["id"], "dashboard-test-worker", 180
+        )
+        self.env["southern.sparex.discovery.run"].record_discovery_page(
+            run_values["id"],
+            "dashboard-test-worker",
+            {
+                "page_url": seed_url,
+                "page_sha256": "e" * 64,
+                "artifact_uri": "s3://test-bucket/discovery/live-dashboard-page.json",
+                "artifact_sha256": "f" * 64,
+                "next_url": "",
+                "items": [
+                    {
+                        "sku": "S.165552",
+                        "source_url": "https://us.sparex.com/filter-165552.html",
+                        "image_url": "https://cdn.example.com/165552.jpg",
+                        "source_state": "verified",
+                    }
+                ],
+            },
+        )
+        run = self.env["southern.sparex.discovery.run"].browse(run_values["id"])
+        item = self.env["southern.sparex.discovery.item"].search(
+            [("last_seen_run_id", "=", run.id), ("normalized_sku", "=", "S.165552")]
+        )
+
+        item.currently_published = True
+        run.invalidate_recordset(["published_product_count", "blocked_item_count"])
+        self.assertEqual(run.published_product_count, 0)
+
+        product.website_published = True
+        item.currently_published = False
+        run.invalidate_recordset(["published_product_count", "blocked_item_count"])
+        self.assertEqual(run.published_product_count, 1)
+
     def test_listing_frontier_advances_without_opening_product_pages(self):
         seed_url = "https://us.sparex.com/"
         category_url = "https://us.sparex.com/engine-filters.html"
