@@ -206,6 +206,41 @@ class SouthernVendorCatalogItem(models.Model):
         return "missing", self.env["product.template"]
 
     @api.model
+    def _match_products(self, internal_references):
+        """Match a bounded catalog batch with one product-table scan."""
+        references = [value for value in dict.fromkeys(internal_references or []) if value]
+        products_by_reference = {value.casefold(): [] for value in references}
+        if references:
+            self.env.cr.execute(
+                """
+                SELECT id
+                  FROM product_template
+                 WHERE LOWER(COALESCE(default_code, '')) = ANY(%s)
+                """,
+                [[value.casefold() for value in references]],
+            )
+            products = self.env["product.template"].with_context(active_test=False).browse(
+                [row[0] for row in self.env.cr.fetchall()]
+            )
+            for product in products:
+                key = (product.default_code or "").casefold()
+                if key in products_by_reference:
+                    products_by_reference[key].append(product.id)
+        result = {}
+        for reference in references:
+            product_ids = products_by_reference[reference.casefold()]
+            if len(product_ids) > 1:
+                result[reference] = ("duplicate", self.env["product.template"])
+            elif product_ids:
+                result[reference] = (
+                    "matched",
+                    self.env["product.template"].with_context(active_test=False).browse(product_ids[:1]),
+                )
+            else:
+                result[reference] = ("missing", self.env["product.template"])
+        return result
+
+    @api.model
     def _readiness(self, source, values, match_state):
         if match_state == "duplicate":
             return "blocked", "duplicate_product"
@@ -276,6 +311,9 @@ class SouthernVendorCatalogItem(models.Model):
             }
             canonical["content_sha256"] = _canonical_sha256(canonical)
             normalized_records[normalized] = canonical
+        product_matches = self._match_products(
+            [values["internal_reference"] for values in normalized_records.values()]
+        )
         existing = self.sudo().search(
             [("source_id", "=", source.id), ("normalized_sku", "in", list(normalized_records))]
         )
@@ -284,7 +322,7 @@ class SouthernVendorCatalogItem(models.Model):
         create_values = []
         for normalized, values in normalized_records.items():
             item = existing_by_sku.get(normalized)
-            match_state, product = self._match_product(values["internal_reference"])
+            match_state, product = product_matches[values["internal_reference"]]
             promotion_state, blocker_code = self._readiness(source, values, match_state)
             if item and item.promotion_requested and promotion_state == "ready":
                 promotion_state = "requested"

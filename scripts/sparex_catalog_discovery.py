@@ -37,6 +37,7 @@ SCHEMA_VERSION = "1.1"
 SPAREX_HOST = "us.sparex.com"
 MAX_PAGE_ITEMS = 100
 MAX_CHECKPOINT_PAGES = 10
+MAX_TOTAL_PAGES = 10_000_000
 MAX_PRODUCT_CREATION_BATCH = 100
 PORTAL_COOLDOWN_STATUSES = {429, 500, 502, 503, 504}
 SKU_FROM_URL = re.compile(r"-(?P<digits>\d+)\.html(?:$|[?#])", re.IGNORECASE)
@@ -358,6 +359,58 @@ def _archive_raw_page(store: ArtifactStore, name: str, content: bytes, bucket: s
     return store.archive_s3(record, bucket=bucket, prefix=prefix)
 
 
+def _read_archived_json(artifact_uri: str, expected_sha256: str, s3_client: Any) -> dict[str, Any]:
+    parsed = urlsplit(artifact_uri)
+    if parsed.scheme != "s3" or not parsed.netloc or not parsed.path.lstrip("/"):
+        raise ValueError("Archived discovery evidence must use an S3 URI.")
+    content = s3_client.get_object(Bucket=parsed.netloc, Key=parsed.path.lstrip("/"))["Body"].read()
+    if hashlib.sha256(content).hexdigest() != expected_sha256:
+        raise RuntimeError("Archived discovery evidence checksum did not verify.")
+    envelope = json.loads(content)
+    payload = envelope.get("data") if isinstance(envelope, dict) else None
+    if not isinstance(payload, dict):
+        raise TypeError("Archived discovery evidence does not contain one JSON object.")
+    return payload
+
+
+def backfill_legacy_page_urls(client: OdooClient, run_id: int, limit: int = 50) -> dict[str, int]:
+    prepared = client.call(
+        "southern.sparex.discovery.run",
+        "prepare_legacy_page_url_backfill",
+        run_id=run_id,
+        limit=limit,
+    )
+    if not prepared:
+        return {"prepared": 0, "updated": 0, "failed": 0}
+    import boto3
+    from botocore.exceptions import BotoCoreError, ClientError
+
+    s3_client = boto3.client("s3")
+    records = []
+    failed = 0
+    for row in prepared:
+        try:
+            payload = _read_archived_json(
+                str(row["artifact_uri"]), str(row["artifact_sha256"]), s3_client
+            )
+            page_url = str(payload.get("page_url") or "").strip()
+            if sha256_text(page_url) != row["page_url_sha256"]:
+                raise ValueError("Archived page URL does not match the Odoo page checksum.")
+            records.append({**row, "page_url": page_url})
+        except (BotoCoreError, ClientError, KeyError, TypeError, ValueError, RuntimeError, json.JSONDecodeError):
+            failed += 1
+    updated = 0
+    if records:
+        result = client.call(
+            "southern.sparex.discovery.run",
+            "apply_legacy_page_url_backfill",
+            run_id=run_id,
+            records=records,
+        )
+        updated = int(result.get("updated") or 0)
+    return {"prepared": len(prepared), "updated": updated, "failed": failed}
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--odoo-env-file", type=Path, default=DEFAULT_ODOO_ENV)
@@ -470,7 +523,7 @@ def main() -> int:
             "parser_version": PARSER_VERSION,
             "throttle_seconds": throttle_seconds,
             "max_pages_per_checkpoint": checkpoint_pages,
-            "max_pages_total": 10000,
+            "max_pages_total": MAX_TOTAL_PAGES,
             "product_creation_authorized": bool(args.create_missing_products),
         }
         plan_record = _archive(store, "plan.json", plan, args.s3_bucket, archive_prefix)
@@ -488,7 +541,7 @@ def main() -> int:
                 "throttle_seconds": throttle_seconds,
                 "max_pages_per_checkpoint": checkpoint_pages,
                 "max_items_per_page": MAX_PAGE_ITEMS,
-                "max_pages_total": 10000,
+                "max_pages_total": MAX_TOTAL_PAGES,
             },
         )
     run = client.call(
@@ -501,6 +554,14 @@ def main() -> int:
         "southern.sparex.discovery.run",
         "prepare_reconciliation_run",
         run_id=int(run["id"]),
+    )
+    legacy_backfill = backfill_legacy_page_urls(client, int(run["id"]))
+    repair_queue = client.call(
+        "southern.sparex.discovery.run",
+        "queue_due_discovery_page_repairs",
+        run_id=int(run["id"]),
+        limit=checkpoint_pages,
+        min_age_hours=24,
     )
     current_claim: dict[str, Any] | None = None
     try:
@@ -529,9 +590,15 @@ def main() -> int:
                 raise PortalCooldownError("dealer_session_lost")
             parsed = parse_listing_page(response.content, cursor_url)
             page_number = int(current_claim.get("page_count") or 0) + 1
+            page_kind = str(current_claim.get("cursor_kind") or "frontier")
+            artifact_stem = (
+                f"listing-page-repair-{len(pages) + 1:02d}-{sha256_text(cursor_url)[:8]}"
+                if page_kind == "repair"
+                else f"listing-page-{page_number:05d}"
+            )
             raw_page_record = _archive_raw_page(
                 store,
-                f"listing-page-{page_number:05d}.html",
+                f"{artifact_stem}.html",
                 response.content,
                 args.s3_bucket,
                 archive_prefix,
@@ -555,7 +622,7 @@ def main() -> int:
             }
             page_record = _archive(
                 store,
-                f"listing-page-{page_number:05d}.json",
+                f"{artifact_stem}.json",
                 page_payload,
                 args.s3_bucket,
                 archive_prefix,
@@ -646,6 +713,8 @@ def main() -> int:
             "stale": stale,
             "terminal_state": terminal_state,
             "product_creation_authorized": bool(args.create_missing_products),
+            "legacy_page_url_backfill": legacy_backfill,
+            "repair_queue": repair_queue,
             "created_count": created_count,
             "created_products": created_products,
             **(throttle.telemetry() if throttle else RequestThrottle(throttle_seconds).telemetry()),

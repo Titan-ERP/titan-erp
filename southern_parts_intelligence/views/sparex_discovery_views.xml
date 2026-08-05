@@ -12,6 +12,7 @@
                 <field name="match_agent_id"/>
                 <field name="page_count"/>
                 <field name="queued_url_count"/>
+                <field name="repair_queued_url_count"/>
                 <field name="visited_url_count"/>
                 <field name="observed_count"/>
                 <field name="matched_count"/>
@@ -62,6 +63,8 @@
                             <field name="page_count"/>
                             <field name="queued_url_count"/>
                             <field name="visited_url_count"/>
+                            <field name="repair_queued_url_count"/>
+                            <field name="repair_visited_url_count"/>
                             <field name="observed_count"/>
                             <field name="product_page_count"/>
                             <field name="empty_page_count"/>
@@ -103,8 +106,8 @@
                                 <field name="seed_url_sha256"/>
                                 <field name="cursor_url" password="1"/>
                                 <field name="cursor_url_sha256"/>
-                                <field name="frontier_urls" password="1"/>
-                                <field name="visited_url_sha256s"/>
+                                <field name="cursor_kind"/>
+                                <field name="frontier_migrated"/>
                                 <field name="plan_artifact_uri"/>
                                 <field name="plan_sha256"/>
                             </group>
@@ -129,6 +132,7 @@
                             </group>
                         </page>
                         <page string="Archived Pages"><field name="page_ids" readonly="1"/></page>
+                        <page string="URL Queue"><field name="url_ids" readonly="1"/></page>
                     </notebook>
                     <chatter/>
                 </sheet>
@@ -148,6 +152,7 @@
                 <field name="progress_percent"/>
                 <field name="page_count"/>
                 <field name="queued_url_count"/>
+                <field name="repair_queued_url_count"/>
                 <field name="observed_count"/>
                 <field name="matched_count"/>
                 <field name="corrected_count"/>
@@ -174,6 +179,7 @@
                         <div class="row mt-3">
                             <div class="col-6">Pages: <field name="page_count"/></div>
                             <div class="col-6">Remaining: <field name="queued_url_count"/></div>
+                            <div class="col-6">Page repairs: <field name="repair_queued_url_count"/></div>
                             <div class="col-6">Observed: <field name="observed_count"/></div>
                             <div class="col-6">Matched: <field name="matched_count"/></div>
                             <div class="col-6">Corrected: <field name="corrected_count"/></div>
