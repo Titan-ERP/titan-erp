@@ -1,4 +1,5 @@
 import json
+import urllib.error
 from datetime import UTC, datetime, timedelta
 
 from scripts.sparex_catalog_agents.cost_recovery import (
@@ -7,6 +8,7 @@ from scripts.sparex_catalog_agents.cost_recovery import (
     parse_exact_priceb,
     write_cooldown,
 )
+from scripts.sparex_catalog_agents.orchestrator import verify_public_pages
 
 
 def _page(container: str, title: str = "Exact Part") -> str:
@@ -71,3 +73,39 @@ def test_portal_cooldown_is_persisted(tmp_path):
     until = datetime.fromisoformat(payload["until_utc"])
     assert until > datetime.now(UTC) + timedelta(minutes=59)
     assert cooldown_active(tmp_path)
+
+
+def test_public_verification_retries_during_storefront_propagation(monkeypatch):
+    class Response:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        @staticmethod
+        def read():
+            return b"Published product S.165551"
+
+    calls = iter([urllib.error.URLError("not ready"), Response()])
+
+    def urlopen(*_args, **_kwargs):
+        result = next(calls)
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    sleeps = []
+    monkeypatch.setattr("scripts.sparex_catalog_agents.orchestrator.urllib.request.urlopen", urlopen)
+    monkeypatch.setattr("scripts.sparex_catalog_agents.orchestrator.time.sleep", sleeps.append)
+
+    result = verify_public_pages(
+        "https://example.com",
+        [{"task_id": 1, "product_id": 2, "sku": "S.165551", "public_path": "/shop/example"}],
+    )
+
+    assert result[0]["attempts"] == 2
+    assert result[0]["http_status"] == 200
+    assert sleeps == [2.0]
