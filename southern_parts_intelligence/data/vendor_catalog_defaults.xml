@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+  <data noupdate="1">
+    <record id="vendor_catalog_source_sparex" model="southern.vendor.catalog.source">
+      <field name="name">Sparex</field>
+      <field name="code">sparex</field>
+      <field name="source_type">web_listing</field>
+      <field name="base_url">https://us.sparex.com</field>
+      <field name="default_category_id" ref="product_category_sparex_pending_enrichment"/>
+      <field name="automatic_promotion_enabled">False</field>
+      <field name="promotion_batch_size">100</field>
+      <field name="schema_version">1.0</field>
+    </record>
+  </data>
+</odoo>
