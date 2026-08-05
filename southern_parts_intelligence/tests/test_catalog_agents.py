@@ -366,3 +366,35 @@ class TestCatalogAgents(TransactionCase):
         self.assertFalse(product.website_published)
         self.assertEqual(product.list_price, list_price)
         self.assertEqual(product.standard_price, standard_price)
+
+    def test_verified_history_does_not_block_republication_of_hidden_product(self):
+        product = self.env["product.template"].create(
+            {
+                "name": "Historically verified Sparex part",
+                "default_code": "S.880010",
+                "active": True,
+                "list_price": 15.39,
+                "standard_price": 10.0,
+                "southern_price_basis": "cost_plus",
+                "southern_cost_plus_margin_percent": 35.0,
+                "southern_source_url": "https://us.sparex.com/example-880010.html",
+                "image_1920": base64.b64encode(b"historically-verified-image"),
+                "public_categ_ids": [(6, 0, self.website_category.ids)],
+                "description_ecommerce": "Customer-ready historically verified replacement part.",
+                "website_published": False,
+            }
+        )
+        supplier = self.env["res.partner"].create({"name": "Sparex", "supplier_rank": 1})
+        self.env["product.supplierinfo"].create(
+            {"partner_id": supplier.id, "product_tmpl_id": product.id, "price": 10.0, "min_qty": 1.0}
+        )
+        self._record_current_dealer_evidence(product, "https://us.sparex.com/example-880010.html")
+        task_id = self.env["southern.catalog.agent.task"].queue_candidate(
+            "website_release",
+            product.default_code,
+            {"idempotency_key": "catalog-agent-historical-verification-880010"},
+        )
+        historical_task = self.env["southern.catalog.agent.task"].browse(task_id)
+        historical_task.write({"state": "completed", "publication_state": "verified"})
+
+        self.assertIn(product, self.env["southern.catalog.agent.task"]._ready_products(limit=1))

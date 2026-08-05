@@ -621,7 +621,7 @@ class SouthernCatalogAgentTask(models.Model):
             active_pipeline = self.search_count(
                 [
                     ("product_tmpl_id", "=", product.id),
-                    ("publication_state", "in", ["ready", "published", "verified"]),
+                    ("publication_state", "in", ["ready", "published"]),
                 ]
             )
             if active_pipeline:

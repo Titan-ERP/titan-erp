@@ -1,5 +1,6 @@
 import base64
 import hashlib
+from unittest.mock import patch
 
 from odoo import fields
 from odoo.exceptions import UserError
@@ -389,7 +390,17 @@ class TestSparexDiscovery(TransactionCase):
         )
         item._refresh_readiness()
         self.assertEqual(item.primary_blocker, "missing_customer_description")
-        description_plan = Item.prepare_description_repair_plan(limit=5)
+        search_calls = []
+        original_search = type(Item).search
+
+        def capture_search(recordset, domain, *args, **kwargs):
+            search_calls.append((domain, kwargs))
+            return original_search(recordset, domain, *args, **kwargs)
+
+        with patch.object(type(Item), "search", capture_search):
+            description_plan = Item.prepare_description_repair_plan(limit=5)
+        self.assertIn(("primary_blocker", "=", "missing_customer_description"), search_calls[0][0])
+        self.assertEqual(search_calls[0][1]["limit"], 5)
         self.assertEqual(len(description_plan), 1)
         repaired_descriptions = Item.apply_description_repair_plan(
             description_plan,

@@ -2318,9 +2318,10 @@ class SouthernSparexDiscoveryItem(models.Model):
                 ("has_exact_sparex_url", "=", True),
                 ("has_image", "=", True),
                 ("listing_title", "!=", False),
+                ("primary_blocker", "=", "missing_customer_description"),
             ],
-            order="last_seen_at, id",
-            limit=bounded * 4,
+            order="readiness_refreshed_at, id",
+            limit=bounded,
         )
         prepared = []
         for item in candidates:
