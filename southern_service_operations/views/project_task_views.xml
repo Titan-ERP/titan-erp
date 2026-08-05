@@ -1,0 +1,360 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_southern_service_work_item_form" model="ir.ui.view">
+        <field name="name">southern.service.work.item.form</field>
+        <field name="model">southern.service.work.item</field>
+        <field name="arch" type="xml">
+            <form string="Service Task / Quote Item">
+                <sheet>
+                    <group>
+                        <group string="Service Work">
+                            <field name="task_id" readonly="1"/>
+                            <field name="work_type"/>
+                            <field name="assigned_user_id"
+                                   invisible="work_type != 'labor'"/>
+                            <field name="allocated_hours"
+                                   invisible="work_type != 'labor'"/>
+                            <field name="state"/>
+                        </group>
+                        <group string="Sales Quotation Product">
+                            <field name="product_id"
+                                   required="billable and work_type != 'labor'"
+                                   invisible="work_type == 'labor'"/>
+                            <field name="name"/>
+                            <field name="quantity"
+                                   invisible="work_type == 'labor'"/>
+                            <field name="product_uom_id"
+                                   readonly="1"
+                                   invisible="work_type == 'labor'"/>
+                            <field name="unit_price"
+                                   invisible="work_type == 'labor'"/>
+                            <field name="billable"/>
+                            <field name="subtotal" readonly="1"/>
+                        </group>
+                    </group>
+                    <div class="alert alert-info" role="status"
+                         invisible="work_type != 'labor'">
+                        This task contributes its Allocated Hours to the single
+                        product-linked Service Labor line on the Sales
+                        quotation.
+                    </div>
+                    <div class="alert alert-info" role="status"
+                         invisible="work_type == 'labor'">
+                        Choose the actual Odoo sales product. Saving creates or
+                        updates its native Sales quotation line.
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="industry_fsm.project_task_action_fsm"
+            model="ir.actions.act_window">
+        <field name="name">Service Jobs</field>
+        <field name="context">{
+            'fsm_mode': True,
+            'search_default_my_tasks': True,
+            'search_default_planned_future': True,
+            'search_default_planned_today': True,
+            'default_scale': 'day',
+            'default_southern_quote_workflow': True
+        }</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No Service Jobs found. Create the first one.
+            </p>
+            <p>
+                Quote, schedule, perform, and document upcoming Service Jobs
+                from this workspace.
+            </p>
+        </field>
+    </record>
+
+    <record id="industry_fsm.project_task_action_fsm2"
+            model="ir.actions.act_window">
+        <field name="name">Service Jobs</field>
+        <field name="context">{
+            'fsm_mode': True,
+            'search_default_my_tasks': True,
+            'search_default_planned_future': True,
+            'search_default_planned_today': True,
+            'default_scale': 'day',
+            'default_southern_quote_workflow': True
+        }</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No Service Jobs found. Create the first one.
+            </p>
+            <p>
+                Quote, schedule, perform, and document upcoming Service Jobs
+                from this workspace.
+            </p>
+        </field>
+    </record>
+
+    <record id="view_task_search_southern_service_jobs" model="ir.ui.view">
+        <field name="name">project.task.search.southern.service.jobs</field>
+        <field name="model">project.task</field>
+        <field name="inherit_id"
+               ref="industry_fsm.project_task_view_search_fsm"/>
+        <field name="arch" type="xml">
+            <xpath expr="//filter[@name='my_tasks']" position="attributes">
+                <attribute name="string">My Service Jobs</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_task_form_southern_service" model="ir.ui.view">
+        <field name="name">project.task.form.southern.service</field>
+        <field name="model">project.task</field>
+        <field name="inherit_id" ref="dmc_fieldservice.view_task_form2_inherit_dmc_fieldservice"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="attributes">
+                <attribute name="placeholder">Service Job Title...</attribute>
+            </xpath>
+            <xpath expr="//page[@name='description_page']" position="attributes">
+                <attribute name="string">Work Details</attribute>
+            </xpath>
+            <xpath expr="//page[@name='description_page']/field[@name='description']"
+                   position="attributes">
+                <attribute name="placeholder">Describe the requested work, customer complaint, symptoms, and initial observations...</attribute>
+            </xpath>
+            <xpath expr="//page[@name='sub_tasks_page']" position="attributes">
+                <attribute name="string">Follow-up Work</attribute>
+            </xpath>
+            <xpath expr="//button[@name='action_timer_stop']" position="after">
+                <button name="action_southern_send_quotation" type="object"
+                        string="Send Quote" class="btn-secondary"
+                        groups="sales_team.group_sale_salesman"
+                        invisible="not is_fsm or not southern_sale_order_id or southern_sale_state not in ('draft', 'sent')"/>
+                <button name="action_southern_confirm_sale_order" type="object"
+                        string="Confirm Sales Order" class="btn-primary"
+                        groups="sales_team.group_sale_salesman"
+                        invisible="not is_fsm or not southern_sale_order_id or southern_sale_state not in ('draft', 'sent')"/>
+            </xpath>
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_southern_open_sale_order" type="object"
+                        class="oe_stat_button" icon="fa-dollar"
+                        groups="sales_team.group_sale_salesman"
+                        invisible="not southern_sale_order_id">
+                    <div class="o_field_widget o_stat_info">
+                        <span class="o_stat_value">
+                            <field name="southern_sale_amount_total"
+                                   widget="monetary"
+                                   options="{'currency_field': 'southern_sale_currency_id'}"/>
+                        </span>
+                        <span class="o_stat_text">
+                            <field name="southern_sale_order_id" nolabel="1"/>
+                        </span>
+                    </div>
+                </button>
+                <button name="action_southern_open_equipment_history"
+                        type="object" class="oe_stat_button"
+                        icon="fa-history"
+                        invisible="not southern_client_equipment_id">
+                    <field name="southern_equipment_service_count"
+                           widget="statinfo" string="Equipment History"/>
+                </button>
+            </xpath>
+            <xpath expr="//field[@name='dmc_equipment']" position="before">
+                <separator string="Equipment &amp; Service Record"
+                           invisible="not is_fsm"/>
+                <field name="southern_service_case_id"
+                       invisible="1"/>
+                <field name="southern_quote_workflow" invisible="1"/>
+                <field name="southern_client_equipment_id"
+                       invisible="not is_fsm"
+                       domain="[('client', 'child_of', partner_id)]"/>
+            </xpath>
+            <xpath expr="//page[@name='description_page']/field[@name='description']"
+                   position="before">
+                <separator string="Customer Complaint / Requested Work"
+                           invisible="not is_fsm"/>
+                <div class="alert alert-info" role="status"
+                     invisible="not is_fsm or description">
+                    Record the customer's symptoms, when they occur, warning
+                    codes, and operating conditions before requesting an AI
+                    estimate.
+                </div>
+            </xpath>
+            <xpath expr="//page[@name='description_page']/field[@name='description']"
+                   position="after">
+                <group invisible="not is_fsm">
+                    <group string="Technician Findings">
+                        <field name="southern_diagnosis"
+                               placeholder="Record diagnosis, test results, and root cause."/>
+                        <field name="southern_work_performed"
+                               placeholder="Record labor performed, adjustments, and resolution."/>
+                    </group>
+                    <group string="Customer Follow-up">
+                        <field name="southern_recommendations"
+                               placeholder="Record recommended repairs, monitoring, or future service."/>
+                    </group>
+                </group>
+            </xpath>
+            <xpath expr="//page[@name='description_page']" position="after">
+                <page name="southern_quotation" string="Jobs &amp; Quotation"
+                      invisible="not is_fsm"
+                      groups="sales_team.group_sale_salesman">
+                    <group>
+                        <group>
+                            <field name="southern_sale_order_id" readonly="1"/>
+                            <field name="southern_sale_state" readonly="1"
+                                   widget="badge"/>
+                        </group>
+                        <group>
+                            <field name="southern_sale_amount_total"
+                                   readonly="1"
+                                   widget="monetary"
+                                   options="{'currency_field': 'southern_sale_currency_id'}"/>
+                            <field name="southern_sale_currency_id" invisible="1"/>
+                        </group>
+                    </group>
+                    <div class="d-flex gap-2 mb-3"
+                         invisible="not southern_sale_order_id">
+                        <button name="action_southern_open_sale_order"
+                                type="object" string="Open Full Quotation"
+                                icon="fa-external-link"
+                                class="btn-secondary"/>
+                    </div>
+                    <div class="alert alert-info" role="status"
+                         invisible="southern_sale_order_id">
+                        Create the Service Job first. Odoo will create its
+                        native Sales quotation so labor and products can be
+                        planned together on this page.
+                    </div>
+                    <group>
+                        <group string="Labor Quotation">
+                            <field name="southern_labor_product_id"
+                                   string="Labor Sales Product"/>
+                            <field name="southern_labor_rate"
+                                   string="Product Labor Rate"
+                                   readonly="1"/>
+                        </group>
+                        <group string="Live Quote">
+                            <field name="southern_service_task_hours" readonly="1"/>
+                            <field name="southern_labor_sale_line_id"
+                                   readonly="1"
+                                   invisible="not southern_labor_sale_line_id"/>
+                        </group>
+                    </group>
+                    <div class="alert alert-info" role="status"
+                         invisible="not southern_sale_order_id">
+                        Add labor scope and allocated hours under Service
+                        Tasks. Add parts, travel, subcontract, and other
+                        products directly under Sales Quotation Lines using
+                        Odoo's standard product, quantity, pricing, tax, and
+                        subtotal fields.
+                    </div>
+                    <group string="AI Estimate Assistant">
+                        <group>
+                            <button name="action_southern_generate_ai_estimate"
+                                    type="object"
+                                    string="Suggest Tasks, Hours &amp; Parts"
+                                    class="btn-primary"
+                                    icon="fa-magic"
+                                    groups="southern_service_operations.group_southern_service_user"/>
+                        </group>
+                        <group>
+                            <field name="southern_ai_current_suggestion_id"
+                                   string="Latest Review"
+                                   readonly="1"
+                                   options="{'no_create': True}"/>
+                        </group>
+                    </group>
+                    <div class="alert alert-warning" role="status"
+                         invisible="description">
+                        Add the customer complaint under Work Details before
+                        requesting an AI estimate.
+                    </div>
+                    <div class="alert alert-warning" role="status"
+                         invisible="southern_labor_product_id">
+                        Select the Labor Sales Product before applying billable
+                        labor suggestions.
+                    </div>
+                    <div class="alert alert-danger" role="status"
+                         invisible="not southern_labor_product_id or southern_labor_rate &gt; 0">
+                        The selected labor product has a $0.00 sales price. A
+                        service manager must set the native Odoo product's Sales
+                        Price before this quotation is sent or confirmed.
+                    </div>
+                    <div class="alert alert-warning" role="status">
+                        AI suggestions never confirm or send the quotation. A
+                        technician must review and apply selected tasks, actual
+                        Odoo products, hours, and customer wording.
+                    </div>
+                    <separator string="Service Tasks"/>
+                    <field name="southern_labor_work_item_ids"
+                           readonly="southern_sale_state not in (False, 'draft', 'sent')"
+                           context="{'default_task_id': id}">
+                        <list editable="bottom">
+                            <control>
+                                <create string="Add Labor Task"
+                                        context="{'default_work_type': 'labor'}"/>
+                            </control>
+                            <field name="sequence" widget="handle"/>
+                            <field name="name"
+                                   placeholder="Describe the labor task or scope..."/>
+                            <field name="work_type" column_invisible="1"/>
+                            <field name="assigned_user_id"
+                                   widget="many2one_avatar_user"/>
+                            <field name="allocated_hours"/>
+                            <field name="billable"/>
+                            <field name="state"/>
+                            <field name="sale_line_id" optional="hide" readonly="1"/>
+                        </list>
+                    </field>
+                    <separator string="Sales Quotation Lines"/>
+                    <field name="southern_quote_line_ids"
+                           readonly="southern_sale_state not in (False, 'draft', 'sent')"
+                           invisible="not southern_sale_order_id"
+                           context="{
+                               'default_order_id': southern_sale_order_id,
+                               'default_southern_service_task_id': id
+                           }"
+                           nolabel="1">
+                        <list editable="bottom">
+                            <field name="southern_service_task_id"
+                                   column_invisible="True"/>
+                            <field name="order_id"
+                                   column_invisible="True"/>
+                            <control>
+                                <create string="Add a product"/>
+                            </control>
+                            <field name="product_id"/>
+                            <field name="name" string="Sales Description"/>
+                            <field name="product_uom_qty"/>
+                            <field name="product_uom_id"/>
+                            <field name="price_unit"/>
+                            <field name="tax_ids" widget="many2many_tags"/>
+                            <field name="price_subtotal" sum="Quotation Total"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_task_list_southern_service" model="ir.ui.view">
+        <field name="name">project.task.list.southern.service</field>
+        <field name="model">project.task</field>
+        <field name="inherit_id" ref="industry_fsm.project_task_view_list_fsm"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="southern_service_case_id" optional="show"/>
+                <field name="southern_client_equipment_id" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_southern_service_schedule" model="ir.actions.act_window">
+        <field name="name">Service Jobs</field>
+        <field name="res_model">project.task</field>
+        <field name="view_mode">kanban,list,form,calendar</field>
+        <field name="domain">[('is_fsm', '=', True), ('southern_service_case_id', '!=', False)]</field>
+        <field name="context">{
+            'default_is_fsm': True,
+            'default_southern_quote_workflow': True
+        }</field>
+    </record>
+</odoo>

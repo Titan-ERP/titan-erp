@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_southern_equipment_comp_audit_list" model="ir.ui.view">
+        <field name="name">southern.equipment.comp.audit.line.list</field>
+        <field name="model">southern.equipment.comp.audit.line</field>
+        <field name="arch" type="xml">
+            <list create="0" edit="0" delete="0"
+                  decoration-success="included"
+                  decoration-muted="not included">
+                <field name="included"/>
+                <field name="manufacturer"/>
+                <field name="model"/>
+                <field name="year"/>
+                <field name="year_difference"/>
+                <field name="hours"/>
+                <field name="hour_difference"/>
+                <field name="condition_grade"/>
+                <field name="price"/>
+                <field name="sale_type"/>
+                <field name="match_basis"/>
+                <field name="match_weight"/>
+                <field name="reason"/>
+                <field name="source"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_southern_equipment_comp_audit_form" model="ir.ui.view">
+        <field name="name">southern.equipment.comp.audit.line.form</field>
+        <field name="model">southern.equipment.comp.audit.line</field>
+        <field name="arch" type="xml">
+            <form create="0" edit="0" delete="0">
+                <sheet>
+                    <group>
+                        <field name="listing_id"/>
+                        <field name="comp_id"/>
+                        <field name="included"/>
+                        <field name="reason"/>
+                        <field name="match_basis"/>
+                        <field name="year_difference"/>
+                        <field name="hour_difference"/>
+                        <field name="match_weight"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+</odoo>

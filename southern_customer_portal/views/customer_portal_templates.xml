@@ -1,0 +1,545 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="southern_sale_order_portal_parts_review_status" inherit_id="sale.sale_order_portal_content" name="Southern Parts Order Portal Status">
+        <xpath expr="//div[@id='informations']" position="before">
+            <div t-if="sale_order.southern_parts_review_state != 'not_parts'" class="border rounded mb-4 p-4" style="background:#f6f4ed;border-left:4px solid #f2b632!important;color:#141719;">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                    <div>
+                        <p class="mb-1 text-uppercase" style="color:#b88912;font-weight:800;letter-spacing:.08em;font-size:.75rem;">Parts Order</p>
+                        <strong>Status:</strong>
+                        <span t-field="sale_order.southern_parts_review_state"/>
+                    </div>
+                    <span t-if="sale_order.southern_customer_last_update_at" class="small text-muted">
+                        Updated <span t-field="sale_order.southern_customer_last_update_at"/>
+                    </span>
+                </div>
+                <p class="mb-3 mt-2">
+                    Southern Equipment is confirming availability, fitment, and fulfillment details before pickup or shipment.
+                </p>
+                <div class="row g-2 mb-3">
+                    <div class="col-6 col-lg">
+                        <div t-att-class="'h-100 border rounded p-2 ' + ('bg-white' if sale_order.southern_parts_review_state in ['parts_review', 'supplier_verification', 'confirmed', 'ready_for_pickup', 'shipping_in_progress', 'needs_customer_confirmation', 'completed'] else '')">
+                            <small class="text-uppercase text-muted d-block">Step 1</small>
+                            <strong>Received</strong>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg">
+                        <div t-att-class="'h-100 border rounded p-2 ' + ('bg-white' if sale_order.southern_parts_review_state in ['supplier_verification', 'confirmed', 'ready_for_pickup', 'shipping_in_progress', 'needs_customer_confirmation', 'completed'] else '')">
+                            <small class="text-uppercase text-muted d-block">Step 2</small>
+                            <strong>Supplier Review</strong>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg">
+                        <div t-att-class="'h-100 border rounded p-2 ' + ('bg-white' if sale_order.southern_parts_review_state in ['confirmed', 'ready_for_pickup', 'shipping_in_progress', 'completed'] else '')">
+                            <small class="text-uppercase text-muted d-block">Step 3</small>
+                            <strong>Confirmed</strong>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg">
+                        <div t-att-class="'h-100 border rounded p-2 ' + ('bg-white' if sale_order.southern_parts_review_state in ['ready_for_pickup', 'shipping_in_progress', 'completed'] else '')">
+                            <small class="text-uppercase text-muted d-block">Step 4</small>
+                            <strong>Fulfillment</strong>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg">
+                        <div t-att-class="'h-100 border rounded p-2 ' + ('bg-white' if sale_order.southern_parts_review_state == 'completed' else '')">
+                            <small class="text-uppercase text-muted d-block">Step 5</small>
+                            <strong>Complete</strong>
+                        </div>
+                    </div>
+                </div>
+                <p t-if="sale_order.southern_pickup_or_shipping_note" class="mb-0 mt-2">
+                    <strong>Pickup/shipping:</strong>
+                    <span t-field="sale_order.southern_pickup_or_shipping_note"/>
+                </p>
+            </div>
+        </xpath>
+    </template>
+
+    <template id="portal_my_home_repair_orders" inherit_id="portal.portal_my_home" name="Outstanding ROs and Invoices">
+        <xpath expr="//div[hasclass('o_portal_docs')]" position="before">
+            <t t-set="portal_service_category_enable" t-value="True"/>
+            <t t-set="portal_client_category_enable" t-value="True"/>
+        </xpath>
+    </template>
+
+    <template id="portal_my_home_customer_status" inherit_id="portal.portal_my_home" name="Southern Customer Account Status">
+        <xpath expr="//div[hasclass('o_portal_docs')]" position="before">
+            <style>
+                .o_portal_docs a[href^="/my/projects"],
+                .o_portal_docs a[href^="/my/tasks"],
+                .o_portal_docs a[href^="/my/timesheets"],
+                .o_portal_docs a[href^="/my/documents"],
+                .o_portal_docs a[href^="/odoo/documents_portal"],
+                .o_portal_docs a[href^="/my/signatures"],
+                .o_portal_docs a[href^="/my/subscriptions"],
+                .o_portal_docs a[href^="/my/productions"],
+                .o_portal_docs a[href^="/my/purchase"],
+                .o_portal_docs a[href^="/my/vendor"],
+                .o_portal_docs a[href^="/my/rfq"],
+                .o_portal_docs a[href^="/my/invoices?filterby=bills"] {
+                    display: none !important;
+                }
+            </style>
+            <section class="se-account-status mb-4">
+                <div class="p-4 rounded" style="background:#141719;border-left:5px solid #f2b632;color:#fff;">
+                    <div class="row g-3 align-items-center">
+                        <div class="col-lg">
+                            <p class="mb-1 text-uppercase" style="color:#f2b632;font-weight:700;letter-spacing:.08em;font-size:.8rem;">Customer Account</p>
+                            <h2 class="h4 mb-2" t-if="southern_is_premium_customer">Premium customer access is active.</h2>
+                            <h2 class="h4 mb-2" t-else="">Standard customer access is active.</h2>
+                            <p class="mb-0" t-if="southern_is_premium_customer">
+                                You can view invoices, orders, ROs, and eligible premium membership benefits from this portal.
+                            </p>
+                            <p class="mb-0" t-else="">
+                                You can view account documents, pay invoices, and track open work. Premium benefits require an active membership.
+                            </p>
+                            <p class="mb-0 mt-2 small" style="color:#d9dde3;">
+                                Parts orders show review, supplier confirmation, pickup, and shipping updates as they move through Southern.
+                            </p>
+                        </div>
+                        <div class="col-lg-auto d-flex flex-wrap gap-2">
+                            <a class="btn" style="background:#f2b632;color:#111;font-weight:700;" href="/my/outstanding-invoices">View Invoices</a>
+                            <a class="btn btn-outline-light" href="/my/repair-orders">View ROs</a>
+                            <a class="btn btn-outline-light" t-if="not southern_is_premium_customer" href="/membership-sign-up">Become a Member</a>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </xpath>
+    </template>
+
+    <template id="portal_breadcrumbs_repair_orders" inherit_id="portal.portal_breadcrumbs" name="Repair Order Breadcrumbs">
+        <xpath expr="//ol[hasclass('o_portal_submenu')]" position="inside">
+            <li t-if="page_name == 'membership'" class="breadcrumb-item active">
+                Membership
+            </li>
+            <li t-if="page_name in ['repair_orders', 'repair_order']" class="breadcrumb-item">
+                <a t-if="page_name == 'repair_order'" href="/my/repair-orders">Outstanding ROs</a>
+                <t t-else="">Outstanding ROs</t>
+            </li>
+            <li t-if="page_name == 'repair_order'" class="breadcrumb-item active">
+                <t t-out="repair_order.name"/>
+            </li>
+            <li t-if="page_name == 'outstanding_invoices'" class="breadcrumb-item active">
+                Outstanding Invoices
+            </li>
+        </xpath>
+    </template>
+
+    <template id="southern_account_access" name="Southern Account Access">
+        <t t-call="website.layout">
+            <section class="py-5" style="background:#f6f4ed;">
+                <div class="container">
+                    <div class="row justify-content-center">
+                        <div class="col-lg-10">
+                            <p class="mb-2 text-uppercase" style="color:#b88912;font-weight:800;letter-spacing:.12em;font-size:.8rem;">Account Access</p>
+                            <h1 class="display-5 fw-bold mb-3">Choose your Southern Equipment login.</h1>
+                            <p class="lead text-muted mb-4">
+                                Every customer can access invoices, orders, ROs, and payments. Membership adds benefits on top of the same account.
+                            </p>
+                            <div class="row g-3 align-items-stretch">
+                                <div class="col-md-6">
+                                    <article class="h-100 p-4 bg-white border rounded">
+                                        <h2 class="h4 mb-2">Customer Login</h2>
+                                        <p class="text-muted">View invoices, pay balances, and follow open orders or ROs.</p>
+                                        <a class="btn btn-dark w-100" t-att-href="customer_login_url">Log In</a>
+                                    </article>
+                                </div>
+                                <div class="col-md-6">
+                                    <article class="h-100 p-4 border rounded" style="background:#141719;color:#fff;border-color:#f2b632!important;">
+                                        <p class="mb-2 text-uppercase" style="color:#f2b632;font-weight:800;letter-spacing:.08em;font-size:.75rem;">Premium Customer</p>
+                                        <h2 class="h4 mb-2">Member Login</h2>
+                                        <p style="color:#d9dde3;">Access the same account plus active premium membership benefits.</p>
+                                        <a class="btn w-100" style="background:#f2b632;color:#111;font-weight:700;" t-att-href="membership_login_url">Log In</a>
+                                    </article>
+                                </div>
+                            </div>
+                            <div class="mt-3 d-flex flex-wrap align-items-center gap-3">
+                                <a class="btn btn-outline-dark" t-att-href="membership_signup_url">Membership Sign Up</a>
+                                <a t-if="partner_application_url" class="small text-muted" t-att-href="partner_application_url">
+                                    Shop, fleet, or parts reseller? Apply for partner access.
+                                </a>
+                            </div>
+                            <div class="alert alert-light border mt-4 mb-0">
+                                Customer and member logins use the same Odoo account system. Account status controls pricing and benefits, not basic access to invoices and payments.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </t>
+    </template>
+
+    <template id="southern_partner_application" name="Southern Partner Application">
+        <t t-call="website.layout">
+            <section class="py-5" style="background:#f6f4ed;">
+                <div class="container">
+                    <div class="row justify-content-center">
+                        <div class="col-lg-9">
+                            <p class="mb-2 text-uppercase" style="color:#b88912;font-weight:800;letter-spacing:.12em;font-size:.8rem;">Partner Access</p>
+                            <h1 class="display-5 fw-bold mb-3">Apply for partner pricing.</h1>
+                            <p class="lead text-muted mb-4">
+                                For diesel shops, parts stores, fleets, and volume buyers who need catalog access and approved partner pricing.
+                            </p>
+
+                            <div t-if="submitted == '1'" class="alert alert-success">
+                                Your partner application was submitted. Southern Equipment will review it and follow up.
+                            </div>
+                            <div t-if="submitted == 'existing'" class="alert alert-info">
+                                We already have an active partner application for this email.
+                            </div>
+                            <div t-if="error == 'missing'" class="alert alert-danger">
+                                Please complete all required fields.
+                            </div>
+                            <div t-if="error == 'spend'" class="alert alert-danger">
+                                Please enter a valid expected monthly spend.
+                            </div>
+                            <div t-if="error == 'invalid'" class="alert alert-danger">
+                                Please enter a valid email address and business type.
+                            </div>
+                            <div t-if="error == 'rate'" class="alert alert-warning">
+                                Too many applications were submitted from this connection. Please try again later.
+                            </div>
+
+                            <form action="/partner-application/submit" method="post" class="bg-white border rounded p-4">
+                                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                <div aria-hidden="true" style="position:absolute;left:-10000px;">
+                                    <label for="company_fax">Company Fax</label>
+                                    <input id="company_fax" name="company_fax" tabindex="-1" autocomplete="off"/>
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="business_name">Business Name *</label>
+                                        <input id="business_name" name="business_name" class="form-control" required="required"/>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="contact_name">Contact Name *</label>
+                                        <input id="contact_name" name="contact_name" class="form-control" required="required"/>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="email">Email *</label>
+                                        <input id="email" name="email" type="email" class="form-control" required="required"/>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="phone">Phone *</label>
+                                        <input id="phone" name="phone" class="form-control" required="required"/>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="business_type">Business Type *</label>
+                                        <select id="business_type" name="business_type" class="form-select" required="required">
+                                            <option t-foreach="business_types" t-as="business_type" t-att-value="business_type[0]">
+                                                <t t-out="business_type[1]"/>
+                                            </option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="expected_monthly_spend">Expected Monthly Parts Spend</label>
+                                        <input id="expected_monthly_spend" name="expected_monthly_spend" class="form-control" placeholder="2500"/>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label" for="website">Website</label>
+                                        <input id="website" name="website" class="form-control" placeholder="https://"/>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check">
+                                            <input id="requested_terms" name="requested_terms" class="form-check-input" type="checkbox" value="1"/>
+                                            <label class="form-check-label" for="requested_terms">Interested in account terms</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check">
+                                            <input id="tax_exempt" name="tax_exempt" class="form-check-input" type="checkbox" value="1"/>
+                                            <label class="form-check-label" for="tax_exempt">Tax-exempt account</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label" for="notes">What should we know?</label>
+                                        <textarea id="notes" name="notes" class="form-control" rows="4"></textarea>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn mt-4" style="background:#f2b632;color:#111;font-weight:700;">Submit Partner Application</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </t>
+    </template>
+
+    <template id="portal_my_membership" name="My Southern Equipment Membership">
+        <t t-call="portal.portal_layout">
+            <t t-set="breadcrumbs_searchbar" t-value="True"/>
+            <t t-call="portal.portal_searchbar">
+                <t t-set="title">Premium Membership</t>
+            </t>
+
+            <div t-if="submitted" class="alert alert-success">
+                Your membership application was submitted. Southern Equipment will review it and finish payment setup.
+            </div>
+            <div t-if="error == 'missing'" class="alert alert-danger">
+                Please complete all required membership and billing authorization fields.
+            </div>
+            <div t-if="error == 'acceptance'" class="alert alert-danger">
+                Please accept the membership agreement and payment authorization to continue.
+            </div>
+            <div t-if="error == 'credit'" class="alert alert-danger">
+                Please enter a valid house-credit amount.
+            </div>
+
+            <section class="mb-4">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <div class="border rounded p-3 h-100">
+                            <h5 class="mb-2">$25 monthly</h5>
+                            <p class="mb-0 text-muted">Includes a 30-day free trial before monthly membership billing begins.</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="border rounded p-3 h-100">
+                            <h5 class="mb-2">5% savings</h5>
+                            <p class="mb-0 text-muted">Applies to eligible Southern Equipment parts and service purchases.</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="border rounded p-3 h-100">
+                            <h5 class="mb-2">$2,500 house credit</h5>
+                            <p class="mb-0 text-muted">Higher credit requests require separate Southern Equipment approval.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <div t-if="not southern_is_premium_customer" class="alert alert-light border">
+                Your standard customer login remains active for invoices, payments, orders, and ROs. Premium membership only controls discounts, house credit, and financing benefits.
+            </div>
+
+            <t t-if="application">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                            <h4 class="mb-0"><t t-out="application.name"/></h4>
+                            <span class="badge rounded-pill text-bg-info" t-field="application.state"/>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <p class="mb-1"><strong>Member:</strong> <t t-out="application.member_name"/></p>
+                                <p class="mb-1"><strong>Email:</strong> <t t-out="application.email"/></p>
+                                <p class="mb-1"><strong>Phone:</strong> <t t-out="application.phone"/></p>
+                                <p class="mb-1"><strong>Signed:</strong> <span t-field="application.signed_on"/></p>
+                            </div>
+                            <div class="col-md-6">
+                                <p class="mb-1"><strong>Monthly fee:</strong> <span t-field="application.monthly_fee" t-options="{'widget': 'monetary', 'display_currency': application.currency_id}"/></p>
+                                <p class="mb-1"><strong>Trial ends:</strong> <span t-field="application.trial_end_date"/></p>
+                                <p class="mb-1"><strong>House credit requested:</strong> <span t-field="application.requested_house_credit" t-options="{'widget': 'monetary', 'display_currency': application.currency_id}"/></p>
+                                <p t-if="application.requires_credit_approval" class="mb-1 text-warning">
+                                    This credit amount requires separate approval.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </t>
+
+            <t t-if="not application or application.state == 'cancelled'">
+                <form action="/my/membership/submit" method="post" class="card">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <div class="card-body">
+                        <h4 class="mb-3">Member Acceptance</h4>
+                        <p class="text-muted">
+                            By signing below, you acknowledge and agree to the membership fee, free-trial period,
+                            automatic monthly billing, house-account terms, payment authorization, and cancellation provisions.
+                        </p>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="member_name">Printed Name</label>
+                                <input id="member_name" name="member_name" class="form-control" required="required" t-att-value="request.env.user.partner_id.name"/>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="signature">Member Signature</label>
+                                <input id="signature" name="signature" class="form-control" required="required" placeholder="Type your full legal name"/>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="phone">Phone</label>
+                                <input id="phone" name="phone" class="form-control" required="required" t-att-value="request.env.user.partner_id.phone"/>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="email">Email</label>
+                                <input id="email" name="email" type="email" class="form-control" required="required" t-att-value="request.env.user.partner_id.email"/>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="requested_house_credit">Requested House Credit</label>
+                                <input id="requested_house_credit" name="requested_house_credit" type="number" min="0" step="1" class="form-control" value="2500"/>
+                                <div class="form-text">Requests above $2,500 require separate credit approval.</div>
+                            </div>
+                        </div>
+
+                        <hr/>
+                        <h4 class="mb-3">Billing Authorization</h4>
+                        <div class="alert alert-light border">
+                            For security, this portal does not store card numbers, expiration dates, or CVV. Southern Equipment will collect or confirm the payment method separately.
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="cardholder_name">Cardholder Name</label>
+                                <input id="cardholder_name" name="cardholder_name" class="form-control" required="required"/>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="billing_zip">Billing ZIP Code</label>
+                                <input id="billing_zip" name="billing_zip" class="form-control" required="required"/>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" for="billing_street">Billing Address</label>
+                                <input id="billing_street" name="billing_street" class="form-control" required="required"/>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="billing_email">Billing Email</label>
+                                <input id="billing_email" name="billing_email" type="email" class="form-control" required="required" t-att-value="request.env.user.partner_id.email"/>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="billing_phone">Billing Phone</label>
+                                <input id="billing_phone" name="billing_phone" class="form-control" required="required" t-att-value="request.env.user.partner_id.phone"/>
+                            </div>
+                        </div>
+
+                        <div class="form-check mt-4">
+                            <input id="agreement_accepted" name="agreement_accepted" class="form-check-input" type="checkbox" value="1" required="required"/>
+                            <label class="form-check-label" for="agreement_accepted">
+                                I accept the Southern Equipment membership agreement, including cancellation and outstanding balance terms.
+                            </label>
+                        </div>
+                        <div class="form-check mt-2">
+                            <input id="payment_authorized" name="payment_authorized" class="form-check-input" type="checkbox" value="1" required="required"/>
+                            <label class="form-check-label" for="payment_authorized">
+                                I authorize Southern Equipment Co. and its payment processor to maintain my payment method and charge the $25 monthly membership fee and house-account invoices when due.
+                            </label>
+                        </div>
+                        <button type="submit" class="btn btn-primary mt-4">Submit Membership Application</button>
+                    </div>
+                </form>
+            </t>
+        </t>
+    </template>
+
+    <template id="portal_my_repair_orders" name="My Outstanding Repair Orders">
+        <t t-call="portal.portal_layout">
+            <t t-set="breadcrumbs_searchbar" t-value="True"/>
+            <t t-call="portal.portal_searchbar">
+                <t t-set="title">Outstanding ROs</t>
+            </t>
+            <t t-if="not repair_orders">
+                <p class="alert alert-warning">There are currently no outstanding repair orders for your account.</p>
+            </t>
+            <t t-if="repair_orders" t-call="portal.portal_table">
+                <thead>
+                    <tr class="active">
+                        <th>RO #</th>
+                        <th class="d-none d-md-table-cell">Equipment</th>
+                        <th class="d-none d-md-table-cell">Scheduled</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr t-foreach="repair_orders" t-as="repair_order">
+                        <td>
+                            <a t-attf-href="/my/repair-orders/#{repair_order.id}">
+                                <t t-out="repair_order.name"/>
+                            </a>
+                        </td>
+                        <td class="d-none d-md-table-cell">
+                            <span t-if="repair_order.product_id" t-field="repair_order.product_id"/>
+                            <span t-elif="repair_order.lot_id" t-field="repair_order.lot_id"/>
+                            <span t-else="">-</span>
+                        </td>
+                        <td class="d-none d-md-table-cell">
+                            <span t-if="repair_order.schedule_date" t-field="repair_order.schedule_date"/>
+                            <span t-else="">-</span>
+                        </td>
+                        <td>
+                            <span class="badge rounded-pill text-bg-info" t-field="repair_order.state"/>
+                        </td>
+                    </tr>
+                </tbody>
+            </t>
+        </t>
+    </template>
+
+    <template id="portal_my_repair_order" name="Repair Order Detail">
+        <t t-call="portal.portal_layout">
+            <t t-set="breadcrumbs_searchbar" t-value="True"/>
+            <t t-call="portal.portal_searchbar">
+                <t t-set="title">
+                    <t t-out="repair_order.name"/>
+                </t>
+            </t>
+            <div class="card">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <h5>Repair Order</h5>
+                            <p class="mb-1"><strong>Reference:</strong> <t t-out="repair_order.name"/></p>
+                            <p class="mb-1"><strong>Status:</strong> <span t-field="repair_order.state"/></p>
+                            <p class="mb-1" t-if="repair_order.schedule_date"><strong>Scheduled:</strong> <span t-field="repair_order.schedule_date"/></p>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>Equipment</h5>
+                            <p class="mb-1" t-if="repair_order.product_id"><strong>Product:</strong> <span t-field="repair_order.product_id"/></p>
+                            <p class="mb-1" t-if="repair_order.lot_id"><strong>Serial/Lot:</strong> <span t-field="repair_order.lot_id"/></p>
+                            <p class="mb-1" t-if="repair_order.under_warranty"><strong>Warranty:</strong> Under warranty</p>
+                            <p class="mb-1" t-if="repair_order.sale_order_id">
+                                <strong>Related Order:</strong>
+                                <span t-field="repair_order.sale_order_id"/>
+                            </p>
+                        </div>
+                    </div>
+                    <div class="alert alert-light border mt-4 mb-0">
+                        Need an update on this RO? Call <a href="tel:+16016514555">(601) 651-4555</a> or use the contact form.
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <template id="portal_my_outstanding_invoices" name="My Outstanding Invoices">
+        <t t-call="portal.portal_layout">
+            <t t-set="breadcrumbs_searchbar" t-value="True"/>
+            <t t-call="portal.portal_searchbar">
+                <t t-set="title">Outstanding Invoices</t>
+            </t>
+            <t t-if="not invoices">
+                <p class="alert alert-warning">There are currently no outstanding invoices for your account.</p>
+            </t>
+            <t t-if="invoices" t-call="portal.portal_table">
+                <thead>
+                    <tr class="active">
+                        <th>Invoice #</th>
+                        <th class="d-none d-md-table-cell">Invoice Date</th>
+                        <th class="d-none d-md-table-cell">Due Date</th>
+                        <th class="text-end pe-3">Amount Due</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr t-foreach="invoices" t-as="invoice">
+                        <td>
+                            <a t-att-href="invoice.get_portal_url()" t-att-title="invoice.name">
+                                <t t-out="invoice.name"/>
+                            </a>
+                        </td>
+                        <td class="d-none d-md-table-cell"><span t-field="invoice.invoice_date"/></td>
+                        <td class="d-none d-md-table-cell"><span t-field="invoice.invoice_date_due"/></td>
+                        <td class="text-end pe-3">
+                            <span t-field="invoice.amount_residual" t-options="{'widget': 'monetary', 'display_currency': invoice.currency_id}"/>
+                        </td>
+                        <td>
+                            <span t-if="invoice.payment_state == 'partial'" class="badge rounded-pill text-bg-warning">Partial</span>
+                            <span t-elif="invoice.payment_state == 'in_payment'" class="badge rounded-pill text-bg-info">Processing Payment</span>
+                            <span t-else="" class="badge rounded-pill text-bg-info">Open</span>
+                        </td>
+                    </tr>
+                </tbody>
+            </t>
+        </t>
+    </template>
+</odoo>

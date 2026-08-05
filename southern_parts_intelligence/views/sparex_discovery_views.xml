@@ -1,0 +1,422 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="southern_sparex_discovery_run_list" model="ir.ui.view">
+        <field name="name">southern.sparex.discovery.run.list</field>
+        <field name="model">southern.sparex.discovery.run</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'completed'" decoration-warning="state == 'cooldown'" decoration-danger="state == 'failed'">
+                <field name="idempotency_key"/>
+                <field name="state"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="discovery_agent_id"/>
+                <field name="match_agent_id"/>
+                <field name="page_count"/>
+                <field name="queued_url_count"/>
+                <field name="visited_url_count"/>
+                <field name="observed_count"/>
+                <field name="matched_count"/>
+                <field name="missing_count"/>
+                <field name="duplicate_count"/>
+                <field name="review_count"/>
+                <field name="corrected_count"/>
+                <field name="product_page_count"/>
+                <field name="empty_page_count"/>
+                <field name="stale_count"/>
+                <field name="source_repair_candidate_count"/>
+                <field name="cost_recovery_queued_count"/>
+                <field name="cost_recovery_retry_count"/>
+                <field name="cost_recovery_manual_count"/>
+                <field name="blocked_item_count"/>
+                <field name="progress_percent" widget="progressbar"/>
+                <field name="estimated_minutes_remaining"/>
+                <field name="reconciliation_state"/>
+                <field name="recovery_state"/>
+                <field name="next_request_at"/>
+                <field name="cooldown_until"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="southern_sparex_discovery_run_form" model="ir.ui.view">
+        <field name="name">southern.sparex.discovery.run.form</field>
+        <field name="model">southern.sparex.discovery.run</field>
+        <field name="arch" type="xml">
+            <form create="0" delete="0">
+                <header><field name="state" widget="statusbar"/></header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group>
+                            <field name="idempotency_key"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="discovery_agent_id"/>
+                            <field name="match_agent_id"/>
+                            <field name="parser_version"/>
+                            <field name="schema_version"/>
+                        </group>
+                        <group>
+                            <field name="throttle_seconds"/>
+                            <field name="max_pages_per_checkpoint"/>
+                            <field name="max_items_per_page"/>
+                            <field name="max_pages_total"/>
+                            <field name="page_count"/>
+                            <field name="queued_url_count"/>
+                            <field name="visited_url_count"/>
+                            <field name="observed_count"/>
+                            <field name="product_page_count"/>
+                            <field name="empty_page_count"/>
+                            <field name="last_page_item_count"/>
+                            <field name="average_items_per_product_page"/>
+                            <field name="progress_percent" widget="progressbar"/>
+                            <field name="estimated_checkpoints_remaining"/>
+                            <field name="estimated_minutes_remaining"/>
+                            <field name="completed_at"/>
+                        </group>
+                    </group>
+                    <group string="Match Totals">
+                        <field name="matched_count"/>
+                        <field name="missing_count"/>
+                        <field name="duplicate_count"/>
+                        <field name="review_count"/>
+                        <field name="corrected_count"/>
+                        <field name="stale_count"/>
+                        <field name="current_item_count"/>
+                        <field name="missing_product_count"/>
+                        <field name="publication_candidate_count"/>
+                        <field name="source_repair_candidate_count"/>
+                        <field name="published_product_count"/>
+                        <field name="readiness_refreshed_count"/>
+                        <field name="cost_recovery_queued_count"/>
+                        <field name="cost_recovery_retry_count"/>
+                        <field name="cost_recovery_manual_count"/>
+                        <field name="source_review_item_count"/>
+                        <field name="blocked_item_count"/>
+                        <field name="missing_cost_blocker_count"/>
+                        <field name="missing_sales_price_blocker_count"/>
+                        <field name="missing_url_blocker_count"/>
+                        <field name="missing_image_blocker_count"/>
+                    </group>
+                    <notebook>
+                        <page string="Cursor and Evidence">
+                            <group>
+                                <field name="seed_url" password="1"/>
+                                <field name="seed_url_sha256"/>
+                                <field name="cursor_url" password="1"/>
+                                <field name="cursor_url_sha256"/>
+                                <field name="frontier_urls" password="1"/>
+                                <field name="visited_url_sha256s"/>
+                                <field name="plan_artifact_uri"/>
+                                <field name="plan_sha256"/>
+                            </group>
+                        </page>
+                        <page string="Worker State">
+                            <group>
+                                <field name="lease_owner"/>
+                                <field name="lease_expires_at"/>
+                                <field name="last_request_at"/>
+                                <field name="next_request_at"/>
+                                <field name="cooldown_until"/>
+                                <field name="error_code"/>
+                                <field name="error_message"/>
+                                <field name="reconciliation_state"/>
+                                <field name="reconciliation_started_at"/>
+                                <field name="reconciliation_completed_at"/>
+                                <field name="recovery_state"/>
+                                <field name="consecutive_failure_count"/>
+                                <field name="recovered_lease_count"/>
+                                <field name="last_success_at"/>
+                                <field name="last_failure_at"/>
+                            </group>
+                        </page>
+                        <page string="Archived Pages"><field name="page_ids" readonly="1"/></page>
+                    </notebook>
+                    <chatter/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="southern_sparex_discovery_run_kanban" model="ir.ui.view">
+        <field name="name">southern.sparex.discovery.run.kanban</field>
+        <field name="model">southern.sparex.discovery.run</field>
+        <field name="arch" type="xml">
+            <kanban default_order="create_date desc">
+                <field name="idempotency_key"/>
+                <field name="state"/>
+                <field name="recovery_state"/>
+                <field name="reconciliation_state"/>
+                <field name="progress_percent"/>
+                <field name="page_count"/>
+                <field name="queued_url_count"/>
+                <field name="observed_count"/>
+                <field name="matched_count"/>
+                <field name="corrected_count"/>
+                <field name="stale_count"/>
+                <field name="missing_product_count"/>
+                <field name="publication_candidate_count"/>
+                <field name="source_repair_candidate_count"/>
+                <field name="published_product_count"/>
+                <field name="readiness_refreshed_count"/>
+                <field name="cost_recovery_queued_count"/>
+                <field name="cost_recovery_retry_count"/>
+                <field name="cost_recovery_manual_count"/>
+                <field name="blocked_item_count"/>
+                <field name="source_review_item_count"/>
+                <field name="estimated_minutes_remaining"/>
+                <field name="last_success_at"/>
+                <templates>
+                    <t t-name="card">
+                        <div class="fw-bold fs-5"><field name="idempotency_key"/></div>
+                        <div class="text-muted mb-2">
+                            <field name="state"/> · <field name="recovery_state"/> · <field name="reconciliation_state"/>
+                        </div>
+                        <field name="progress_percent" widget="progressbar"/>
+                        <div class="row mt-3">
+                            <div class="col-6">Pages: <field name="page_count"/></div>
+                            <div class="col-6">Remaining: <field name="queued_url_count"/></div>
+                            <div class="col-6">Observed: <field name="observed_count"/></div>
+                            <div class="col-6">Matched: <field name="matched_count"/></div>
+                            <div class="col-6">Corrected: <field name="corrected_count"/></div>
+                            <div class="col-6">Stale: <field name="stale_count"/></div>
+                            <div class="col-6">Missing Odoo: <field name="missing_product_count"/></div>
+                            <div class="col-6">Ready: <field name="publication_candidate_count"/></div>
+                            <div class="col-6">Repair queue: <field name="source_repair_candidate_count"/></div>
+                            <div class="col-6">Cost recovery: <field name="cost_recovery_queued_count"/></div>
+                            <div class="col-6">Cost retries: <field name="cost_recovery_retry_count"/></div>
+                            <div class="col-6">Published: <field name="published_product_count"/></div>
+                            <div class="col-6">Readiness rescanned: <field name="readiness_refreshed_count"/></div>
+                            <div class="col-6">Blocked: <field name="blocked_item_count"/></div>
+                            <div class="col-6">Source review: <field name="source_review_item_count"/></div>
+                        </div>
+                        <div class="text-muted mt-2">
+                            Estimated minutes: <field name="estimated_minutes_remaining"/>
+                            · Last success: <field name="last_success_at"/>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <record id="southern_sparex_discovery_item_list" model="ir.ui.view">
+        <field name="name">southern.sparex.discovery.item.list</field>
+        <field name="model">southern.sparex.discovery.item</field>
+        <field name="arch" type="xml">
+            <list decoration-success="odoo_match_state == 'matched_active' and state == 'verified'" decoration-warning="odoo_match_state == 'missing'" decoration-danger="odoo_match_state == 'duplicate'">
+                <field name="normalized_sku"/>
+                <field name="listing_title"/>
+                <field name="state"/>
+                <field name="source_state"/>
+                <field name="reconciliation_state"/>
+                <field name="review_reason"/>
+                <field name="odoo_match_state"/>
+                <field name="matched_product_id"/>
+                <field name="has_positive_supplier_cost"/>
+                <field name="has_positive_sales_price"/>
+                <field name="has_exact_sparex_url"/>
+                <field name="has_image"/>
+                <field name="source_enrichment_candidate"/>
+                <field name="publication_candidate"/>
+                <field name="primary_blocker"/>
+                <field name="cost_recovery_state"/>
+                <field name="cost_recovery_priority"/>
+                <field name="cost_recovery_attempt_count"/>
+                <field name="cost_recovery_next_at"/>
+                <field name="blocker_summary"/>
+                <field name="correction_count"/>
+                <field name="observation_count"/>
+                <field name="last_seen_at"/>
+                <field name="creation_state"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="southern_sparex_discovery_item_form" model="ir.ui.view">
+        <field name="name">southern.sparex.discovery.item.form</field>
+        <field name="model">southern.sparex.discovery.item</field>
+        <field name="arch" type="xml">
+            <form create="0" edit="0" delete="0">
+                <header>
+                    <button name="action_approve_creation_review" type="object" string="Approve Creation Review" class="btn-primary" invisible="odoo_match_state != 'missing' or creation_state == 'approved'"/>
+                    <button name="action_reject_creation_review" type="object" string="Reject Creation" invisible="odoo_match_state != 'missing' or creation_state == 'rejected'"/>
+                    <button name="action_reset_creation_review" type="object" string="Reset Review" invisible="creation_state not in ['approved', 'rejected']"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="normalized_sku"/></h1></div>
+                    <div class="oe_title"><h2><field name="listing_title"/></h2></div>
+                    <group>
+                        <group>
+                            <field name="state"/>
+                            <field name="source_state"/>
+                            <field name="reconciliation_state"/>
+                            <field name="review_reason"/>
+                            <field name="odoo_match_state"/>
+                            <field name="matched_product_id"/>
+                            <field name="duplicate_product_ids" widget="many2many_tags"/>
+                            <field name="creation_state"/>
+                            <field name="currently_published"/>
+                            <field name="source_enrichment_candidate"/>
+                            <field name="publication_candidate"/>
+                            <field name="primary_blocker"/>
+                            <field name="cost_recovery_state"/>
+                            <field name="cost_recovery_priority"/>
+                            <field name="cost_recovery_attempt_count"/>
+                            <field name="cost_recovery_next_at"/>
+                            <field name="cost_recovery_last_error"/>
+                            <field name="cost_evidence_url_sha256"/>
+                            <field name="cost_evidence_sha256"/>
+                            <field name="cost_recovery_parser_version"/>
+                            <field name="cost_recovered_at"/>
+                            <field name="blocker_summary"/>
+                        </group>
+                        <group>
+                            <field name="first_seen_at"/>
+                            <field name="last_seen_at"/>
+                            <field name="observation_count"/>
+                            <field name="correction_count"/>
+                            <field name="last_corrected_at"/>
+                            <field name="readiness_refreshed_at"/>
+                            <field name="first_seen_run_id"/>
+                            <field name="last_seen_run_id"/>
+                            <field name="last_seen_page_id"/>
+                        </group>
+                    </group>
+                    <group string="Publication Essentials">
+                        <field name="has_positive_supplier_cost"/>
+                        <field name="has_positive_sales_price"/>
+                        <field name="has_exact_sparex_url"/>
+                        <field name="has_image"/>
+                        <field name="product_has_exact_sparex_url"/>
+                        <field name="product_has_image"/>
+                    </group>
+                    <group string="Internal Source Evidence">
+                        <field name="source_url" password="1"/>
+                        <field name="source_url_sha256"/>
+                        <field name="image_url" password="1"/>
+                        <field name="image_url_sha256"/>
+                        <field name="source_artifact_uri"/>
+                        <field name="source_artifact_sha256"/>
+                    </group>
+                    <div class="alert alert-info" role="alert">
+                        Discovery is inventory-only. Missing products are classified here but cannot be created by this queue.
+                    </div>
+                    <chatter/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="southern_sparex_discovery_item_search" model="ir.ui.view">
+        <field name="name">southern.sparex.discovery.item.search</field>
+        <field name="model">southern.sparex.discovery.item</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="normalized_sku"/>
+                <field name="matched_product_id"/>
+                <field name="primary_blocker"/>
+                <filter name="missing" string="Missing in Odoo" domain="[('odoo_match_state','=','missing')]"/>
+                <filter name="existing" string="Existing in Odoo" domain="[('odoo_match_state','in',['matched_active','matched_archived'])]"/>
+                <filter name="duplicate" string="Duplicate SKU" domain="[('odoo_match_state','=','duplicate')]"/>
+                <filter name="source_review" string="Source Review" domain="[('state','=','review')]"/>
+                <filter name="current_run" string="Current Run" domain="[('reconciliation_state','=','current')]"/>
+                <filter name="awaiting_rescan" string="Awaiting Rescan" domain="[('reconciliation_state','=','pending')]"/>
+                <filter name="stale" string="Stale" domain="[('reconciliation_state','=','stale')]"/>
+                <filter name="creation_review" string="Creation Review" domain="[('creation_state','=','review_required')]"/>
+                <filter name="enrichment_candidates" string="Ready to Link Source" domain="[('source_enrichment_candidate','=',True)]"/>
+                <filter name="publication_candidates" string="Publication Candidates" domain="[('publication_candidate','=',True)]"/>
+                <filter name="publication_blockers" string="Publication Blockers" domain="[('reconciliation_state','=','current'),('odoo_match_state','=','matched_active'),('currently_published','=',False),('publication_candidate','=',False)]"/>
+                <filter name="missing_cost" string="Missing Cost" domain="[('primary_blocker','=','missing_cost')]"/>
+                <filter name="cost_recovery_queued" string="Cost Recovery Queued" domain="[('cost_recovery_state','=','queued')]"/>
+                <filter name="cost_recovery_retry" string="Cost Retry Scheduled" domain="[('cost_recovery_state','=','retry_wait')]"/>
+                <filter name="cost_recovery_manual" string="Cost Manual Review" domain="[('cost_recovery_state','=','manual_review')]"/>
+                <filter name="missing_sales_price" string="Missing Sales Price" domain="[('primary_blocker','=','missing_sales_price')]"/>
+                <filter name="missing_product_url" string="Missing Product URL" domain="[('primary_blocker','=','missing_product_url')]"/>
+                <filter name="missing_product_image" string="Missing Product Image" domain="[('primary_blocker','=','missing_product_image')]"/>
+                <filter name="missing_customer_description" string="Missing Customer Description" domain="[('primary_blocker','=','missing_customer_description')]"/>
+                <separator/>
+                <filter name="group_match" string="Odoo Match" context="{'group_by':'odoo_match_state'}"/>
+                <filter name="group_source" string="Source Status" context="{'group_by':'source_state'}"/>
+                <filter name="group_blocker" string="Publication Blocker" context="{'group_by':'primary_blocker'}"/>
+                <filter name="group_cost_recovery" string="Cost Recovery State" context="{'group_by':'cost_recovery_state'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_southern_sparex_discovery_runs" model="ir.actions.act_window">
+        <field name="name">Sparex Discovery Runs</field>
+        <field name="res_model">southern.sparex.discovery.run</field>
+        <field name="view_mode">list,form</field>
+    </record>
+    <record id="action_southern_sparex_discovery_dashboard" model="ir.actions.act_window">
+        <field name="name">Sparex Discovery Dashboard</field>
+        <field name="res_model">southern.sparex.discovery.run</field>
+        <field name="view_mode">kanban,list,form</field>
+    </record>
+    <record id="action_southern_sparex_discovery_items" model="ir.actions.act_window">
+        <field name="name">Sparex Discovery Queue</field>
+        <field name="res_model">southern.sparex.discovery.item</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="southern_sparex_discovery_item_search"/>
+    </record>
+    <record id="action_southern_sparex_missing_products" model="ir.actions.act_window">
+        <field name="name">Missing Sparex Products</field>
+        <field name="res_model">southern.sparex.discovery.item</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('odoo_match_state','=','missing')]</field>
+        <field name="search_view_id" ref="southern_sparex_discovery_item_search"/>
+    </record>
+    <record id="action_southern_sparex_publication_blockers" model="ir.actions.act_window">
+        <field name="name">Sparex Publication Blockers</field>
+        <field name="res_model">southern.sparex.discovery.item</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('reconciliation_state','=','current'),('odoo_match_state','=','matched_active'),('currently_published','=',False),('publication_candidate','=',False)]</field>
+        <field name="context">{'search_default_group_blocker': 1}</field>
+        <field name="search_view_id" ref="southern_sparex_discovery_item_search"/>
+    </record>
+    <record id="action_southern_sparex_cost_recovery" model="ir.actions.act_window">
+        <field name="name">Sparex Dealer Cost Recovery</field>
+        <field name="res_model">southern.sparex.discovery.item</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('reconciliation_state','=','current'),('primary_blocker','=','missing_cost')]</field>
+        <field name="context">{'search_default_group_cost_recovery': 1}</field>
+        <field name="search_view_id" ref="southern_sparex_discovery_item_search"/>
+    </record>
+
+    <menuitem id="menu_southern_sparex_discovery_dashboard"
+              name="Sparex Discovery Dashboard"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_sparex_discovery_dashboard"
+              sequence="4"
+              groups="base.group_system"/>
+
+    <menuitem id="menu_southern_sparex_discovery_runs"
+              name="Sparex Discovery Runs"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_sparex_discovery_runs"
+              sequence="5"
+              groups="base.group_system"/>
+    <menuitem id="menu_southern_sparex_discovery_items"
+              name="Sparex Discovery Queue"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_sparex_discovery_items"
+              sequence="6"
+              groups="base.group_system"/>
+    <menuitem id="menu_southern_sparex_missing_products"
+              name="Missing Sparex Products"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_sparex_missing_products"
+              sequence="7"
+              groups="base.group_system"/>
+    <menuitem id="menu_southern_sparex_publication_blockers"
+              name="Sparex Publication Blockers"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_sparex_publication_blockers"
+              sequence="8"
+              groups="base.group_system"/>
+    <menuitem id="menu_southern_sparex_cost_recovery"
+              name="Sparex Dealer Cost Recovery"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_sparex_cost_recovery"
+              sequence="9"
+              groups="base.group_system"/>
+</odoo>

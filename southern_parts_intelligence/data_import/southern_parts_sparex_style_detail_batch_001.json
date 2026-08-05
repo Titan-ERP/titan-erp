@@ -1,0 +1,149 @@
+{
+  "products": [
+    {
+      "internal_reference": "PAR-00000175",
+      "source": {
+        "vendor": "RDO / FridayParts / TractorPartsASAP research",
+        "url": "https://www.rdoequipment.com/product-details/john-deere-alternator-12v-65a-at173624"
+      },
+      "specifications": [
+        {"name": "Brand", "value": "John Deere / aftermarket replacement", "group": "Specifications"},
+        {"name": "OEM Part Number", "value": "AT173624", "group": "Specifications"},
+        {"name": "Voltage", "value": "12", "unit": "V", "group": "Specifications"},
+        {"name": "Amperage", "value": "65", "unit": "Amp", "group": "Specifications"},
+        {"name": "Related Replacement Numbers", "value": "RE533516, SE501387, SE501835", "group": "Specifications"}
+      ],
+      "oem_references": [
+        {"manufacturer": "John Deere", "part_number": "AT173624", "reference_type": "oem"},
+        {"manufacturer": "John Deere", "part_number": "RE533516", "reference_type": "replacement"},
+        {"manufacturer": "John Deere", "part_number": "SE501387", "reference_type": "replacement"},
+        {"manufacturer": "John Deere", "part_number": "SE501835", "reference_type": "replacement"}
+      ],
+      "fitments": [
+        {"make": "John Deere", "model": "210LE"},
+        {"make": "John Deere", "model": "240"},
+        {"make": "John Deere", "model": "250"},
+        {"make": "John Deere", "model": "260"},
+        {"make": "John Deere", "model": "270"},
+        {"make": "John Deere", "model": "485E"},
+        {"make": "John Deere", "model": "486E"},
+        {"make": "John Deere", "model": "488E"},
+        {"make": "John Deere", "model": "550G"},
+        {"make": "John Deere", "model": "650G"},
+        {"make": "John Deere", "model": "344J"},
+        {"make": "John Deere", "model": "344H"}
+      ],
+      "catalog_pages": [
+        {"catalog_name": "Retail Evidence", "page_number": "AT173624 product page", "source_url": "https://www.rdoequipment.com/product-details/john-deere-alternator-12v-65a-at173624"}
+      ]
+    },
+    {
+      "internal_reference": "PAR-00000176",
+      "source": {
+        "vendor": "John Deere / Made-in-China / eBay research",
+        "url": "https://best-excavator-parts.en.made-in-china.com/product/FrlYNJeDZoVg/China-Ty24485-Se501342-At175194-12V-95A-Alternator-Suitable-for-Backhoe-Loader.html"
+      },
+      "specifications": [
+        {"name": "Brand", "value": "John Deere / aftermarket replacement", "group": "Specifications"},
+        {"name": "OEM Part Number", "value": "TY24485", "group": "Specifications"},
+        {"name": "Voltage", "value": "12", "unit": "V", "group": "Specifications"},
+        {"name": "Amperage", "value": "95", "unit": "Amp", "group": "Specifications"},
+        {"name": "Related Replacement Numbers", "value": "SE501342, AT175194", "group": "Specifications"}
+      ],
+      "oem_references": [
+        {"manufacturer": "John Deere", "part_number": "TY24485", "reference_type": "oem"},
+        {"manufacturer": "John Deere", "part_number": "SE501342", "reference_type": "replacement"},
+        {"manufacturer": "John Deere", "part_number": "AT175194", "reference_type": "replacement"}
+      ],
+      "fitments": [
+        {"make": "John Deere", "model": "360D"},
+        {"make": "John Deere", "model": "460D"},
+        {"make": "John Deere", "model": "540G-II"},
+        {"make": "John Deere", "model": "540G-III"},
+        {"make": "John Deere", "model": "548G-II"},
+        {"make": "John Deere", "model": "548G-III"},
+        {"make": "John Deere", "model": "648G-II"},
+        {"make": "John Deere", "model": "648G-III"}
+      ],
+      "catalog_pages": [
+        {"catalog_name": "Retail Evidence", "page_number": "TY24485 product page", "source_url": "https://best-excavator-parts.en.made-in-china.com/product/FrlYNJeDZoVg/China-Ty24485-Se501342-At175194-12V-95A-Alternator-Suitable-for-Backhoe-Loader.html"}
+      ]
+    },
+    {
+      "internal_reference": "PAR-00000095",
+      "source": {
+        "vendor": "Heavy Duty Pros",
+        "url": "https://www.heavydutypros.com/deutz-water-pump-4135550.aspx"
+      },
+      "specifications": [
+        {"name": "Brand", "value": "Memo / aftermarket replacement", "group": "Specifications"},
+        {"name": "OEM Part Number", "value": "4135550", "group": "Specifications"},
+        {"name": "Manufacturer Part No.", "value": "D4135550", "group": "Specifications"},
+        {"name": "Includes", "value": "Water pump with gasket and O-ring", "group": "Specifications"},
+        {"name": "Engine Size", "value": "2.9", "unit": "L", "group": "Specifications"}
+      ],
+      "oem_references": [
+        {"manufacturer": "Deutz", "part_number": "4135550", "reference_type": "oem"},
+        {"manufacturer": "Deutz", "part_number": "4138560", "reference_type": "alternate"},
+        {"manufacturer": "Deutz", "part_number": "4138700", "reference_type": "alternate"},
+        {"manufacturer": "Deutz", "part_number": "4137490", "reference_type": "alternate"}
+      ],
+      "fitments": [
+        {"make": "Deutz", "model": "D2-9L04"},
+        {"make": "Deutz", "model": "D2-9L4"},
+        {"make": "Deutz", "model": "TD2-9L04"},
+        {"make": "Deutz", "model": "TD2-9L4"},
+        {"make": "Deutz", "model": "TCD2-9L04"},
+        {"make": "Deutz", "model": "TCD2-9L4"}
+      ],
+      "catalog_pages": [
+        {"catalog_name": "Retail Evidence", "page_number": "4135550 product page", "source_url": "https://www.heavydutypros.com/deutz-water-pump-4135550.aspx"}
+      ]
+    },
+    {
+      "internal_reference": "PAR-00000307",
+      "source": {
+        "vendor": "Reliable Aftermarket Parts",
+        "url": "https://www.reliableaftermarketparts.com/products/119225-52102-am876266-electric-fuel-pump-for-yanmar-fits-john-deere"
+      },
+      "specifications": [
+        {"name": "Brand", "value": "Aftermarket replacement", "group": "Specifications"},
+        {"name": "OEM Part Number", "value": "119225-52102", "group": "Specifications"},
+        {"name": "Voltage", "value": "12", "unit": "V", "group": "Specifications"},
+        {"name": "Inlet", "value": "3/8", "unit": "in", "group": "Specifications"},
+        {"name": "Outlet", "value": "3/8", "unit": "in", "group": "Specifications"},
+        {"name": "Electrical Connection", "value": "2 wire", "group": "Specifications"}
+      ],
+      "oem_references": [
+        {"manufacturer": "Yanmar", "part_number": "119225-52102", "reference_type": "oem"},
+        {"manufacturer": "John Deere", "part_number": "AM876266", "reference_type": "alternate"},
+        {"manufacturer": "John Deere", "part_number": "AM876207", "reference_type": "alternate"},
+        {"manufacturer": "Yanmar", "part_number": "RD411-51353", "reference_type": "alternate"},
+        {"manufacturer": "Aftermarket", "part_number": "FSG60-0050", "reference_type": "replacement"}
+      ],
+      "fitments": [
+        {"make": "John Deere", "model": "430"},
+        {"make": "John Deere", "model": "655"},
+        {"make": "John Deere", "model": "755"},
+        {"make": "John Deere", "model": "756"},
+        {"make": "John Deere", "model": "855"},
+        {"make": "John Deere", "model": "856"},
+        {"make": "John Deere", "model": "790"},
+        {"make": "John Deere", "model": "990"},
+        {"make": "John Deere", "model": "1025R"},
+        {"make": "John Deere", "model": "1026R"},
+        {"make": "John Deere", "model": "2025R"},
+        {"make": "John Deere", "model": "2032R"},
+        {"make": "Yanmar", "model": "2TNV70"},
+        {"make": "Yanmar", "model": "3TNV76"},
+        {"make": "Yanmar", "model": "3TNV88"},
+        {"make": "Yanmar", "model": "4TNV84T"},
+        {"make": "Yanmar", "model": "4TNV88"},
+        {"make": "Yanmar", "model": "4TNV106"}
+      ],
+      "catalog_pages": [
+        {"catalog_name": "Retail Evidence", "page_number": "119225-52102 product page", "source_url": "https://www.reliableaftermarketparts.com/products/119225-52102-am876266-electric-fuel-pump-for-yanmar-fits-john-deere"}
+      ]
+    }
+  ]
+}

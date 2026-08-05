@@ -1,0 +1,14 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+
+access.equipment.details.user,access_equipment.details.user,cs_client_equipment.model_equipment_details,cs_client_equipment.group_client_equipment_user,1,1,1,1
+access.equipment.category.user,access_equipment.category.user,cs_client_equipment.model_equipment_category,cs_client_equipment.group_client_equipment_user,1,1,1,1
+access.equipment.manufacturer.user,access_equipment.manufacturer.user,cs_client_equipment.model_equipment_manufacturer,cs_client_equipment.group_client_equipment_user,1,1,1,1
+access.equipment.jobs.user,access_cs_client_equipment.equipment.jobs.user,cs_client_equipment.model_equipment_jobs,cs_client_equipment.group_client_equipment_user,1,1,0,0
+access.equipment.systems.user,access_equipment.systems.user,cs_client_equipment.model_equipment_systems,cs_client_equipment.group_client_equipment_user,1,1,1,1
+
+access.equipment.details.admin,access_equipment.details.admin,cs_client_equipment.model_equipment_details,cs_client_equipment.group_client_equipment_administrator,1,1,1,1
+access.equipment.category.admin,access_equipment.category.admin,cs_client_equipment.model_equipment_category,cs_client_equipment.group_client_equipment_administrator,1,1,1,1
+access.equipment.manufacturer.admin,access_equipment.manufacturer.admin,cs_client_equipment.model_equipment_manufacturer,cs_client_equipment.group_client_equipment_administrator,1,1,1,1
+access.equipment.jobs.admin,access_cs_client_equipment.equipment.jobs.admin,cs_client_equipment.model_equipment_jobs,cs_client_equipment.group_client_equipment_administrator,1,1,1,1
+
+access.equipment.systems.admin,access_equipment.systems.admin,cs_client_equipment.model_equipment_systems,cs_client_equipment.group_client_equipment_administrator,1,1,1,1

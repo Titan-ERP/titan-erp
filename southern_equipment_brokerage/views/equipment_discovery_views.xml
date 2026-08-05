@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_southern_equipment_discovery_candidate_list" model="ir.ui.view">
+        <field name="name">southern.equipment.discovery.candidate.list</field>
+        <field name="model">southern.equipment.discovery.candidate</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'verified'"
+                  decoration-warning="state == 'needs_review'"
+                  decoration-danger="conflict_reason">
+                <field name="priority"/>
+                <field name="discovered_at"/>
+                <field name="source"/>
+                <field name="source_listing_id"/>
+                <field name="exact_title"/>
+                <field name="ask_price"/>
+                <field name="approximate_location"/>
+                <field name="verification_ready"/>
+                <field name="state"/>
+                <field name="listing_id"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_southern_equipment_discovery_candidate_form" model="ir.ui.view">
+        <field name="name">southern.equipment.discovery.candidate.form</field>
+        <field name="model">southern.equipment.discovery.candidate</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_start_verification" type="object" string="Start Verification"
+                            invisible="state not in ['new', 'needs_review']"/>
+                    <button name="action_needs_review" type="object" string="Needs Broker Review"
+                            invisible="state in ['converted', 'rejected']"/>
+                    <button name="action_verify" type="object" string="Verify" class="btn-primary"
+                            invisible="state != 'verification'"/>
+                    <button name="action_convert_to_listing" type="object" string="Create Listing"
+                            class="btn-primary" invisible="state != 'verified'"/>
+                    <button name="action_reject" type="object" string="Reject"
+                            invisible="state in ['converted', 'rejected']"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="new,needs_review,verification,verified,converted"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group string="Source">
+                            <field name="company_id"/>
+                            <field name="source"/>
+                            <field name="source_listing_id"/>
+                            <field name="canonical_url" widget="url"/>
+                            <field name="capture_run_id"/>
+                            <field name="discovered_at"/>
+                        </group>
+                        <group string="Visible Facts">
+                            <field name="exact_title"/>
+                            <field name="ask_price"/>
+                            <field name="approximate_location"/>
+                            <field name="equipment_type"/>
+                            <field name="manufacturer"/>
+                            <field name="model"/>
+                            <field name="year"/>
+                            <field name="hours"/>
+                        </group>
+                    </group>
+                    <group string="Verification Checklist">
+                        <group>
+                            <field name="title_confirmed"/>
+                            <field name="price_confirmed"/>
+                            <field name="location_confirmed"/>
+                            <field name="availability_confirmed"/>
+                        </group>
+                        <group>
+                            <field name="source_identity_confirmed"/>
+                            <field name="image_rights_confirmed"/>
+                            <field name="facts_not_inferred"/>
+                            <field name="verification_ready" readonly="1"/>
+                        </group>
+                    </group>
+                    <field name="conflict_reason"/>
+                    <field name="verification_note"/>
+                    <notebook>
+                        <page string="Evidence">
+                            <field name="evidence_ids">
+                                <list editable="bottom">
+                                    <field name="evidence_type"/>
+                                    <field name="source_url"/>
+                                    <field name="observed_value"/>
+                                    <field name="captured_at"/>
+                                    <field name="captured_by_id"/>
+                                    <field name="artifact_sha256"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Restricted Source Description">
+                            <field name="source_description"/>
+                        </page>
+                    </notebook>
+                    <field name="listing_id" readonly="1"/>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_southern_equipment_discovery_candidate_search" model="ir.ui.view">
+        <field name="name">southern.equipment.discovery.candidate.search</field>
+        <field name="model">southern.equipment.discovery.candidate</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="exact_title"/>
+                <field name="source_listing_id"/>
+                <field name="approximate_location"/>
+                <filter name="active_queue" string="Active Queue"
+                        domain="[('state', 'in', ['new', 'needs_review', 'verification', 'verified'])]"/>
+                <filter name="needs_review" string="Needs Review"
+                        domain="[('state', '=', 'needs_review')]"/>
+                <filter name="ready" string="Verification Ready"
+                        domain="[('verification_ready', '=', True)]"/>
+                <separator/>
+                <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
+                <filter name="group_source" string="Source" context="{'group_by': 'source'}"/>
+                <filter name="group_class" string="Equipment Type" context="{'group_by': 'equipment_type'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_southern_equipment_discovery_candidates" model="ir.actions.act_window">
+        <field name="name">Equipment Discovery</field>
+        <field name="res_model">southern.equipment.discovery.candidate</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_southern_equipment_discovery_candidate_search"/>
+        <field name="context">{'search_default_active_queue': 1}</field>
+    </record>
+</odoo>

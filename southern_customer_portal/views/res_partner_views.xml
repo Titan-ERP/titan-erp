@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_partner_form_southern_customer_access" model="ir.ui.view">
+        <field name="name">res.partner.form.southern.customer.access</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Financing" name="southern_customer_financing">
+                    <group>
+                        <group string="Synchrony Financing">
+                            <field name="southern_synchrony_account_number"
+                                   placeholder="Enter Synchrony account number"/>
+                        </group>
+                    </group>
+                </page>
+                <page string="Southern Access" name="southern_customer_access">
+                    <group>
+                        <group string="Account Type">
+                            <field name="southern_account_type"/>
+                            <field name="property_product_pricelist"/>
+                        </group>
+                        <group string="Portal Relationship">
+                            <field name="southern_membership_status"/>
+                            <field name="southern_partner_status"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Membership">
+                            <field name="southern_membership_application_id" readonly="1"/>
+                        </group>
+                        <group string="Partner">
+                            <field name="southern_partner_application_id" readonly="1"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_partner_tree_southern_customer_access" model="ir.ui.view">
+        <field name="name">res.partner.list.southern.customer.access</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='user_id']" position="after">
+                <field name="southern_account_type" optional="show"/>
+                <field name="southern_membership_status" optional="hide"/>
+                <field name="southern_partner_status" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

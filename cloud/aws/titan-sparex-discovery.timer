@@ -1,0 +1,13 @@
+[Unit]
+Description=Poll for one Odoo-owned product dispatch
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=1min
+RandomizedDelaySec=15s
+AccuracySec=1s
+Persistent=false
+Unit=titan-sparex-discovery.service
+
+[Install]
+WantedBy=timers.target

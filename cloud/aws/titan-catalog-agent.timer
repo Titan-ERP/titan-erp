@@ -1,0 +1,13 @@
+[Unit]
+Description=Run the Titan catalog-agent pipeline after each completed interval
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=2min
+RandomizedDelaySec=10s
+AccuracySec=1s
+Persistent=false
+Unit=titan-catalog-agent.service
+
+[Install]
+WantedBy=timers.target

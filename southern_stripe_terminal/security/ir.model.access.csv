@@ -1,0 +1,8 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_stripe_terminal_config_manager,stripe.terminal.config manager,model_southern_stripe_terminal_config,account.group_account_manager,1,1,1,0
+access_stripe_terminal_payment_readonly,stripe.terminal.payment readonly,model_southern_stripe_terminal_payment,account.group_account_readonly,1,0,0,0
+access_stripe_terminal_payment_invoice,stripe.terminal.payment invoice,model_southern_stripe_terminal_payment,account.group_account_invoice,1,1,1,0
+access_stripe_terminal_payment_manager,stripe.terminal.payment manager,model_southern_stripe_terminal_payment,account.group_account_manager,1,1,1,0
+access_stripe_terminal_event_manager,stripe.terminal.event manager,model_southern_stripe_terminal_event,account.group_account_manager,1,0,0,0
+access_invoice_payment_route_manager,invoice.payment.route manager,model_southern_invoice_payment_route,account.group_account_manager,1,1,1,0
+access_invoice_payment_route_invoice,invoice.payment.route invoice,model_southern_invoice_payment_route,account.group_account_invoice,1,0,0,0

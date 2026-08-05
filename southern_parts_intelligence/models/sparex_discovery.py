@@ -1,0 +1,2378 @@
+import base64
+import hashlib
+import html
+import json
+import math
+import re
+from datetime import timedelta
+from urllib.parse import parse_qs, urlsplit
+
+from odoo import _, api, fields, models
+from odoo.exceptions import UserError, ValidationError
+
+from .catalog_agents import (
+    SHA256_PATTERN,
+    customer_description_ready,
+    exact_sparex_url,
+    normalized_sparex_sku,
+    sales_price_blocker,
+)
+
+SPAREX_DISCOVERY_HOSTS = {"us.sparex.com"}
+MAX_DISCOVERY_PAGE_ITEMS = 100
+MAX_DISCOVERY_CHECKPOINT_PAGES = 10
+MAX_DISCOVERY_FRONTIER_URLS = 10000
+MAX_DISCOVERY_LINKS_PER_PAGE = 5_000
+MAX_DISCOVERY_TOTAL_PAGES = 10000
+MAX_SOURCE_LINK_BATCH = 50
+MAX_COST_RECOVERY_BATCH = 50
+MAX_COST_RECOVERY_ATTEMPTS = 5
+MAX_PRODUCT_CREATION_BATCH = 100
+SOURCE_LINK_CONFIRMATION = "sparex-discovery-source-link"
+DESCRIPTION_REPAIR_CONFIRMATION = "sparex-listing-description-repair"
+COST_RECOVERY_CONFIRMATION = "sparex-dealer-cost-recovery"
+PRODUCT_CREATION_CONFIRMATION = "sparex-page-driven-draft-creation"
+DEFAULT_COST_PLUS_MARGIN_PERCENT = 35.0
+PRODUCT_DETAIL_PATH = re.compile(r"(?:^|[-/])\d+\.html$", re.IGNORECASE)
+LISTING_PATH_DENY_PREFIXES = (
+    "/about",
+    "/account",
+    "/catalogue",
+    "/checkout",
+    "/contact",
+    "/cookie",
+    "/customer",
+    "/help",
+    "/login",
+    "/media",
+    "/privacy",
+    "/sales",
+    "/search",
+    "/wishlist",
+)
+
+
+def _https_sparex_url(value):
+    parsed = urlsplit((value or "").strip())
+    return (
+        parsed.scheme.casefold() == "https" and (parsed.hostname or "").casefold().rstrip(".") in SPAREX_DISCOVERY_HOSTS
+    )
+
+
+def _https_url(value):
+    parsed = urlsplit((value or "").strip())
+    return parsed.scheme.casefold() == "https" and bool(parsed.hostname)
+
+
+def _sparex_listing_url(value):
+    parsed = urlsplit((value or "").strip())
+    path = parsed.path.rstrip("/") or "/"
+    return (
+        _https_sparex_url(value)
+        and not PRODUCT_DETAIL_PATH.search(path)
+        and not path.casefold().startswith(LISTING_PATH_DENY_PREFIXES)
+    )
+
+
+def _sha256_text(value):
+    return hashlib.sha256((value or "").encode("utf-8")).hexdigest()
+
+
+def _canonical_sha256(value):
+    payload = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _frontier_priority(value):
+    """Prefer product pagination before broad category expansion."""
+    parsed = urlsplit((value or "").strip())
+    query = parse_qs(parsed.query)
+    if {"p", "page"} & set(query):
+        return (0, parsed.path.count("/"), value)
+    if parsed.path.casefold().endswith(".html"):
+        return (1, parsed.path.count("/"), value)
+    return (2, parsed.path.count("/"), value)
+
+
+def _primary_publication_blocker(
+    *,
+    reconciliation_state,
+    item_state,
+    source_state,
+    match_state,
+    product_active,
+    currently_published,
+    has_cost,
+    has_sales_price,
+    product_has_exact_url,
+    product_has_image,
+    product_has_category,
+    product_has_description,
+):
+    if reconciliation_state != "current":
+        return "stale"
+    if item_state != "verified" or source_state != "verified":
+        return "source_review"
+    if match_state == "missing":
+        return "missing_odoo"
+    if match_state == "duplicate":
+        return "duplicate_odoo"
+    if match_state == "matched_archived" or not product_active:
+        return "archived"
+    if not has_cost:
+        return "missing_cost"
+    if currently_published:
+        return "already_published"
+    if not has_sales_price:
+        return "missing_sales_price"
+    if not product_has_exact_url:
+        return "missing_product_url"
+    if not product_has_image:
+        return "missing_product_image"
+    if not product_has_category:
+        return "missing_website_category"
+    if not product_has_description:
+        return "missing_customer_description"
+    return "ready"
+
+
+class SouthernSparexDiscoveryRun(models.Model):
+    _name = "southern.sparex.discovery.run"
+    _description = "Sparex Catalog Discovery Run"
+    _inherit = ["mail.thread", "mail.activity.mixin"]  # noqa: RUF012 - Odoo model metadata
+    _order = "create_date desc, id desc"
+
+    name = fields.Char(compute="_compute_name", store=True)
+    active = fields.Boolean(default=True)
+    company_id = fields.Many2one("res.company", required=True, default=lambda self: self.env.company, index=True)
+    idempotency_key = fields.Char(required=True, copy=False, index=True)
+    state = fields.Selection(
+        [
+            ("ready", "Ready"),
+            ("running", "Running"),
+            ("cooldown", "Cooldown"),
+            ("completed", "Completed"),
+            ("failed", "Failed"),
+            ("cancelled", "Cancelled"),
+        ],
+        default="ready",
+        required=True,
+        tracking=True,
+        index=True,
+    )
+    discovery_agent_id = fields.Many2one("southern.catalog.agent", required=True, ondelete="restrict")
+    match_agent_id = fields.Many2one("southern.catalog.agent", required=True, ondelete="restrict")
+    seed_url = fields.Char(required=True, readonly=True, copy=False)
+    seed_url_sha256 = fields.Char(required=True, readonly=True, copy=False)
+    cursor_url = fields.Char(required=True, readonly=True, copy=False)
+    cursor_url_sha256 = fields.Char(required=True, readonly=True, copy=False)
+    parser_version = fields.Char(required=True, readonly=True)
+    schema_version = fields.Char(default="1.0", required=True, readonly=True)
+    plan_artifact_uri = fields.Char(required=True, readonly=True, copy=False)
+    plan_sha256 = fields.Char(required=True, readonly=True, copy=False)
+    throttle_seconds = fields.Float(default=3.0, required=True)
+    max_pages_per_checkpoint = fields.Integer(default=1, required=True)
+    max_items_per_page = fields.Integer(default=MAX_DISCOVERY_PAGE_ITEMS, required=True)
+    max_pages_total = fields.Integer(default=MAX_DISCOVERY_TOTAL_PAGES, required=True)
+    frontier_urls = fields.Text(readonly=True, copy=False)
+    visited_url_sha256s = fields.Text(readonly=True, copy=False)
+    queued_url_count = fields.Integer(default=0, readonly=True)
+    visited_url_count = fields.Integer(default=0, readonly=True)
+    page_count = fields.Integer(default=0, readonly=True)
+    observed_count = fields.Integer(default=0, readonly=True)
+    matched_count = fields.Integer(default=0, readonly=True)
+    missing_count = fields.Integer(default=0, readonly=True)
+    duplicate_count = fields.Integer(default=0, readonly=True)
+    review_count = fields.Integer(default=0, readonly=True)
+    corrected_count = fields.Integer(default=0, readonly=True)
+    stale_count = fields.Integer(default=0, readonly=True)
+    product_page_count = fields.Integer(default=0, readonly=True)
+    empty_page_count = fields.Integer(default=0, readonly=True)
+    last_page_item_count = fields.Integer(default=0, readonly=True)
+    average_items_per_product_page = fields.Float(compute="_compute_progress")
+    current_item_count = fields.Integer(compute="_compute_dashboard_counts")
+    missing_product_count = fields.Integer(compute="_compute_dashboard_counts")
+    publication_candidate_count = fields.Integer(compute="_compute_dashboard_counts")
+    source_repair_candidate_count = fields.Integer(compute="_compute_dashboard_counts")
+    source_review_item_count = fields.Integer(compute="_compute_dashboard_counts")
+    blocked_item_count = fields.Integer(compute="_compute_dashboard_counts")
+    published_product_count = fields.Integer(compute="_compute_dashboard_counts")
+    readiness_refreshed_count = fields.Integer(compute="_compute_dashboard_counts")
+    cost_recovery_queued_count = fields.Integer(compute="_compute_dashboard_counts")
+    cost_recovery_retry_count = fields.Integer(compute="_compute_dashboard_counts")
+    cost_recovery_manual_count = fields.Integer(compute="_compute_dashboard_counts")
+    missing_cost_blocker_count = fields.Integer(compute="_compute_dashboard_counts")
+    missing_sales_price_blocker_count = fields.Integer(compute="_compute_dashboard_counts")
+    missing_url_blocker_count = fields.Integer(compute="_compute_dashboard_counts")
+    missing_image_blocker_count = fields.Integer(compute="_compute_dashboard_counts")
+    progress_percent = fields.Float(compute="_compute_progress")
+    estimated_checkpoints_remaining = fields.Integer(compute="_compute_progress")
+    estimated_minutes_remaining = fields.Integer(compute="_compute_progress")
+    reconciliation_state = fields.Selection(
+        [("pending", "Pending"), ("in_progress", "In Progress"), ("completed", "Completed")],
+        default="pending",
+        required=True,
+        readonly=True,
+        index=True,
+    )
+    reconciliation_started_at = fields.Datetime(readonly=True)
+    reconciliation_completed_at = fields.Datetime(readonly=True)
+    recovery_state = fields.Selection(
+        [("healthy", "Healthy"), ("retrying", "Retrying"), ("cooldown", "Portal Cooldown")],
+        default="healthy",
+        required=True,
+        readonly=True,
+        index=True,
+    )
+    consecutive_failure_count = fields.Integer(default=0, readonly=True)
+    recovered_lease_count = fields.Integer(default=0, readonly=True)
+    last_success_at = fields.Datetime(readonly=True)
+    last_failure_at = fields.Datetime(readonly=True)
+    lease_owner = fields.Char(readonly=True, copy=False, index=True)
+    lease_expires_at = fields.Datetime(readonly=True, copy=False, index=True)
+    last_request_at = fields.Datetime(readonly=True, copy=False)
+    next_request_at = fields.Datetime(readonly=True, copy=False, index=True)
+    cooldown_until = fields.Datetime(readonly=True, copy=False, index=True)
+    error_code = fields.Char(readonly=True, copy=False, index=True)
+    error_message = fields.Text(readonly=True, copy=False)
+    completed_at = fields.Datetime(readonly=True, copy=False)
+    page_ids = fields.One2many("southern.sparex.discovery.page", "run_id")
+    item_ids = fields.One2many("southern.sparex.discovery.item", "last_seen_run_id")
+
+    _idempotency_company_unique = models.Constraint(
+        "unique(idempotency_key, company_id)", "A Sparex discovery run already exists for this key and company."
+    )
+
+    @api.depends("idempotency_key", "state")
+    def _compute_name(self):
+        for run in self:
+            run.name = f"{run.idempotency_key or _('New discovery')} / {run.state or 'ready'}"
+
+    @api.depends(
+        "page_count",
+        "queued_url_count",
+        "max_pages_per_checkpoint",
+        "observed_count",
+        "product_page_count",
+    )
+    def _compute_progress(self):
+        for run in self:
+            total = run.page_count + run.queued_url_count
+            run.progress_percent = (
+                (100.0 * run.page_count / total) if total else (100.0 if run.state == "completed" else 0.0)
+            )
+            capacity = max(1, run.max_pages_per_checkpoint)
+            checkpoints = (run.queued_url_count + capacity - 1) // capacity
+            run.estimated_checkpoints_remaining = checkpoints
+            run.estimated_minutes_remaining = checkpoints * 2
+            run.average_items_per_product_page = (
+                run.observed_count / run.product_page_count if run.product_page_count else 0.0
+            )
+
+    @api.depends(
+        "item_ids.reconciliation_state",
+        "item_ids.odoo_match_state",
+        "item_ids.publication_candidate",
+        "item_ids.source_enrichment_candidate",
+        "item_ids.primary_blocker",
+        "item_ids.cost_recovery_state",
+        "item_ids.readiness_refreshed_at",
+    )
+    def _compute_dashboard_counts(self):
+        Item = self.env["southern.sparex.discovery.item"]
+        for run in self:
+            current_domain = [("last_seen_run_id", "=", run.id), ("reconciliation_state", "=", "current")]
+            run.current_item_count = Item.search_count(current_domain)
+            run.missing_product_count = Item.search_count(current_domain + [("odoo_match_state", "=", "missing")])
+            run.publication_candidate_count = Item.search_count(current_domain + [("publication_candidate", "=", True)])
+            run.source_repair_candidate_count = Item.search_count(
+                current_domain + [("source_enrichment_candidate", "=", True)]
+            )
+            run.source_review_item_count = Item.search_count(current_domain + [("state", "=", "review")])
+            blocked_domain = current_domain + [
+                ("odoo_match_state", "=", "matched_active"),
+                ("currently_published", "=", False),
+                ("publication_candidate", "=", False),
+            ]
+            run.blocked_item_count = Item.search_count(blocked_domain)
+            run.published_product_count = Item.search_count(current_domain + [("currently_published", "=", True)])
+            run.readiness_refreshed_count = Item.search_count(
+                current_domain + [("readiness_refreshed_at", "!=", False)]
+            )
+            run.cost_recovery_queued_count = Item.search_count(
+                current_domain + [("cost_recovery_state", "=", "queued")]
+            )
+            run.cost_recovery_retry_count = Item.search_count(
+                current_domain + [("cost_recovery_state", "=", "retry_wait")]
+            )
+            run.cost_recovery_manual_count = Item.search_count(
+                current_domain + [("cost_recovery_state", "=", "manual_review")]
+            )
+            run.missing_cost_blocker_count = Item.search_count(
+                current_domain + [("primary_blocker", "=", "missing_cost")]
+            )
+            run.missing_sales_price_blocker_count = Item.search_count(
+                current_domain + [("primary_blocker", "=", "missing_sales_price")]
+            )
+            run.missing_url_blocker_count = Item.search_count(
+                current_domain + [("primary_blocker", "=", "missing_product_url")]
+            )
+            run.missing_image_blocker_count = Item.search_count(
+                current_domain + [("primary_blocker", "=", "missing_product_image")]
+            )
+
+    @api.constrains(
+        "seed_url_sha256",
+        "cursor_url_sha256",
+        "plan_sha256",
+        "throttle_seconds",
+        "max_pages_per_checkpoint",
+        "max_items_per_page",
+        "max_pages_total",
+    )
+    def _check_contract(self):
+        for run in self:
+            for value in (run.seed_url_sha256, run.cursor_url_sha256, run.plan_sha256):
+                if value and not SHA256_PATTERN.fullmatch(value.casefold()):
+                    raise ValidationError(_("Sparex discovery hashes must be SHA-256 hexadecimal values."))
+            if run.throttle_seconds < 3.0:
+                raise ValidationError(_("Sparex discovery throttling cannot be less than 3 seconds."))
+            if not 1 <= run.max_pages_per_checkpoint <= MAX_DISCOVERY_CHECKPOINT_PAGES:
+                raise ValidationError(_("A discovery checkpoint must contain between 1 and 10 listing pages."))
+            if not 1 <= run.max_items_per_page <= MAX_DISCOVERY_PAGE_ITEMS:
+                raise ValidationError(_("A discovery listing page must contain between 1 and 100 observations."))
+            if not 1 <= run.max_pages_total <= MAX_DISCOVERY_TOTAL_PAGES:
+                raise ValidationError(_("A discovery run must contain between 1 and 10,000 listing pages."))
+
+    @api.model
+    def start_discovery_run(self, values):
+        values = dict(values or {})
+        key = (values.get("idempotency_key") or "").strip()
+        seed_url = (values.get("seed_url") or "").strip()
+        seed_sha = (values.get("seed_url_sha256") or "").casefold()
+        plan_sha = (values.get("plan_sha256") or "").casefold()
+        plan_uri = (values.get("plan_artifact_uri") or "").strip()
+        if not key or not seed_url or not plan_uri:
+            raise UserError(_("Discovery runs require an idempotency key, explicit seed URL, and archived plan."))
+        if not _https_sparex_url(seed_url) or seed_sha != _sha256_text(seed_url):
+            raise UserError(_("The explicit Sparex seed URL or its hash is invalid."))
+        if not SHA256_PATTERN.fullmatch(plan_sha):
+            raise UserError(_("The archived discovery plan requires a valid SHA-256."))
+        existing = self.search([("idempotency_key", "=", key), ("company_id", "=", self.env.company.id)], limit=1)
+        if existing:
+            if existing.seed_url_sha256 != seed_sha or existing.plan_sha256 != plan_sha:
+                raise UserError(_("The discovery run key is already bound to a different explicit plan."))
+            return existing.read(self._worker_fields())[0]
+        agents = self.env["southern.catalog.agent"]
+        discovery_agent = agents.search(
+            [("company_id", "=", self.env.company.id), ("code", "=", "sparex_discovery"), ("active", "=", True)],
+            limit=1,
+        )
+        match_agent = agents.search(
+            [("company_id", "=", self.env.company.id), ("code", "=", "odoo_match"), ("active", "=", True)],
+            limit=1,
+        )
+        if not discovery_agent or not match_agent:
+            raise UserError(_("The existing Sparex Discovery and Odoo Match agents must be active."))
+        run = self.create(
+            {
+                "company_id": self.env.company.id,
+                "idempotency_key": key,
+                "discovery_agent_id": discovery_agent.id,
+                "match_agent_id": match_agent.id,
+                "seed_url": seed_url,
+                "seed_url_sha256": seed_sha,
+                "cursor_url": seed_url,
+                "cursor_url_sha256": seed_sha,
+                "parser_version": (values.get("parser_version") or "sparex-listing-frontier-v2").strip(),
+                "schema_version": (values.get("schema_version") or "1.1").strip(),
+                "plan_artifact_uri": plan_uri,
+                "plan_sha256": plan_sha,
+                "throttle_seconds": max(3.0, float(values.get("throttle_seconds") or 3.0)),
+                "max_pages_per_checkpoint": max(
+                    1, min(int(values.get("max_pages_per_checkpoint") or 1), MAX_DISCOVERY_CHECKPOINT_PAGES)
+                ),
+                "max_items_per_page": max(
+                    1, min(int(values.get("max_items_per_page") or MAX_DISCOVERY_PAGE_ITEMS), MAX_DISCOVERY_PAGE_ITEMS)
+                ),
+                "max_pages_total": max(
+                    1,
+                    min(
+                        int(values.get("max_pages_total") or MAX_DISCOVERY_TOTAL_PAGES),
+                        MAX_DISCOVERY_TOTAL_PAGES,
+                    ),
+                ),
+            }
+        )
+        return run.read(self._worker_fields())[0]
+
+    @api.model
+    def _worker_fields(self):
+        return [
+            "id",
+            "idempotency_key",
+            "state",
+            "seed_url",
+            "seed_url_sha256",
+            "cursor_url",
+            "cursor_url_sha256",
+            "parser_version",
+            "schema_version",
+            "plan_artifact_uri",
+            "plan_sha256",
+            "throttle_seconds",
+            "max_pages_per_checkpoint",
+            "max_items_per_page",
+            "max_pages_total",
+            "queued_url_count",
+            "visited_url_count",
+            "page_count",
+            "observed_count",
+            "matched_count",
+            "missing_count",
+            "duplicate_count",
+            "review_count",
+            "corrected_count",
+            "stale_count",
+            "product_page_count",
+            "empty_page_count",
+            "last_page_item_count",
+            "reconciliation_state",
+            "recovery_state",
+            "consecutive_failure_count",
+            "recovered_lease_count",
+            "cooldown_until",
+        ]
+
+    @api.model
+    def configure_discovery_checkpoint(self, run_id, max_pages_per_checkpoint=5):
+        run = self.browse(int(run_id)).exists()
+        if not run or run.company_id != self.env.company:
+            raise UserError(_("The discovery run does not exist in the active company."))
+        bounded = max(1, min(int(max_pages_per_checkpoint or 1), MAX_DISCOVERY_CHECKPOINT_PAGES))
+        self.env.cr.execute("SELECT id FROM southern_sparex_discovery_run WHERE id = %s FOR UPDATE NOWAIT", [run.id])
+        run.invalidate_recordset()
+        if run.lease_owner and run.lease_expires_at and run.lease_expires_at > fields.Datetime.now():
+            raise UserError(_("Checkpoint capacity cannot change while a discovery lease is active."))
+        if run.state in {"completed", "failed", "cancelled"}:
+            return run.read(self._worker_fields())[0]
+        updates = {}
+        if run.max_pages_per_checkpoint != bounded:
+            updates["max_pages_per_checkpoint"] = bounded
+        # Existing runs keep the ceiling that was stored when they were
+        # created.  Raise legacy active runs to the current safe frontier
+        # ceiling so a module upgrade does not strand them at 5,000 pages.
+        if run.max_pages_total < MAX_DISCOVERY_TOTAL_PAGES:
+            updates["max_pages_total"] = MAX_DISCOVERY_TOTAL_PAGES
+        if updates:
+            run.write(updates)
+        return run.read(self._worker_fields())[0]
+
+    @api.model
+    def prepare_reconciliation_run(self, run_id):
+        run = self.browse(int(run_id)).exists()
+        if not run or run.company_id != self.env.company:
+            raise UserError(_("The discovery run does not exist in the active company."))
+        self.env.cr.execute("SELECT id FROM southern_sparex_discovery_run WHERE id = %s FOR UPDATE NOWAIT", [run.id])
+        run.invalidate_recordset()
+        if run.reconciliation_state != "pending":
+            return run.read(self._worker_fields())[0]
+        Item = self.env["southern.sparex.discovery.item"]
+        Item.search([("company_id", "=", run.company_id.id)]).write(
+            {
+                "reconciliation_state": "pending",
+                "source_enrichment_candidate": False,
+                "publication_candidate": False,
+            }
+        )
+        Item.search([("company_id", "=", run.company_id.id), ("last_seen_run_id", "=", run.id)]).write(
+            {"reconciliation_state": "current"}
+        )
+        run.write(
+            {
+                "reconciliation_state": "in_progress",
+                "reconciliation_started_at": fields.Datetime.now(),
+                "reconciliation_completed_at": False,
+                "stale_count": 0,
+            }
+        )
+        return run.read(self._worker_fields())[0]
+
+    def _complete_reconciliation(self):
+        self.ensure_one()
+        if self.reconciliation_state == "completed":
+            return self.stale_count
+        Item = self.env["southern.sparex.discovery.item"]
+        stale = Item.search(
+            [
+                ("company_id", "=", self.company_id.id),
+                ("last_seen_run_id", "!=", self.id),
+            ]
+        )
+        stale.write(
+            {
+                "reconciliation_state": "stale",
+                "state": "review",
+                "review_reason": "stale_not_seen",
+                "source_enrichment_candidate": False,
+                "publication_candidate": False,
+            }
+        )
+        current = Item.search([("company_id", "=", self.company_id.id), ("last_seen_run_id", "=", self.id)])
+        current.write({"reconciliation_state": "current"})
+        self.write(
+            {
+                "reconciliation_state": "completed",
+                "reconciliation_completed_at": fields.Datetime.now(),
+                "stale_count": len(stale),
+            }
+        )
+        return len(stale)
+
+    @api.model
+    def claim_discovery_checkpoint(self, run_id, worker_id, lease_seconds=180):
+        run = self.browse(int(run_id)).exists()
+        if not run or run.company_id != self.env.company:
+            raise UserError(_("The requested discovery run does not exist in the active company."))
+        self.env.cr.execute("SELECT id FROM southern_sparex_discovery_run WHERE id = %s FOR UPDATE NOWAIT", [run.id])
+        run.invalidate_recordset()
+        now = fields.Datetime.now()
+        if run.state in {"completed", "failed", "cancelled"}:
+            return {"claimed": False, "state": run.state}
+        if run.state == "cooldown" and run.cooldown_until and run.cooldown_until > now:
+            return {"claimed": False, "state": run.state, "cooldown_until": run.cooldown_until}
+        if run.lease_owner and run.lease_expires_at and run.lease_expires_at > now and run.lease_owner != worker_id:
+            return {"claimed": False, "state": "busy"}
+        recovered_lease = bool(run.lease_owner and run.lease_expires_at and run.lease_expires_at <= now)
+        run.write(
+            {
+                "state": "running",
+                "lease_owner": (worker_id or "external-worker")[:255],
+                "lease_expires_at": now + timedelta(seconds=max(60, min(int(lease_seconds or 180), 900))),
+                "cooldown_until": False,
+                "error_code": False,
+                "error_message": False,
+                "recovered_lease_count": run.recovered_lease_count + (1 if recovered_lease else 0),
+            }
+        )
+        return {"claimed": True, **run.read(self._worker_fields())[0]}
+
+    @api.model
+    def record_discovery_page(self, run_id, worker_id, page):
+        run = self.browse(int(run_id)).exists()
+        if not run or run.company_id != self.env.company:
+            raise UserError(_("The discovery run does not exist in the active company."))
+        self.env.cr.execute("SELECT id FROM southern_sparex_discovery_run WHERE id = %s FOR UPDATE NOWAIT", [run.id])
+        run.invalidate_recordset()
+        if run.state != "running" or run.lease_owner != worker_id:
+            raise UserError(_("The worker does not own the active discovery lease."))
+        page = dict(page or {})
+        page_url = (page.get("page_url") or "").strip()
+        page_sha = (page.get("page_sha256") or "").casefold()
+        artifact_sha = (page.get("artifact_sha256") or "").casefold()
+        artifact_uri = (page.get("artifact_uri") or "").strip()
+        items = list(page.get("items") or [])
+        listing_urls = list(page.get("listing_urls") or [])
+        if page_url != run.cursor_url or not _https_sparex_url(page_url):
+            raise UserError(_("The listing page does not match the explicit discovery cursor."))
+        if not SHA256_PATTERN.fullmatch(page_sha) or not SHA256_PATTERN.fullmatch(artifact_sha) or not artifact_uri:
+            raise UserError(_("The listing checkpoint requires checksum-verified evidence."))
+        if len(items) > run.max_items_per_page:
+            raise UserError(_("The listing page exceeds the bounded discovery item limit."))
+        if len(listing_urls) > MAX_DISCOVERY_LINKS_PER_PAGE:
+            raise UserError(_("The listing page exceeds the bounded discovery frontier limit."))
+        page_url_sha = _sha256_text(page_url)
+        existing_page = self.env["southern.sparex.discovery.page"].search(
+            [("run_id", "=", run.id), ("page_url_sha256", "=", page_url_sha)], limit=1
+        )
+        if existing_page:
+            run.write({"lease_owner": False, "lease_expires_at": False})
+            return {"idempotent": True, "page_id": existing_page.id, "state": run.state}
+
+        now = fields.Datetime.now()
+        page_record = self.env["southern.sparex.discovery.page"].create(
+            {
+                "run_id": run.id,
+                "company_id": run.company_id.id,
+                "page_number": run.page_count + 1,
+                "page_url_sha256": page_url_sha,
+                "page_sha256": page_sha,
+                "artifact_uri": artifact_uri,
+                "artifact_sha256": artifact_sha,
+                "retrieved_at": now,
+            }
+        )
+        seen_skus = set()
+        page_counts = {"matched": 0, "missing": 0, "duplicate": 0, "review": 0}
+        page_corrected = 0
+        page_item_ids = []
+        vendor_catalog_records = []
+        Item = self.env["southern.sparex.discovery.item"]
+        for observation in items:
+            raw_sku = (observation.get("sku") or "").strip()
+            normalized = normalized_sparex_sku(raw_sku)
+            listing_title = " ".join((observation.get("listing_title") or "").split()).strip()
+            source_url = (observation.get("source_url") or "").strip()
+            image_url = (observation.get("image_url") or "").strip()
+            source_state = (observation.get("source_state") or "verified").strip()
+            if not normalized or normalized in seen_skus:
+                raise UserError(_("Each listing observation must contain one unique exact Sparex SKU."))
+            seen_skus.add(normalized)
+            if not exact_sparex_url(source_url, normalized):
+                raise UserError(_("A listing observation contains a non-exact Sparex product link."))
+            if image_url and not _https_url(image_url):
+                raise UserError(_("A listing observation contains an invalid image URL."))
+            if source_state not in {"verified", "missing_image", "ambiguous"}:
+                raise UserError(_("A listing observation contains an invalid source state."))
+            if len(listing_title) > 255:
+                raise UserError(_("A listing observation title exceeds the bounded product-name length."))
+
+            digits = normalized.split(".", 1)[1]
+            candidates = (
+                self.env["product.template"]
+                .with_context(active_test=False)
+                .search(["|", ("default_code", "ilike", f"S.{digits}"), ("default_code", "ilike", f"S{digits}")])
+            )
+            exact = candidates.filtered(
+                lambda product, target=normalized: normalized_sparex_sku(product.default_code) == target
+            )
+            if len(exact) > 1:
+                match_state = "duplicate"
+                matched_product = self.env["product.template"]
+            elif exact:
+                matched_product = exact[0]
+                match_state = "matched_active" if matched_product.active else "matched_archived"
+            else:
+                matched_product = self.env["product.template"]
+                match_state = "missing"
+            positive_supplier = self.env["product.supplierinfo"]
+            if matched_product:
+                positive_supplier = (
+                    self.env["product.supplierinfo"]
+                    .sudo()
+                    .search(
+                        [
+                            ("product_tmpl_id", "=", matched_product.id),
+                            ("partner_id.name", "=ilike", "Sparex"),
+                            ("price", ">", 0),
+                        ],
+                        limit=1,
+                    )
+                )
+            queue_state = "verified" if source_state == "verified" and image_url else "review"
+            has_cost = bool(positive_supplier)
+            has_sales_price = bool(matched_product and not sales_price_blocker(matched_product, positive_supplier))
+            has_exact_url = exact_sparex_url(source_url, normalized)
+            has_image = bool(image_url)
+            currently_published = bool(matched_product and matched_product.website_published)
+            product_has_exact_url = bool(
+                matched_product and exact_sparex_url(matched_product.southern_source_url, normalized)
+            )
+            product_has_image = bool(matched_product and matched_product.image_1920)
+            product_has_category = bool(matched_product and matched_product.public_categ_ids)
+            product_has_description = bool(matched_product and customer_description_ready(matched_product))
+            source_enrichment_candidate = bool(
+                matched_product
+                and matched_product.active
+                and not currently_published
+                and has_cost
+                and has_sales_price
+                and has_exact_url
+                and has_image
+                and queue_state == "verified"
+                and (not product_has_exact_url or not product_has_image)
+            )
+            publication_candidate = bool(
+                matched_product
+                and matched_product.active
+                and not currently_published
+                and has_cost
+                and has_sales_price
+                and has_exact_url
+                and has_image
+                and queue_state == "verified"
+                and product_has_exact_url
+                and product_has_image
+                and product_has_category
+                and product_has_description
+            )
+            item = Item.search([("company_id", "=", run.company_id.id), ("normalized_sku", "=", normalized)], limit=1)
+            review_reason = False
+            if source_state == "ambiguous":
+                review_reason = "source_ambiguous"
+            elif source_state == "missing_image" or not image_url:
+                review_reason = "missing_image"
+            elif match_state == "missing":
+                review_reason = "missing_odoo"
+            elif match_state == "duplicate":
+                review_reason = "duplicate_odoo"
+            primary_blocker = _primary_publication_blocker(
+                reconciliation_state="current",
+                item_state=queue_state,
+                source_state=source_state,
+                match_state=match_state,
+                product_active=bool(matched_product and matched_product.active),
+                currently_published=currently_published,
+                has_cost=has_cost,
+                has_sales_price=has_sales_price,
+                product_has_exact_url=product_has_exact_url,
+                product_has_image=product_has_image,
+                product_has_category=product_has_category,
+                product_has_description=product_has_description,
+            )
+            corrected = bool(
+                item
+                and queue_state == "verified"
+                and (
+                    item.state != "verified"
+                    or item.source_state != "verified"
+                    or item.source_url_sha256 != _sha256_text(source_url)
+                    or item.image_url_sha256 != (_sha256_text(image_url) if image_url else False)
+                )
+            )
+            values = {
+                "raw_sku": raw_sku,
+                "listing_title": listing_title or False,
+                "source_url": source_url,
+                "source_url_sha256": _sha256_text(source_url),
+                "image_url": image_url or False,
+                "image_url_sha256": _sha256_text(image_url) if image_url else False,
+                "source_state": source_state,
+                "state": queue_state,
+                "odoo_match_state": match_state,
+                "matched_product_id": matched_product.id if matched_product else False,
+                "duplicate_product_ids": [(6, 0, exact.ids if len(exact) > 1 else [])],
+                "has_positive_supplier_cost": has_cost,
+                "has_positive_sales_price": has_sales_price,
+                "has_exact_sparex_url": has_exact_url,
+                "has_image": has_image,
+                "product_has_exact_sparex_url": product_has_exact_url,
+                "product_has_image": product_has_image,
+                "currently_published": currently_published,
+                "source_enrichment_candidate": source_enrichment_candidate,
+                "publication_candidate": publication_candidate,
+                "primary_blocker": primary_blocker,
+                "readiness_refreshed_at": now,
+                "reconciliation_state": "current",
+                "review_reason": review_reason,
+                "creation_state": (
+                    "created"
+                    if item and item.creation_state == "created" and match_state.startswith("matched_")
+                    else ("review_required" if match_state == "missing" else "not_authorized")
+                ),
+                "last_seen_run_id": run.id,
+                "last_seen_page_id": page_record.id,
+                "last_seen_at": now,
+                "source_artifact_uri": artifact_uri,
+                "source_artifact_sha256": artifact_sha,
+            }
+            if item:
+                values["observation_count"] = item.observation_count + 1
+                if corrected:
+                    values["correction_count"] = item.correction_count + 1
+                    values["last_corrected_at"] = now
+                    page_corrected += 1
+                item.write(values)
+            else:
+                values.update(
+                    {
+                        "company_id": run.company_id.id,
+                        "normalized_sku": normalized,
+                        "first_seen_run_id": run.id,
+                        "first_seen_at": now,
+                    }
+                )
+                item = Item.create(values)
+            page_item_ids.append(item.id)
+            vendor_catalog_records.append(
+                {
+                    "vendor_sku": raw_sku,
+                    "normalized_sku": normalized,
+                    "title": listing_title,
+                    "customer_description": listing_title,
+                    "source_url": source_url,
+                    "image_url": image_url,
+                    "vendor_cost": positive_supplier.price if positive_supplier else 0.0,
+                    "sales_price": matched_product.list_price if matched_product else 0.0,
+                    "availability": "available",
+                }
+            )
+            if queue_state == "review":
+                page_counts["review"] += 1
+            if match_state.startswith("matched_"):
+                page_counts["matched"] += 1
+            elif match_state == "missing":
+                page_counts["missing"] += 1
+            elif match_state == "duplicate":
+                page_counts["duplicate"] += 1
+
+        page_record.write(
+            {
+                "item_count": len(items),
+                "matched_count": page_counts["matched"],
+                "missing_count": page_counts["missing"],
+                "duplicate_count": page_counts["duplicate"],
+                "review_count": page_counts["review"],
+            }
+        )
+        staged = {"created": 0, "updated": 0, "unchanged": 0, "ready": 0, "observed": 0}
+        if vendor_catalog_records:
+            staged = self.env["southern.vendor.catalog.item"].sudo().upsert_catalog_items(
+                source_code="sparex",
+                records=vendor_catalog_records,
+                artifact_uri=artifact_uri,
+                artifact_sha256=artifact_sha,
+                schema_version="1.0",
+            )
+        next_url = (page.get("next_url") or "").strip()
+        if next_url and not _sparex_listing_url(next_url):
+            raise UserError(_("The next listing cursor is not an HTTPS Sparex URL."))
+        frontier = [value.strip() for value in (run.frontier_urls or "").splitlines() if value.strip()]
+        visited = {value.strip().casefold() for value in (run.visited_url_sha256s or "").splitlines() if value.strip()}
+        visited.add(page_url_sha)
+        frontier = [value for value in frontier if _sha256_text(value) not in visited and value != page_url]
+        queued_hashes = {_sha256_text(value) for value in frontier}
+        for candidate in listing_urls:
+            candidate = (candidate or "").strip()
+            if not candidate:
+                continue
+            if not _sparex_listing_url(candidate):
+                raise UserError(_("A discovered frontier URL is not an HTTPS Sparex listing URL."))
+            candidate_sha = _sha256_text(candidate)
+            if candidate_sha in visited or candidate_sha in queued_hashes:
+                continue
+            if len(frontier) >= MAX_DISCOVERY_FRONTIER_URLS:
+                raise UserError(_("The bounded discovery frontier is full."))
+            frontier.append(candidate)
+            queued_hashes.add(candidate_sha)
+        frontier.sort(key=_frontier_priority)
+        if next_url:
+            next_sha = _sha256_text(next_url)
+            frontier = [value for value in frontier if _sha256_text(value) != next_sha]
+            if next_sha not in visited:
+                frontier.insert(0, next_url)
+        page_limit_reached = run.page_count + 1 >= run.max_pages_total
+        cursor_url = frontier.pop(0) if frontier and not page_limit_reached else ""
+        completed = not cursor_url
+        run.write(
+            {
+                "state": "completed" if completed else "ready",
+                "cursor_url": cursor_url or page_url,
+                "cursor_url_sha256": _sha256_text(cursor_url or page_url),
+                "frontier_urls": "\n".join(frontier) or False,
+                "visited_url_sha256s": "\n".join(sorted(visited)),
+                "queued_url_count": len(frontier) + (1 if cursor_url else 0),
+                "visited_url_count": len(visited),
+                "page_count": run.page_count + 1,
+                "observed_count": run.observed_count + len(items),
+                "matched_count": run.matched_count + page_counts["matched"],
+                "missing_count": run.missing_count + page_counts["missing"],
+                "duplicate_count": run.duplicate_count + page_counts["duplicate"],
+                "review_count": run.review_count + page_counts["review"],
+                "corrected_count": run.corrected_count + page_corrected,
+                "product_page_count": run.product_page_count + (1 if items else 0),
+                "empty_page_count": run.empty_page_count + (0 if items else 1),
+                "last_page_item_count": len(items),
+                "last_request_at": now,
+                "last_success_at": now,
+                "consecutive_failure_count": 0,
+                "recovery_state": "healthy",
+                "next_request_at": False if completed else now + timedelta(seconds=run.throttle_seconds),
+                "completed_at": now if completed else False,
+                "error_code": "max_pages_total_reached" if page_limit_reached and frontier else False,
+                "lease_owner": False,
+                "lease_expires_at": False,
+            }
+        )
+        if completed:
+            run._complete_reconciliation()
+        return {
+            "idempotent": False,
+            "page_id": page_record.id,
+            "state": run.state,
+            "next_cursor_sha256": run.cursor_url_sha256,
+            "counts": page_counts,
+            "observed": len(items),
+            "corrected": page_corrected,
+            "item_ids": page_item_ids,
+            "vendor_catalog": staged,
+            "stale": run.stale_count if completed else 0,
+        }
+
+    @api.model
+    def record_discovery_failure(self, run_id, worker_id, error_code, cooldown=False):
+        run = self.browse(int(run_id)).exists()
+        if not run or run.company_id != self.env.company:
+            raise UserError(_("The discovery run does not exist in the active company."))
+        if run.lease_owner != worker_id:
+            raise UserError(_("The worker does not own the active discovery lease."))
+        now = fields.Datetime.now()
+        run.write(
+            {
+                "state": "cooldown" if cooldown else "ready",
+                "cooldown_until": now + timedelta(minutes=60) if cooldown else False,
+                "error_code": (error_code or "checkpoint_failed")[:255],
+                "error_message": _("Discovery checkpoint failed; the explicit cursor was preserved."),
+                "last_failure_at": now,
+                "consecutive_failure_count": run.consecutive_failure_count + 1,
+                "recovery_state": "cooldown" if cooldown else "retrying",
+                "lease_owner": False,
+                "lease_expires_at": False,
+            }
+        )
+        return True
+
+
+class SouthernSparexDiscoveryPage(models.Model):
+    _name = "southern.sparex.discovery.page"
+    _description = "Sparex Catalog Discovery Page"
+    _order = "run_id desc, page_number"
+
+    run_id = fields.Many2one("southern.sparex.discovery.run", required=True, ondelete="restrict", index=True)
+    company_id = fields.Many2one("res.company", required=True, index=True)
+    page_number = fields.Integer(required=True)
+    page_url_sha256 = fields.Char(required=True, readonly=True, copy=False)
+    page_sha256 = fields.Char(required=True, readonly=True, copy=False)
+    artifact_uri = fields.Char(required=True, readonly=True, copy=False)
+    artifact_sha256 = fields.Char(required=True, readonly=True, copy=False)
+    retrieved_at = fields.Datetime(required=True, readonly=True)
+    item_count = fields.Integer(default=0, readonly=True)
+    matched_count = fields.Integer(default=0, readonly=True)
+    missing_count = fields.Integer(default=0, readonly=True)
+    duplicate_count = fields.Integer(default=0, readonly=True)
+    review_count = fields.Integer(default=0, readonly=True)
+
+    _page_run_unique = models.Constraint(
+        "unique(run_id, page_url_sha256)", "This listing cursor was already recorded for the discovery run."
+    )
+
+    @api.constrains("page_url_sha256", "page_sha256", "artifact_sha256")
+    def _check_hashes(self):
+        for page in self:
+            if any(
+                not SHA256_PATTERN.fullmatch((value or "").casefold())
+                for value in (
+                    page.page_url_sha256,
+                    page.page_sha256,
+                    page.artifact_sha256,
+                )
+            ):
+                raise ValidationError(_("Discovery page hashes must be SHA-256 hexadecimal values."))
+
+
+class SouthernSparexDiscoveryItem(models.Model):
+    _name = "southern.sparex.discovery.item"
+    _description = "Sparex Catalog Discovery Queue"
+    _inherit = ["mail.thread", "mail.activity.mixin"]  # noqa: RUF012 - Odoo model metadata
+    _order = "odoo_match_state, normalized_sku, id"
+
+    active = fields.Boolean(default=True)
+    company_id = fields.Many2one("res.company", required=True, default=lambda self: self.env.company, index=True)
+    normalized_sku = fields.Char(required=True, readonly=True, index=True, tracking=True)
+    raw_sku = fields.Char(required=True, readonly=True)
+    listing_title = fields.Char(readonly=True)
+    state = fields.Selection(
+        [("verified", "Source Verified"), ("review", "Source Review")],
+        default="review",
+        required=True,
+        readonly=True,
+        index=True,
+    )
+    source_state = fields.Selection(
+        [("verified", "Exact Link and Image"), ("missing_image", "Missing Image"), ("ambiguous", "Ambiguous Listing")],
+        required=True,
+        readonly=True,
+        index=True,
+    )
+    source_url = fields.Char(required=True, readonly=True, copy=False)
+    source_url_sha256 = fields.Char(required=True, readonly=True, copy=False)
+    image_url = fields.Char(readonly=True, copy=False)
+    image_url_sha256 = fields.Char(readonly=True, copy=False)
+    odoo_match_state = fields.Selection(
+        [
+            ("matched_active", "Existing Active Product"),
+            ("matched_archived", "Existing Archived Product"),
+            ("missing", "Missing in Odoo"),
+            ("duplicate", "Duplicate Odoo SKU"),
+        ],
+        required=True,
+        readonly=True,
+        index=True,
+    )
+    matched_product_id = fields.Many2one("product.template", readonly=True, index=True, ondelete="set null")
+    duplicate_product_ids = fields.Many2many("product.template", string="Duplicate Products", readonly=True)
+    has_positive_supplier_cost = fields.Boolean(readonly=True, index=True)
+    has_positive_sales_price = fields.Boolean(readonly=True, index=True)
+    has_exact_sparex_url = fields.Boolean(readonly=True, index=True)
+    has_image = fields.Boolean(readonly=True, index=True)
+    product_has_exact_sparex_url = fields.Boolean(readonly=True, index=True)
+    product_has_image = fields.Boolean(readonly=True, index=True)
+    currently_published = fields.Boolean(readonly=True, index=True)
+    source_enrichment_candidate = fields.Boolean(readonly=True, index=True)
+    publication_candidate = fields.Boolean(readonly=True, index=True)
+    primary_blocker = fields.Selection(
+        [
+            ("ready", "Ready to Publish"),
+            ("stale", "Awaiting Current Rescan"),
+            ("source_review", "Source Evidence Review"),
+            ("missing_odoo", "Missing in Odoo"),
+            ("duplicate_odoo", "Duplicate Odoo SKU"),
+            ("archived", "Product Archived"),
+            ("already_published", "Already Published"),
+            ("missing_cost", "Missing Positive Dealer Cost"),
+            ("missing_sales_price", "Missing Positive Sales Price"),
+            ("missing_product_url", "Missing Product Sparex URL"),
+            ("missing_product_image", "Missing Product Image"),
+            ("missing_customer_description", "Missing Customer Description"),
+        ],
+        readonly=True,
+        index=True,
+    )
+    readiness_refreshed_at = fields.Datetime(readonly=True, index=True)
+    cost_recovery_state = fields.Selection(
+        [
+            ("not_required", "Not Required"),
+            ("queued", "Queued"),
+            ("claimed", "Claimed"),
+            ("retry_wait", "Retry Scheduled"),
+            ("resolved", "Resolved"),
+            ("manual_review", "Manual Review"),
+        ],
+        default="not_required",
+        required=True,
+        readonly=True,
+        index=True,
+        tracking=True,
+    )
+    cost_recovery_priority = fields.Integer(default=0, readonly=True, index=True)
+    cost_recovery_attempt_count = fields.Integer(default=0, readonly=True)
+    cost_recovery_next_at = fields.Datetime(readonly=True, index=True)
+    cost_recovery_claimed_at = fields.Datetime(readonly=True)
+    cost_recovery_worker_id = fields.Char(readonly=True, copy=False, index=True)
+    cost_recovery_last_error = fields.Char(readonly=True, copy=False)
+    cost_evidence_sha256 = fields.Char(readonly=True, copy=False)
+    cost_evidence_url_sha256 = fields.Char(readonly=True, copy=False)
+    cost_recovery_parser_version = fields.Char(readonly=True, copy=False)
+    cost_recovered_at = fields.Datetime(readonly=True)
+    reconciliation_state = fields.Selection(
+        [("pending", "Awaiting Current Run"), ("current", "Current Run Verified"), ("stale", "Not Seen")],
+        default="pending",
+        required=True,
+        readonly=True,
+        index=True,
+    )
+    review_reason = fields.Selection(
+        [
+            ("source_ambiguous", "Ambiguous Listing"),
+            ("missing_image", "Missing Listing Image"),
+            ("missing_odoo", "Missing in Odoo"),
+            ("duplicate_odoo", "Duplicate Odoo SKU"),
+            ("stale_not_seen", "Not Seen in Current Catalog Run"),
+        ],
+        readonly=True,
+        index=True,
+    )
+    correction_count = fields.Integer(default=0, readonly=True)
+    last_corrected_at = fields.Datetime(readonly=True)
+    blocker_summary = fields.Char(compute="_compute_blocker_summary")
+    creation_state = fields.Selection(
+        [
+            ("not_authorized", "Product Creation Not Authorized"),
+            ("review_required", "Creation Review Required"),
+            ("approved", "Approved for Separate Creation Workflow"),
+            ("created", "Draft Product Created"),
+            ("rejected", "Creation Rejected"),
+        ],
+        default="not_authorized",
+        required=True,
+        readonly=True,
+        tracking=True,
+        index=True,
+    )
+    first_seen_run_id = fields.Many2one(
+        "southern.sparex.discovery.run", required=True, readonly=True, ondelete="restrict"
+    )
+    last_seen_run_id = fields.Many2one(
+        "southern.sparex.discovery.run", required=True, readonly=True, ondelete="restrict"
+    )
+    last_seen_page_id = fields.Many2one(
+        "southern.sparex.discovery.page", required=True, readonly=True, ondelete="restrict"
+    )
+    first_seen_at = fields.Datetime(required=True, readonly=True)
+    last_seen_at = fields.Datetime(required=True, readonly=True)
+    observation_count = fields.Integer(default=1, required=True, readonly=True)
+    source_artifact_uri = fields.Char(required=True, readonly=True, copy=False)
+    source_artifact_sha256 = fields.Char(required=True, readonly=True, copy=False)
+
+    _sku_company_unique = models.Constraint(
+        "unique(normalized_sku, company_id)", "Each Sparex SKU can appear only once in the company discovery queue."
+    )
+
+    @api.depends(
+        "reconciliation_state",
+        "review_reason",
+        "has_positive_supplier_cost",
+        "has_positive_sales_price",
+        "has_exact_sparex_url",
+        "has_image",
+        "odoo_match_state",
+    )
+    def _compute_blocker_summary(self):
+        labels = {
+            "source_ambiguous": _("ambiguous source"),
+            "missing_image": _("missing listing image"),
+            "missing_odoo": _("missing in Odoo"),
+            "duplicate_odoo": _("duplicate Odoo SKU"),
+            "stale_not_seen": _("not seen in current run"),
+        }
+        for item in self:
+            blockers = []
+            if item.reconciliation_state != "current":
+                blockers.append(_("stale evidence"))
+            if item.review_reason:
+                blockers.append(labels.get(item.review_reason, item.review_reason))
+            if not item.has_positive_supplier_cost:
+                blockers.append(_("supplier cost"))
+            if not item.has_positive_sales_price:
+                blockers.append(_("sales price"))
+            if not item.has_exact_sparex_url:
+                blockers.append(_("exact URL"))
+            if not item.has_image:
+                blockers.append(_("image"))
+            item.blocker_summary = ", ".join(dict.fromkeys(blockers)) or _("Ready")
+
+    def action_approve_creation_review(self):
+        missing = self.filtered(lambda item: item.odoo_match_state == "missing")
+        if len(missing) != len(self):
+            raise UserError(_("Only Sparex SKUs confirmed missing in Odoo can be approved for creation review."))
+        missing.write({"creation_state": "approved"})
+        return True
+
+    def action_reject_creation_review(self):
+        missing = self.filtered(lambda item: item.odoo_match_state == "missing")
+        if len(missing) != len(self):
+            raise UserError(_("Only Sparex SKUs confirmed missing in Odoo can be rejected."))
+        missing.write({"creation_state": "rejected"})
+        return True
+
+    def action_reset_creation_review(self):
+        self.filtered(lambda item: item.odoo_match_state == "missing").write({"creation_state": "review_required"})
+        self.filtered(lambda item: item.odoo_match_state != "missing").write({"creation_state": "not_authorized"})
+        return True
+
+    def _product_creation_snapshot(self):
+        self.ensure_one()
+        category = self.env.ref(
+            "southern_parts_intelligence.product_category_sparex_pending_enrichment",
+            raise_if_not_found=False,
+        )
+        suppliers = (
+            self.env["res.partner"]
+            .sudo()
+            .search([("name", "=ilike", "Sparex"), ("supplier_rank", ">", 0)], limit=2)
+        )
+        supplier = suppliers if len(suppliers) == 1 else self.env["res.partner"]
+        snapshot = {
+            "item_id": self.id,
+            "company_id": self.company_id.id,
+            "sku": self.normalized_sku,
+            "listing_title": self.listing_title or "",
+            "source_url": self.source_url,
+            "source_url_sha256": self.source_url_sha256,
+            "image_url": self.image_url or "",
+            "image_url_sha256": self.image_url_sha256 or "",
+            "source_artifact_uri": self.source_artifact_uri,
+            "source_artifact_sha256": self.source_artifact_sha256,
+            "item_write_date": str(self.write_date or ""),
+            "category_id": category.id if category else None,
+            "category_write_date": str(category.write_date or "") if category else "",
+            "supplier_partner_count": len(suppliers),
+            "supplier_partner_id": supplier.id if supplier else None,
+            "supplier_write_date": str(supplier.write_date or "") if supplier else "",
+        }
+        snapshot["snapshot_sha256"] = _canonical_sha256(snapshot)
+        return snapshot
+
+    @api.model
+    def prepare_product_creation_plan(self, item_ids=None, limit=MAX_PRODUCT_CREATION_BATCH):
+        bounded = max(1, min(int(limit or MAX_PRODUCT_CREATION_BATCH), MAX_PRODUCT_CREATION_BATCH))
+        domain = [
+            ("company_id", "=", self.env.company.id),
+            ("reconciliation_state", "=", "current"),
+            ("state", "=", "verified"),
+            ("source_state", "=", "verified"),
+            ("odoo_match_state", "=", "missing"),
+            ("creation_state", "in", ["review_required", "approved"]),
+            ("listing_title", "!=", False),
+            ("image_url", "!=", False),
+        ]
+        if item_ids:
+            domain.append(("id", "in", [int(item_id) for item_id in item_ids]))
+        prepared = []
+        for item in self.search(domain, order="last_seen_at, id", limit=bounded * 3):
+            snapshot = item._product_creation_snapshot()
+            if (
+                not snapshot["category_id"]
+                or snapshot["supplier_partner_count"] != 1
+                or not exact_sparex_url(item.source_url, item.normalized_sku)
+                or not item.image_url
+                or not item.listing_title
+            ):
+                continue
+            prepared.append(snapshot)
+            if len(prepared) >= bounded:
+                break
+        return prepared
+
+    @api.model
+    def apply_product_creation_plan(
+        self,
+        records,
+        plan_artifact_uri,
+        plan_sha256,
+        confirmation,
+        reason,
+    ):
+        records = list(records or [])
+        if confirmation != PRODUCT_CREATION_CONFIRMATION or not (reason or "").strip():
+            raise UserError(_("Page-driven product creation requires explicit confirmation and a business reason."))
+        if not records or len(records) > MAX_PRODUCT_CREATION_BATCH:
+            raise UserError(_("Product creation plans must contain between 1 and 5 exact products."))
+        if not (plan_artifact_uri or "").startswith("s3://") or not SHA256_PATTERN.fullmatch(
+            (plan_sha256 or "").casefold()
+        ):
+            raise UserError(_("Product creation requires an archived SHA-256 plan artifact."))
+        authorized_syncs = (
+            self.env["southern.parts.catalog.sync"]
+            .sudo()
+            .search(
+                [
+                    ("active", "=", True),
+                    ("mode", "=", "sparex_discovery"),
+                    ("approval_state", "=", "approved"),
+                    ("continuous_release_enabled", "=", True),
+                    ("page_driven_creation_enabled", "=", True),
+                ],
+                limit=2,
+            )
+        )
+        if len(authorized_syncs) != 1:
+            raise UserError(_("Page-driven product creation is not enabled on one approved Sparex workflow."))
+        category = self.env.ref(
+            "southern_parts_intelligence.product_category_sparex_pending_enrichment",
+            raise_if_not_found=False,
+        )
+        if not category:
+            raise UserError(_("The Sparex pending-enrichment product category is not configured."))
+        applied = []
+        for prepared in records:
+            item = self.browse(int(prepared.get("item_id") or 0)).exists()
+            if not item or item.company_id != self.env.company:
+                raise UserError(_("The prepared Sparex discovery item is unavailable."))
+            self.env.cr.execute(
+                "SELECT id FROM southern_sparex_discovery_item WHERE id = %s FOR UPDATE NOWAIT",
+                [item.id],
+            )
+            item.invalidate_recordset()
+            current_snapshot = item._product_creation_snapshot()
+            if (
+                item.reconciliation_state != "current"
+                or item.state != "verified"
+                or item.source_state != "verified"
+                or item.odoo_match_state != "missing"
+                or item.creation_state not in {"review_required", "approved"}
+                or not item.listing_title
+                or not item.image_url
+                or not exact_sparex_url(item.source_url, item.normalized_sku)
+                or current_snapshot != prepared
+                or _canonical_sha256({key: value for key, value in prepared.items() if key != "snapshot_sha256"})
+                != (prepared.get("snapshot_sha256") or "").casefold()
+            ):
+                raise UserError(_("Sparex product creation evidence changed; prepare a fresh plan."))
+            digits = item.normalized_sku.split(".", 1)[1]
+            candidates = (
+                self.env["product.template"]
+                .with_context(active_test=False)
+                .search(
+                    [
+                        "|",
+                        ("default_code", "ilike", f"S.{digits}"),
+                        ("default_code", "ilike", f"S{digits}"),
+                    ]
+                )
+            )
+            exact = candidates.filtered(
+                lambda product, target=item.normalized_sku: normalized_sparex_sku(product.default_code) == target
+            )
+            if len(exact) > 1:
+                raise UserError(_("The Sparex SKU became duplicated after the creation plan was prepared."))
+            created = not bool(exact)
+            product = exact[:1]
+            supplier_line = self.env["product.supplierinfo"]
+            if created:
+                product = (
+                    self.env["product.template"]
+                    .sudo()
+                    .create(
+                        {
+                            "name": item.listing_title,
+                            "default_code": item.normalized_sku,
+                            "active": True,
+                            "sale_ok": True,
+                            "purchase_ok": True,
+                            "categ_id": category.id,
+                            "list_price": 0.0,
+                            "standard_price": 0.0,
+                            "southern_source_name": "Sparex",
+                            "southern_source_url": item.source_url,
+                            "southern_enrichment_status": "partial",
+                            "website_published": False,
+                        }
+                    )
+                )
+                supplier = self.env["res.partner"].sudo().browse(int(prepared["supplier_partner_id"])).exists()
+                if (
+                    not supplier
+                    or supplier.name.casefold() != "sparex"
+                    or supplier.supplier_rank <= 0
+                    or str(supplier.write_date or "") != prepared["supplier_write_date"]
+                ):
+                    raise UserError(_("The exact Sparex supplier changed after the creation plan was prepared."))
+                supplier_line = self.env["product.supplierinfo"].sudo().create(
+                    {
+                        "partner_id": supplier.id,
+                        "product_tmpl_id": product.id,
+                        "product_code": item.normalized_sku,
+                        "price": 0.0,
+                        "min_qty": 1.0,
+                    }
+                )
+            item.write(
+                {
+                    "odoo_match_state": "matched_active" if product.active else "matched_archived",
+                    "matched_product_id": product.id,
+                    "duplicate_product_ids": [(5, 0, 0)],
+                    "creation_state": "created" if created else "not_authorized",
+                    "review_reason": False,
+                }
+            )
+            item._refresh_readiness()
+            applied.append(
+                {
+                    "item_id": item.id,
+                    "product_id": product.id,
+                    "sku": item.normalized_sku,
+                    "created": created,
+                    "website_published": bool(product.website_published),
+                    "category_id": product.categ_id.id,
+                    "product_write_date": str(product.write_date or ""),
+                    "supplierinfo_id": supplier_line.id if supplier_line else None,
+                    "supplierinfo_write_date": str(supplier_line.write_date or "") if supplier_line else "",
+                    "plan_artifact_uri": plan_artifact_uri,
+                    "plan_sha256": plan_sha256.casefold(),
+                }
+            )
+        return applied
+
+    @api.model
+    def rollback_created_products(self, records, reason):
+        records = list(records or [])
+        if not (reason or "").strip() or not records or len(records) > MAX_PRODUCT_CREATION_BATCH:
+            raise UserError(_("A bounded product-creation rollback reason is required."))
+        category = self.env.ref(
+            "southern_parts_intelligence.product_category_sparex_pending_enrichment",
+            raise_if_not_found=False,
+        )
+        rolled_back = []
+        for record in records:
+            if not record.get("created"):
+                raise UserError(_("Only products created by the page-driven plan can be rolled back."))
+            item = self.browse(int(record.get("item_id") or 0)).exists()
+            product = (
+                self.env["product.template"]
+                .sudo()
+                .with_context(active_test=False)
+                .browse(int(record.get("product_id") or 0))
+                .exists()
+            )
+            supplier = (
+                self.env["product.supplierinfo"]
+                .sudo()
+                .browse(int(record.get("supplierinfo_id") or 0))
+                .exists()
+            )
+            if not item or not product or not supplier:
+                raise UserError(_("The created product rollback scope is unavailable."))
+            self.env.cr.execute("SELECT id FROM product_template WHERE id = %s FOR UPDATE NOWAIT", [product.id])
+            product.invalidate_recordset()
+            supplier.invalidate_recordset()
+            if (
+                item.company_id != self.env.company
+                or item.matched_product_id != product
+                or item.creation_state != "created"
+                or product.default_code != item.normalized_sku
+                or product.website_published
+                or product.categ_id != category
+                or product.list_price != 0
+                or product.standard_price != 0
+                or not exact_sparex_url(product.southern_source_url, item.normalized_sku)
+                or supplier.product_tmpl_id != product
+                or supplier.partner_id.name.casefold() != "sparex"
+                or supplier.price != 0
+                or str(product.write_date or "") != record.get("product_write_date")
+                or str(supplier.write_date or "") != record.get("supplierinfo_write_date")
+            ):
+                raise UserError(_("The created product changed after its rollback snapshot; manual review is required."))
+            product.write({"active": False})
+            item.write(
+                {
+                    "odoo_match_state": "matched_archived",
+                    "creation_state": "rejected",
+                    "review_reason": False,
+                }
+            )
+            item._refresh_readiness()
+            rolled_back.append({"item_id": item.id, "product_id": product.id, "active": False})
+        return rolled_back
+
+    @api.constrains(
+        "normalized_sku", "source_url", "source_url_sha256", "image_url", "image_url_sha256", "source_artifact_sha256"
+    )
+    def _check_contract(self):
+        for item in self:
+            if normalized_sparex_sku(item.normalized_sku) != item.normalized_sku:
+                raise ValidationError(_("Discovery items require a normalized exact Sparex SKU."))
+            if not exact_sparex_url(item.source_url, item.normalized_sku):
+                raise ValidationError(_("Discovery items require an exact same-SKU Sparex URL."))
+            if item.source_url_sha256 != _sha256_text(item.source_url):
+                raise ValidationError(_("The discovery source URL hash does not match."))
+            if item.image_url and (
+                not _https_url(item.image_url) or item.image_url_sha256 != _sha256_text(item.image_url)
+            ):
+                raise ValidationError(_("The discovery image URL or hash is invalid."))
+            if any(
+                value and not SHA256_PATTERN.fullmatch(value.casefold())
+                for value in (item.source_url_sha256, item.image_url_sha256, item.source_artifact_sha256)
+            ):
+                raise ValidationError(_("Discovery evidence hashes must be SHA-256 hexadecimal values."))
+
+    def _positive_sparex_supplier(self):
+        self.ensure_one()
+        if not self.matched_product_id:
+            return self.env["product.supplierinfo"]
+        return (
+            self.env["product.supplierinfo"]
+            .sudo()
+            .search(
+                [
+                    ("product_tmpl_id", "=", self.matched_product_id.id),
+                    ("partner_id.name", "=ilike", "Sparex"),
+                    ("price", ">", 0),
+                ],
+                limit=1,
+            )
+        )
+
+    def _source_link_snapshot(self):
+        self.ensure_one()
+        product = self.matched_product_id.sudo()
+        before_url = product.southern_source_url or ""
+        before_image = product.image_1920 or b""
+        if isinstance(before_image, str):
+            before_image = before_image.encode("ascii", errors="ignore")
+        values = {
+            "item_id": self.id,
+            "product_id": product.id,
+            "sku": self.normalized_sku,
+            "source_url_sha256": self.source_url_sha256,
+            "source_url": self.source_url,
+            "image_url_sha256": self.image_url_sha256 or "",
+            "image_url": self.image_url or "",
+            "source_artifact_sha256": self.source_artifact_sha256,
+            "before_source_url": before_url,
+            "before_source_url_sha256": _sha256_text(before_url),
+            "before_image_present": bool(product.image_1920),
+            "before_image_sha256": hashlib.sha256(before_image).hexdigest(),
+            "repair_url": not exact_sparex_url(before_url, self.normalized_sku),
+            "repair_image": not bool(product.image_1920),
+            "product_write_date": str(product.write_date or ""),
+        }
+        values["snapshot_sha256"] = _canonical_sha256(values)
+        return values
+
+    def _description_repair_snapshot(self):
+        """Capture a listing-title-only replacement for an internal placeholder."""
+        self.ensure_one()
+        product = self.matched_product_id.sudo()
+        title = " ".join((self.listing_title or "").split())
+        if not title:
+            raise UserError(_("A verified listing title is required to repair customer copy."))
+        safe_title = html.escape(title)
+        safe_sku = html.escape(self.normalized_sku)
+        ecommerce = (
+            f"<p>{safe_title} is available from Southern Equipment under Sparex reference {safe_sku}.</p>"
+            "<p>Southern Equipment confirms availability, fitment, and pickup or shipping details before fulfillment.</p>"
+        )
+        descriptions_before = {
+            field_name: product[field_name] or ""
+            for field_name in ("description_ecommerce", "website_description", "description_sale")
+            if field_name in product._fields
+        }
+        values = {
+            "item_id": self.id,
+            "product_id": product.id,
+            "sku": self.normalized_sku,
+            "listing_title": title,
+            "source_url_sha256": self.source_url_sha256,
+            "source_artifact_sha256": self.source_artifact_sha256,
+            "descriptions_before": descriptions_before,
+            "descriptions_before_sha256": _canonical_sha256(descriptions_before),
+            "descriptions_after": {
+                "description_ecommerce": ecommerce,
+                "website_description": ecommerce,
+                "description_sale": (
+                    f"{html.unescape(safe_title)}. Sparex reference {html.unescape(safe_sku)}. "
+                    "Confirm availability and fitment with Southern Equipment."
+                ),
+            },
+            "product_write_date": str(product.write_date or ""),
+        }
+        values["snapshot_sha256"] = _canonical_sha256(values)
+        return values
+
+    def _refresh_readiness(self):
+        now = fields.Datetime.now()
+        for item in self:
+            product = item.matched_product_id.sudo()
+            supplier = item._positive_sparex_supplier()
+            has_cost = bool(supplier)
+            has_sales_price = bool(product and not sales_price_blocker(product, supplier))
+            product_has_exact_url = bool(product and exact_sparex_url(product.southern_source_url, item.normalized_sku))
+            product_has_image = bool(product and product.image_1920)
+            product_has_category = bool(product and product.public_categ_ids)
+            product_has_description = bool(product and customer_description_ready(product))
+            currently_published = bool(product and product.website_published)
+            source_ready = bool(
+                item.reconciliation_state == "current"
+                and item.state == "verified"
+                and item.source_state == "verified"
+                and item.odoo_match_state == "matched_active"
+                and item.has_exact_sparex_url
+                and item.has_image
+            )
+            enrichment = bool(
+                source_ready
+                and not currently_published
+                and has_cost
+                and has_sales_price
+                and (not product_has_exact_url or not product_has_image)
+            )
+            primary_blocker = _primary_publication_blocker(
+                reconciliation_state=item.reconciliation_state,
+                item_state=item.state,
+                source_state=item.source_state,
+                match_state=item.odoo_match_state,
+                product_active=bool(product and product.active),
+                currently_published=currently_published,
+                has_cost=has_cost,
+                has_sales_price=has_sales_price,
+                product_has_exact_url=product_has_exact_url,
+                product_has_image=product_has_image,
+                product_has_category=product_has_category,
+                product_has_description=product_has_description,
+            )
+            recovery_priority = 0
+            recovery_values = {}
+            if has_cost:
+                recovery_values = {
+                    "cost_recovery_state": "resolved",
+                    "cost_recovery_priority": 0,
+                    "cost_recovery_next_at": False,
+                    "cost_recovery_worker_id": False,
+                    "cost_recovery_last_error": False,
+                }
+            elif (
+                not has_cost
+                and item.reconciliation_state == "current"
+                and item.source_state in {"verified", "missing_image"}
+                and item.odoo_match_state == "matched_active"
+                and bool(product and product.active)
+                and product_has_exact_url
+            ):
+                recovery_priority = 100
+                recovery_priority += 30 if has_sales_price else 0
+                recovery_priority += 20 if product_has_exact_url else 0
+                recovery_priority += 10 if product_has_image else 0
+                claimed_until = (
+                    item.cost_recovery_claimed_at + timedelta(minutes=30) if item.cost_recovery_claimed_at else False
+                )
+                if item.cost_recovery_state == "manual_review":
+                    next_state = "manual_review"
+                elif item.cost_recovery_state == "claimed" and claimed_until and claimed_until > now:
+                    next_state = "claimed"
+                elif item.cost_recovery_attempt_count >= MAX_COST_RECOVERY_ATTEMPTS:
+                    next_state = "manual_review"
+                elif (
+                    item.cost_recovery_state == "retry_wait"
+                    and item.cost_recovery_next_at
+                    and item.cost_recovery_next_at > now
+                ):
+                    next_state = "retry_wait"
+                else:
+                    next_state = "queued"
+                recovery_values = {
+                    "cost_recovery_state": next_state,
+                    "cost_recovery_priority": recovery_priority,
+                }
+                if next_state == "queued":
+                    recovery_values.update(
+                        {
+                            "cost_recovery_next_at": False,
+                            "cost_recovery_worker_id": False,
+                        }
+                    )
+            else:
+                recovery_values = {
+                    "cost_recovery_state": "not_required",
+                    "cost_recovery_priority": 0,
+                    "cost_recovery_next_at": False,
+                    "cost_recovery_worker_id": False,
+                    "cost_recovery_last_error": False,
+                }
+            item.write(
+                {
+                    "has_positive_supplier_cost": has_cost,
+                    "has_positive_sales_price": has_sales_price,
+                    "product_has_exact_sparex_url": product_has_exact_url,
+                    "product_has_image": product_has_image,
+                    "currently_published": currently_published,
+                    "source_enrichment_candidate": enrichment,
+                    "primary_blocker": primary_blocker,
+                    "readiness_refreshed_at": now,
+                    "publication_candidate": bool(
+                        source_ready
+                        and not currently_published
+                        and has_cost
+                        and has_sales_price
+                        and product_has_exact_url
+                        and product_has_image
+                        and product_has_category
+                        and product_has_description
+                    ),
+                    **recovery_values,
+                }
+            )
+        return True
+
+    @api.model
+    def refresh_readiness_batch(self, limit=500):
+        bounded = max(1, min(int(limit or 500), 2000))
+        items = self.search(
+            [("company_id", "=", self.env.company.id), ("reconciliation_state", "=", "current")],
+            order="readiness_refreshed_at, id",
+            limit=bounded,
+        )
+        items._refresh_readiness()
+        counts = {}
+        for blocker in items.mapped("primary_blocker"):
+            counts[blocker or "unclassified"] = counts.get(blocker or "unclassified", 0) + 1
+        recovery_counts = {}
+        for state in items.mapped("cost_recovery_state"):
+            recovery_counts[state or "unclassified"] = recovery_counts.get(state or "unclassified", 0) + 1
+        return {"refreshed": len(items), "blockers": counts, "cost_recovery": recovery_counts}
+
+    @api.model
+    def continuous_release_status(self):
+        """Return an Odoo-only gate for the next bounded release dispatch."""
+        now = fields.Datetime.now()
+        items = self.search(
+            [
+                ("company_id", "=", self.env.company.id),
+                ("reconciliation_state", "=", "current"),
+                ("odoo_match_state", "=", "matched_active"),
+                ("currently_published", "=", False),
+            ],
+            order="cost_recovery_priority desc, readiness_refreshed_at, id",
+        )
+        items._refresh_readiness()
+        actionable = self.browse()
+        waiting = self.browse()
+        manual = self.browse()
+        blocked = self.browse()
+        for item in items:
+            if item.publication_candidate or item.source_enrichment_candidate or item.cost_recovery_state == "queued":
+                actionable |= item
+            elif item.cost_recovery_state == "retry_wait":
+                if not item.cost_recovery_next_at or item.cost_recovery_next_at <= now:
+                    actionable |= item
+                else:
+                    waiting |= item
+            elif item.cost_recovery_state == "claimed":
+                waiting |= item
+            elif item.cost_recovery_state == "manual_review":
+                manual |= item
+            else:
+                blocked |= item
+        unlinked_count = self.search_count(
+            [
+                ("company_id", "=", self.env.company.id),
+                ("reconciliation_state", "=", "current"),
+                ("odoo_match_state", "!=", "matched_active"),
+            ]
+        )
+        tracked_product_ids = self.search(
+            [
+                ("company_id", "=", self.env.company.id),
+                ("reconciliation_state", "=", "current"),
+                ("matched_product_id", "!=", False),
+            ]
+        ).mapped("matched_product_id").ids
+        untracked_product_count = (
+            self.env["product.template"]
+            .with_context(active_test=False)
+            .search_count(
+                [
+                    ("active", "=", True),
+                    ("default_code", "=like", "S.%"),
+                    ("id", "not in", tracked_product_ids),
+                ]
+            )
+        )
+        waiting_dates = [value for value in waiting.mapped("cost_recovery_next_at") if value]
+        if actionable:
+            state = "actionable"
+        elif waiting:
+            state = "waiting"
+        elif manual or blocked or unlinked_count or untracked_product_count:
+            state = "needs_review"
+        else:
+            state = "complete"
+        return {
+            "state": state,
+            "actionable_count": len(actionable),
+            "waiting_count": len(waiting),
+            "manual_review_count": len(manual),
+            "blocked_count": len(blocked),
+            "unlinked_count": unlinked_count,
+            "untracked_product_count": untracked_product_count,
+            "next_attempt_at": min(waiting_dates) if waiting_dates else False,
+        }
+
+    @api.model
+    def claim_cost_recovery_batch(self, worker_id, limit=MAX_COST_RECOVERY_BATCH):
+        worker = (worker_id or "").strip()
+        if not worker:
+            raise UserError(_("Cost recovery requires a worker identifier."))
+        bounded = max(1, min(int(limit or MAX_COST_RECOVERY_BATCH), MAX_COST_RECOVERY_BATCH))
+        now = fields.Datetime.now()
+        self.env.cr.execute(
+            """
+            SELECT id FROM southern_sparex_discovery_item
+             WHERE company_id = %s
+               AND reconciliation_state = 'current'
+               AND cost_recovery_state IN ('queued', 'retry_wait')
+               AND (cost_recovery_next_at IS NULL OR cost_recovery_next_at <= %s)
+             ORDER BY cost_recovery_priority DESC, readiness_refreshed_at, id
+             FOR UPDATE SKIP LOCKED LIMIT %s
+            """,
+            [self.env.company.id, now, bounded],
+        )
+        items = self.browse([row[0] for row in self.env.cr.fetchall()])
+        items.write(
+            {
+                "cost_recovery_state": "claimed",
+                "cost_recovery_claimed_at": now,
+                "cost_recovery_worker_id": worker,
+            }
+        )
+        for item in items:
+            item.cost_recovery_attempt_count += 1
+        claimed = []
+        for item in items:
+            product = item.matched_product_id.sudo()
+            supplier_lines = (
+                self.env["product.supplierinfo"]
+                .sudo()
+                .search(
+                    [
+                        ("product_tmpl_id", "=", product.id),
+                        ("partner_id.name", "=ilike", "Sparex"),
+                    ],
+                    limit=2,
+                )
+            )
+            supplier = supplier_lines if len(supplier_lines) == 1 else self.env["product.supplierinfo"]
+            snapshot = {
+                "item_id": item.id,
+                "product_id": product.id,
+                "sku": item.normalized_sku,
+                "source_url": item.source_url,
+                "source_url_sha256": item.source_url_sha256,
+                "source_artifact_sha256": item.source_artifact_sha256,
+                "priority": item.cost_recovery_priority,
+                "attempt": item.cost_recovery_attempt_count,
+                "has_sales_price": item.has_positive_sales_price,
+                "has_exact_product_url": item.product_has_exact_sparex_url,
+                "has_image": item.product_has_image,
+                "supplierinfo_count": len(supplier_lines),
+                "supplierinfo_id": supplier.id if supplier else None,
+                "supplier_price_before": supplier.price if supplier else None,
+                "supplier_write_date": str(supplier.write_date or "") if supplier else "",
+                "standard_price_before": product.standard_price,
+                "list_price_before": product.list_price,
+                "quote_only_before": bool(product.southern_quote_only),
+                "price_basis_before": product.southern_price_basis,
+                "cost_plus_margin_before": product.southern_cost_plus_margin_percent,
+                "price_basis_updated_at_before": str(product.southern_price_basis_updated_at or ""),
+                "product_write_date": str(product.write_date or ""),
+            }
+            snapshot["snapshot_sha256"] = _canonical_sha256(snapshot)
+            claimed.append(snapshot)
+        return claimed
+
+    @api.model
+    def apply_cost_recovery_plan(self, records, worker_id, confirmation, reason):
+        worker = (worker_id or "").strip()
+        if confirmation != COST_RECOVERY_CONFIRMATION or not (reason or "").strip():
+            raise UserError(_("Dealer-cost recovery requires explicit confirmation and a business reason."))
+        if not worker or len(records or []) > MAX_COST_RECOVERY_BATCH:
+            raise UserError(_("Dealer-cost recovery worker or batch limit is invalid."))
+        applied = []
+        for record in records or []:
+            item = self.browse(int(record.get("item_id") or 0)).exists()
+            if not item or item.company_id != self.env.company:
+                raise UserError(_("The dealer-cost recovery item is unavailable."))
+            self.env.cr.execute(
+                "SELECT id FROM southern_sparex_discovery_item WHERE id = %s FOR UPDATE NOWAIT",
+                [item.id],
+            )
+            item.invalidate_recordset()
+            if item.cost_recovery_state != "claimed" or item.cost_recovery_worker_id != worker:
+                raise UserError(_("The dealer-cost recovery claim is no longer owned by this worker."))
+            product = item.matched_product_id.sudo()
+            if (
+                not product
+                or not product.active
+                or product.id != int(record.get("product_id") or 0)
+                or item.normalized_sku != normalized_sparex_sku(record.get("sku"))
+                or not exact_sparex_url(item.source_url, item.normalized_sku)
+                or item.source_url != (record.get("evidence_url") or "").strip()
+                or item.source_url_sha256 != (record.get("evidence_url_sha256") or "").casefold()
+            ):
+                raise UserError(_("Dealer-cost evidence does not match the exact active product and SKU."))
+            supplier_lines = (
+                self.env["product.supplierinfo"]
+                .sudo()
+                .search(
+                    [
+                        ("product_tmpl_id", "=", product.id),
+                        ("partner_id.name", "=ilike", "Sparex"),
+                    ],
+                    limit=2,
+                )
+            )
+            if len(supplier_lines) != 1 or supplier_lines.id != int(record.get("supplierinfo_id") or 0):
+                raise UserError(_("Exactly one existing matching Sparex supplier line is required."))
+            expected_snapshot = {
+                key: record.get(key)
+                for key in (
+                    "item_id",
+                    "product_id",
+                    "sku",
+                    "source_url",
+                    "source_url_sha256",
+                    "source_artifact_sha256",
+                    "priority",
+                    "attempt",
+                    "has_sales_price",
+                    "has_exact_product_url",
+                    "has_image",
+                    "supplierinfo_count",
+                    "supplierinfo_id",
+                    "supplier_price_before",
+                    "supplier_write_date",
+                    "standard_price_before",
+                    "list_price_before",
+                    "quote_only_before",
+                    "price_basis_before",
+                    "cost_plus_margin_before",
+                    "price_basis_updated_at_before",
+                    "product_write_date",
+                )
+            }
+            if _canonical_sha256(expected_snapshot) != (record.get("snapshot_sha256") or "").casefold():
+                raise UserError(_("Dealer-cost rollback snapshot hash does not match."))
+            if abs(float(supplier_lines.price) - float(record.get("supplier_price_before") or 0.0)) > 1e-9:
+                raise UserError(_("The Sparex supplier price changed after the rollback snapshot."))
+            price = float(record.get("dealer_price") or 0.0)
+            if price <= 0 or (record.get("currency") or "").upper() != "USD":
+                raise UserError(_("A positive exact USD dealer price is required."))
+            evidence_sha = (record.get("evidence_sha256") or "").casefold()
+            if not SHA256_PATTERN.fullmatch(evidence_sha):
+                raise UserError(_("Dealer-cost page evidence requires a SHA-256 hash."))
+            image_applied = False
+            image_sha = (record.get("detail_image_sha256") or "").casefold()
+            image_content = record.get("detail_image_base64") or ""
+            image_url = (record.get("detail_image_url") or "").strip()
+            if image_content or image_sha or image_url:
+                if product.image_1920 or record.get("has_image"):
+                    raise UserError(_("Detail-page image recovery is allowed only when the product snapshot had no image."))
+                if not _https_url(image_url) or _sha256_text(image_url) != (
+                    record.get("detail_image_url_sha256") or ""
+                ).casefold():
+                    raise UserError(_("The recovered detail-page image URL is invalid."))
+                if not SHA256_PATTERN.fullmatch(image_sha):
+                    raise UserError(_("The recovered detail-page image requires a SHA-256 hash."))
+                try:
+                    decoded_image = base64.b64decode(image_content, validate=True)
+                except (ValueError, TypeError) as exc:
+                    raise UserError(_("The recovered detail-page image is not valid base64.")) from exc
+                if not decoded_image or len(decoded_image) > 10 * 1024 * 1024 or hashlib.sha256(decoded_image).hexdigest() != image_sha:
+                    raise UserError(_("The recovered detail-page image content does not match its evidence hash."))
+                product.write({"image_1920": image_content})
+                product.invalidate_recordset(["image_1920"])
+                if not product.image_1920:
+                    raise UserError(_("The recovered Sparex product image did not verify."))
+                image_applied = True
+                stored_image = product.image_1920
+                if isinstance(stored_image, str):
+                    stored_image = stored_image.encode("ascii", errors="ignore")
+                stored_image_sha = hashlib.sha256(stored_image).hexdigest()
+            supplier_lines.write({"price": price})
+            supplier_lines.invalidate_recordset(["price"])
+            if abs(float(supplier_lines.price) - price) > 1e-9:
+                raise UserError(_("The recovered Sparex supplier price did not verify."))
+            margin_parameter = self.env["ir.config_parameter"].sudo().get_param(
+                "southern_parts_intelligence.provisional_cost_plus_margin_percent",
+                DEFAULT_COST_PLUS_MARGIN_PERCENT,
+            )
+            try:
+                margin_percent = float(margin_parameter)
+            except (TypeError, ValueError):
+                margin_percent = DEFAULT_COST_PLUS_MARGIN_PERCENT
+            if margin_percent <= 0 or margin_percent >= 90:
+                raise UserError(_("The provisional cost-plus gross margin must be greater than 0 and less than 90."))
+            apply_cost_plus_price = bool(product.southern_quote_only or product.list_price <= 0)
+            provisional_price = math.ceil((price / (1.0 - (margin_percent / 100.0))) * 100.0) / 100.0
+            product_values = {"standard_price": price}
+            if apply_cost_plus_price:
+                product_values.update(
+                    {
+                        "southern_quote_only": False,
+                        "list_price": provisional_price,
+                        "southern_price_basis": "cost_plus",
+                        "southern_cost_plus_margin_percent": margin_percent,
+                        "southern_price_basis_updated_at": fields.Datetime.now(),
+                    }
+                )
+            product.write(product_values)
+            product.invalidate_recordset(
+                [
+                    "standard_price",
+                    "list_price",
+                    "southern_quote_only",
+                    "southern_price_basis",
+                    "southern_cost_plus_margin_percent",
+                    "southern_price_basis_updated_at",
+                ]
+            )
+            if abs(float(product.standard_price) - price) > 1e-9:
+                raise UserError(_("The recovered Sparex standard cost did not verify."))
+            if apply_cost_plus_price and (
+                product.southern_quote_only
+                or abs(float(product.list_price) - provisional_price) > 1e-9
+                or product.southern_price_basis != "cost_plus"
+            ):
+                raise UserError(_("The provisional Sparex cost-plus sales price did not verify."))
+            item.write(
+                {
+                    "cost_recovery_state": "resolved",
+                    "cost_recovery_priority": 0,
+                    "cost_recovery_next_at": False,
+                    "cost_recovery_worker_id": False,
+                    "cost_recovery_last_error": False,
+                    "cost_evidence_sha256": evidence_sha,
+                    "cost_evidence_url_sha256": item.source_url_sha256,
+                    "cost_recovery_parser_version": (record.get("parser_version") or "")[:80],
+                    "cost_recovered_at": fields.Datetime.now(),
+                }
+            )
+            item._refresh_readiness()
+            applied.append(
+                {
+                    "item_id": item.id,
+                    "product_id": product.id,
+                    "sku": item.normalized_sku,
+                    "supplierinfo_id": supplier_lines.id,
+                    "supplier_price_before": float(record.get("supplier_price_before") or 0.0),
+                    "supplier_price_applied": price,
+                    "standard_price_before": float(record.get("standard_price_before") or 0.0),
+                    "standard_price_applied": price,
+                    "list_price_before": float(record.get("list_price_before") or 0.0),
+                    "list_price_applied": float(product.list_price),
+                    "quote_only_before": bool(record.get("quote_only_before")),
+                    "quote_only_applied": bool(product.southern_quote_only),
+                    "price_basis_before": record.get("price_basis_before") or "none",
+                    "price_basis_applied": product.southern_price_basis,
+                    "cost_plus_margin_before": float(record.get("cost_plus_margin_before") or 0.0),
+                    "cost_plus_margin_applied": float(product.southern_cost_plus_margin_percent or 0.0),
+                    "price_basis_updated_at_before": record.get("price_basis_updated_at_before") or "",
+                    "cost_plus_price_applied": apply_cost_plus_price,
+                    "image_applied": image_applied,
+                    "image_source_sha256": image_sha if image_applied else "",
+                    "image_sha256_applied": stored_image_sha if image_applied else "",
+                    "evidence_sha256": evidence_sha,
+                    "evidence_url_sha256": item.source_url_sha256,
+                    "publication_candidate": item.publication_candidate,
+                }
+            )
+        return applied
+
+    @api.model
+    def rollback_cost_recovery(self, records, reason):
+        if not (reason or "").strip() or len(records or []) > MAX_COST_RECOVERY_BATCH:
+            raise UserError(_("A bounded dealer-cost rollback reason is required."))
+        rolled_back = []
+        for record in records or []:
+            item = self.browse(int(record.get("item_id") or 0)).exists()
+            supplier = self.env["product.supplierinfo"].sudo().browse(int(record.get("supplierinfo_id") or 0)).exists()
+            if (
+                not item
+                or item.company_id != self.env.company
+                or not supplier
+                or supplier.product_tmpl_id != item.matched_product_id
+                or supplier.partner_id.name.casefold() != "sparex"
+                or abs(float(supplier.price) - float(record.get("supplier_price_applied") or 0.0)) > 1e-9
+            ):
+                raise UserError(_("Dealer-cost rollback scope or current value does not match."))
+            product = item.matched_product_id.sudo()
+            if (
+                abs(float(product.standard_price) - float(record.get("standard_price_applied") or 0.0)) > 1e-9
+                or abs(float(product.list_price) - float(record.get("list_price_applied") or 0.0)) > 1e-9
+                or bool(product.southern_quote_only) != bool(record.get("quote_only_applied"))
+                or product.southern_price_basis != (record.get("price_basis_applied") or "none")
+            ):
+                raise UserError(_("Dealer-cost rollback product values no longer match the applied snapshot."))
+            if record.get("image_applied"):
+                current_image_sha = hashlib.sha256(base64.b64decode(product.image_1920 or b"")).hexdigest()
+                if current_image_sha != (record.get("image_sha256_applied") or "").casefold():
+                    raise UserError(_("Dealer-cost rollback image no longer matches the applied snapshot."))
+            product.write(
+                {
+                    "standard_price": float(record.get("standard_price_before") or 0.0),
+                    "list_price": float(record.get("list_price_before") or 0.0),
+                    "southern_quote_only": bool(record.get("quote_only_before")),
+                    "southern_price_basis": record.get("price_basis_before") or "none",
+                    "southern_cost_plus_margin_percent": float(record.get("cost_plus_margin_before") or 0.0),
+                    "southern_price_basis_updated_at": record.get("price_basis_updated_at_before") or False,
+                    **({"image_1920": False} if record.get("image_applied") else {}),
+                }
+            )
+            supplier.write({"price": float(record.get("supplier_price_before") or 0.0)})
+            item.write(
+                {
+                    "cost_recovery_state": "manual_review",
+                    "cost_recovery_worker_id": False,
+                    "cost_recovery_next_at": False,
+                    "cost_recovery_last_error": (reason or "rollback")[:120],
+                }
+            )
+            item._refresh_readiness()
+            rolled_back.append(item.id)
+        return rolled_back
+
+    @api.model
+    def record_cost_recovery_result(self, item_id, worker_id, outcome, error_code=""):
+        allowed = {"cost_present", "not_found", "source_unavailable", "manual_review"}
+        if outcome not in allowed:
+            raise UserError(_("Invalid cost-recovery outcome."))
+        item = self.browse(int(item_id)).exists()
+        if not item or item.company_id != self.env.company:
+            raise UserError(_("The cost-recovery item does not exist in the active company."))
+        self.env.cr.execute("SELECT id FROM southern_sparex_discovery_item WHERE id = %s FOR UPDATE NOWAIT", [item.id])
+        item.invalidate_recordset()
+        if item.cost_recovery_state != "claimed" or item.cost_recovery_worker_id != (worker_id or "").strip():
+            raise UserError(_("The cost-recovery claim is no longer owned by this worker."))
+        if outcome == "cost_present":
+            item._refresh_readiness()
+            if not item.has_positive_supplier_cost:
+                raise UserError(_("Dealer cost is still absent; verified evidence must be applied separately."))
+            return True
+        if outcome == "manual_review" or item.cost_recovery_attempt_count >= MAX_COST_RECOVERY_ATTEMPTS:
+            values = {
+                "cost_recovery_state": "manual_review",
+                "cost_recovery_next_at": False,
+            }
+        else:
+            delay_minutes = min(24 * 60, 15 * (2 ** max(0, item.cost_recovery_attempt_count - 1)))
+            if (error_code or "").startswith(("portal_", "dealer_login", "dealer_session")):
+                delay_minutes = max(60, delay_minutes)
+            values = {
+                "cost_recovery_state": "retry_wait",
+                "cost_recovery_next_at": fields.Datetime.now() + timedelta(minutes=delay_minutes),
+            }
+        values.update(
+            {
+                "cost_recovery_worker_id": False,
+                "cost_recovery_last_error": (error_code or outcome)[:120],
+            }
+        )
+        item.write(values)
+        return True
+
+    @api.model
+    def prepare_source_link_plan(self, limit=MAX_SOURCE_LINK_BATCH):
+        bounded = max(1, min(int(limit or MAX_SOURCE_LINK_BATCH), MAX_SOURCE_LINK_BATCH))
+        candidates = self.search(
+            [
+                ("reconciliation_state", "=", "current"),
+                ("state", "=", "verified"),
+                ("source_state", "=", "verified"),
+                ("odoo_match_state", "=", "matched_active"),
+                ("currently_published", "=", False),
+                ("has_exact_sparex_url", "=", True),
+                ("has_image", "=", True),
+                ("source_enrichment_candidate", "=", True),
+            ],
+            order="last_seen_at, id",
+            limit=bounded * 4,
+        )
+        prepared = []
+        for item in candidates:
+            item._refresh_readiness()
+            product = item.matched_product_id.sudo()
+            if (
+                not item.source_enrichment_candidate
+                or not product
+                or not product.active
+                or not item._positive_sparex_supplier()
+                or product.list_price <= 0
+            ):
+                continue
+            prepared.append(item._source_link_snapshot())
+            if len(prepared) >= bounded:
+                break
+        return prepared
+
+    @api.model
+    def prepare_description_repair_plan(self, limit=MAX_SOURCE_LINK_BATCH):
+        """Plan customer-copy repair only for verified listings with the internal placeholder."""
+        bounded = max(1, min(int(limit or MAX_SOURCE_LINK_BATCH), MAX_SOURCE_LINK_BATCH))
+        candidates = self.search(
+            [
+                ("reconciliation_state", "=", "current"),
+                ("state", "=", "verified"),
+                ("source_state", "=", "verified"),
+                ("odoo_match_state", "=", "matched_active"),
+                ("currently_published", "=", False),
+                ("has_exact_sparex_url", "=", True),
+                ("has_image", "=", True),
+                ("primary_blocker", "=", "missing_customer_description"),
+                ("listing_title", "!=", False),
+            ],
+            order="last_seen_at, id",
+            limit=bounded * 4,
+        )
+        prepared = []
+        for item in candidates:
+            item._refresh_readiness()
+            product = item.matched_product_id.sudo()
+            if (
+                item.primary_blocker != "missing_customer_description"
+                or not product
+                or not product.active
+                or not item._positive_sparex_supplier()
+                or sales_price_blocker(product, item._positive_sparex_supplier())
+                or not product.public_categ_ids
+                or customer_description_ready(product)
+            ):
+                continue
+            prepared.append(item._description_repair_snapshot())
+            if len(prepared) >= bounded:
+                break
+        return prepared
+
+    @api.model
+    def apply_description_repair_plan(self, records, confirmation, reason):
+        if confirmation != DESCRIPTION_REPAIR_CONFIRMATION or not (reason or "").strip():
+            raise UserError(_("Description repair requires the exact confirmation and business reason."))
+        if not records or len(records) > MAX_SOURCE_LINK_BATCH:
+            raise UserError(_("Description-repair batches must contain between 1 and 50 records."))
+        applied = []
+        for prepared in records:
+            item = self.browse(int(prepared.get("item_id") or 0)).exists()
+            if not item:
+                raise UserError(_("A prepared discovery item no longer exists."))
+            self.env.cr.execute(
+                "SELECT id FROM southern_sparex_discovery_item WHERE id = %s FOR UPDATE NOWAIT", [item.id]
+            )
+            item.invalidate_recordset()
+            item._refresh_readiness()
+            product = item.matched_product_id.sudo()
+            self.env.cr.execute("SELECT id FROM product_template WHERE id = %s FOR UPDATE NOWAIT", [product.id])
+            product.invalidate_recordset()
+            if (
+                item.primary_blocker != "missing_customer_description"
+                or product.id != int(prepared.get("product_id") or 0)
+                or item.normalized_sku != normalized_sparex_sku(prepared.get("sku"))
+                or item.source_url_sha256 != prepared.get("source_url_sha256")
+                or item._description_repair_snapshot().get("snapshot_sha256") != prepared.get("snapshot_sha256")
+            ):
+                raise UserError(_("Description evidence changed; create a fresh plan."))
+            product.write(prepared.get("descriptions_after") or {})
+            product.invalidate_recordset(["description_ecommerce", "website_description", "description_sale"])
+            if not customer_description_ready(product):
+                product.write(prepared.get("descriptions_before") or {})
+                raise UserError(_("The customer description was not retained; the prior values were restored."))
+            item._refresh_readiness()
+            applied.append(
+                {
+                    **prepared,
+                    "descriptions_after_sha256": _canonical_sha256(
+                        {
+                            field_name: product[field_name] or ""
+                            for field_name in ("description_ecommerce", "website_description", "description_sale")
+                            if field_name in product._fields
+                        }
+                    ),
+                }
+            )
+        return applied
+
+    @api.model
+    def rollback_description_repairs(self, records, reason):
+        if not (reason or "").strip():
+            raise UserError(_("Description-repair rollback requires a reason."))
+        for prepared in records or []:
+            item = self.browse(int(prepared.get("item_id") or 0)).exists()
+            if not item or item.normalized_sku != normalized_sparex_sku(prepared.get("sku")):
+                continue
+            product = item.matched_product_id.sudo()
+            if product.id != int(prepared.get("product_id") or 0):
+                continue
+            self.env.cr.execute("SELECT id FROM product_template WHERE id = %s FOR UPDATE NOWAIT", [product.id])
+            product.invalidate_recordset()
+            descriptions_after = {
+                field_name: product[field_name] or ""
+                for field_name in ("description_ecommerce", "website_description", "description_sale")
+                if field_name in product._fields
+            }
+            if _canonical_sha256(descriptions_after) != (prepared.get("descriptions_after_sha256") or ""):
+                raise UserError(_("Description rollback stopped because the product copy changed after this run."))
+            product.write(prepared.get("descriptions_before") or {})
+            item._refresh_readiness()
+        return True
+
+    @api.model
+    def apply_source_link_plan(self, records, confirmation, reason):
+        if confirmation != SOURCE_LINK_CONFIRMATION or not (reason or "").strip():
+            raise UserError(_("Source linking requires the exact confirmation and business reason."))
+        if not records or len(records) > MAX_SOURCE_LINK_BATCH:
+            raise UserError(_("Source-link batches must contain between 1 and 50 records."))
+        applied = []
+        for prepared in records:
+            item = self.browse(int(prepared.get("item_id") or 0)).exists()
+            if not item:
+                raise UserError(_("A prepared discovery item no longer exists."))
+            self.env.cr.execute(
+                "SELECT id FROM southern_sparex_discovery_item WHERE id = %s FOR UPDATE NOWAIT", [item.id]
+            )
+            item.invalidate_recordset()
+            item._refresh_readiness()
+            product = item.matched_product_id.sudo()
+            self.env.cr.execute("SELECT id FROM product_template WHERE id = %s FOR UPDATE NOWAIT", [product.id])
+            product.invalidate_recordset()
+            if (
+                not item.source_enrichment_candidate
+                or product.id != int(prepared.get("product_id") or 0)
+                or item.normalized_sku != normalized_sparex_sku(prepared.get("sku"))
+                or item.source_url_sha256 != prepared.get("source_url_sha256")
+                or item._source_link_snapshot().get("snapshot_sha256") != prepared.get("snapshot_sha256")
+            ):
+                raise UserError(_("Source-link evidence changed; create a fresh plan."))
+            repair_url = bool(prepared.get("repair_url"))
+            repair_image = bool(prepared.get("repair_image"))
+            if not repair_url and not repair_image:
+                raise UserError(_("The prepared source repair no longer has a missing product field."))
+            write_values = {}
+            if repair_url:
+                write_values["southern_source_url"] = item.source_url
+            image_content_sha = ""
+            if repair_image:
+                encoded_image = (prepared.get("image_base64") or "").strip()
+                try:
+                    image_content = base64.b64decode(encoded_image, validate=True)
+                except (TypeError, ValueError) as exc:
+                    raise UserError(_("The prepared listing image is not valid base64 evidence.")) from exc
+                image_content_sha = hashlib.sha256(image_content).hexdigest()
+                if (
+                    not image_content
+                    or len(image_content) > 10 * 1024 * 1024
+                    or image_content_sha != (prepared.get("image_content_sha256") or "").casefold()
+                ):
+                    raise UserError(_("The prepared listing image hash or size is invalid."))
+                write_values["image_1920"] = encoded_image
+            product.write(write_values)
+            product.invalidate_recordset(["southern_source_url", "image_1920"])
+            if not exact_sparex_url(product.southern_source_url, item.normalized_sku):
+                product.write(
+                    {
+                        "southern_source_url": prepared.get("before_source_url") or False,
+                        **({"image_1920": False} if repair_image else {}),
+                    }
+                )
+                raise UserError(_("The exact Sparex URL was not retained; the prior value was restored."))
+            if repair_image and not product.image_1920:
+                product.write(
+                    {
+                        "southern_source_url": prepared.get("before_source_url") or False,
+                        "image_1920": False,
+                    }
+                )
+                raise UserError(_("The listing image was not retained; prior values were restored."))
+            stored_image = product.image_1920 or b""
+            if isinstance(stored_image, str):
+                stored_image = stored_image.encode("ascii", errors="ignore")
+            item._refresh_readiness()
+            applied.append(
+                {
+                    **{key: value for key, value in prepared.items() if key != "image_base64"},
+                    "after_source_url_sha256": _sha256_text(product.southern_source_url),
+                    "after_image_sha256": (
+                        hashlib.sha256(stored_image).hexdigest()
+                        if repair_image
+                        else prepared.get("before_image_sha256")
+                    ),
+                }
+            )
+        return applied
+
+    @api.model
+    def rollback_source_links(self, records, reason):
+        if not (reason or "").strip():
+            raise UserError(_("Source-link rollback requires a reason."))
+        for prepared in records or []:
+            item = self.browse(int(prepared.get("item_id") or 0)).exists()
+            if not item or item.normalized_sku != normalized_sparex_sku(prepared.get("sku")):
+                continue
+            product = item.matched_product_id.sudo()
+            if product.id != int(prepared.get("product_id") or 0):
+                continue
+            self.env.cr.execute("SELECT id FROM product_template WHERE id = %s FOR UPDATE NOWAIT", [product.id])
+            product.invalidate_recordset()
+            expected_after = (prepared.get("after_source_url_sha256") or "").casefold()
+            if expected_after and _sha256_text(product.southern_source_url or "") != expected_after:
+                raise UserError(_("Source-link rollback stopped because the product URL changed after this run."))
+            if prepared.get("repair_image") and not prepared.get("before_image_present"):
+                expected_image = (prepared.get("after_image_sha256") or "").casefold()
+                current_image = product.image_1920 or b""
+                if isinstance(current_image, str):
+                    current_image = current_image.encode("ascii", errors="ignore")
+                if expected_image and hashlib.sha256(current_image).hexdigest() != expected_image:
+                    raise UserError(_("Source-link rollback stopped because the product image changed after this run."))
+            rollback_values = {"southern_source_url": prepared.get("before_source_url") or False}
+            if prepared.get("repair_image") and not prepared.get("before_image_present"):
+                rollback_values["image_1920"] = False
+            product.write(rollback_values)
+            item._refresh_readiness()
+        return True

@@ -1,0 +1,352 @@
+.se-brokerage {
+    --se-ink: #181a1d;
+    --se-charcoal: #151719;
+    --se-green: #151719;
+    --se-sand: #f3efe5;
+    --se-yellow: #f2b632;
+    color: var(--se-ink);
+    background: #fff;
+}
+
+.se-hero {
+    color: #fff;
+    background:
+        radial-gradient(circle at 82% 20%, rgba(242, 182, 50, .22), transparent 24rem),
+        linear-gradient(125deg, #151719, #252a30);
+}
+
+.se-eyebrow {
+    color: #c88d10;
+    font-size: .78rem;
+    font-weight: 800;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+}
+
+.se-hero .se-eyebrow {
+    color: #ffd36d;
+}
+
+.se-trust-card,
+.se-verification-box {
+    padding: 1.5rem;
+    border: 1px solid rgba(255, 255, 255, .2);
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, .08);
+    backdrop-filter: blur(10px);
+}
+
+.se-filter {
+    padding: 1.25rem;
+    border: 1px solid #e2ded4;
+    border-radius: 1rem;
+    background: var(--se-sand);
+}
+.se-filter-summary {
+    max-width: 1180px;
+}
+.se-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 0 12px;
+    border-radius: 999px;
+    color: var(--se-yellow);
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    background: var(--se-charcoal);
+}
+.se-filter-clear {
+    color: var(--se-charcoal);
+    font-weight: 800;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.se-listing-card {
+    overflow: hidden;
+    box-shadow: 0 14px 40px rgba(28, 45, 32, .1);
+    transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.se-listing-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 18px 50px rgba(28, 45, 32, .16);
+}
+.se-card-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+}
+.se-card-facts span {
+    display: block;
+    padding: 10px 12px;
+    border: 1px solid #e5dfd4;
+    border-radius: 6px;
+    color: #1f2429;
+    font-size: 14px;
+    line-height: 1.25;
+    background: #fbfaf6;
+}
+.se-card-facts strong {
+    display: block;
+    margin-bottom: 3px;
+    line-height: 1.15;
+    color: #7a6a37;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+.se-card-media {
+    position: relative;
+    height: 245px;
+    background: #dfe4de;
+}
+
+.se-card-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #fff;
+    font-size: 1.4rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    background: linear-gradient(145deg, #333941, #151719);
+}
+
+.se-status,
+.se-owned {
+    position: absolute;
+    top: 1rem;
+    padding: .45rem .7rem;
+    border-radius: 999px;
+    color: #fff;
+    font-size: .72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    background: rgba(20, 31, 23, .88);
+}
+
+.se-status { left: 1rem; }
+.se-owned { right: 1rem; background: #5f4a10; }
+.se-spec-line { color: #66726a; font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.se-price, .se-detail-price { color: #000; font-size: 1.6rem; font-weight: 850; }
+.se-detail-price { font-size: 2.2rem; }
+.se-listing-note { padding-left: .8rem; border-left: 3px solid var(--se-yellow); }
+.se-detail-media { overflow: hidden; height: min(62vw, 520px); border-radius: 1rem; background: #dfe4de; }
+.se-thumb { height: 120px; border-radius: .6rem; background: #dfe4de; }
+.se-back-link { color: var(--se-green); font-weight: 700; text-decoration: none; }
+.se-specs dt { color: #6b756e; font-weight: 600; }
+.se-specs dd { font-weight: 750; text-align: right; }
+.se-detail-section { background: var(--se-sand); }
+.se-description { font-size: 1.08rem; line-height: 1.75; }
+.se-verification-box { border-color: #d8d2c4; background: #fff; box-shadow: 0 12px 30px rgba(28, 45, 32, .08); }
+.se-inquiry-panel { padding: clamp(1.5rem, 4vw, 3rem); border-radius: 1.25rem; color: #fff; background: var(--se-charcoal); border: 1px solid rgba(242, 182, 50, .28); box-shadow: 0 18px 50px rgba(0, 0, 0, .16); }
+.se-inquiry-panel .form-control, .se-inquiry-panel .form-select { border-color: rgba(255, 255, 255, .25); }
+.se-inquiry-panel .se-eyebrow { color: var(--se-yellow); }
+.se-inquiry-panel a { color: #f7c84a; }
+.se-disclosure { padding: 1.25rem; border: 1px solid #dad4c7; background: #f8f6f0; color: #4d554f; }
+.se-machine-notes { padding: 1.5rem; border-left: 4px solid var(--se-yellow); border-radius: .5rem; background: #f7f5ef; box-shadow: 0 10px 28px rgba(24, 26, 29, .08); }
+.se-machine-notes p,
+.se-machine-notes .se-description { color: #2c3035; font-size: 1.02rem; line-height: 1.65; }
+.se-detail-top,
+.se-public-comps-section,
+.se-inquiry-container,
+.se-disclosure {
+    max-width: 1180px;
+}
+.se-detail-media {
+    height: clamp(340px, 42vw, 540px);
+    border-radius: 8px;
+    box-shadow: 0 14px 36px rgba(24, 26, 29, .12);
+}
+.se-detail-sidebar {
+    padding-top: .35rem;
+}
+.se-detail-sidebar h1 {
+    font-size: clamp(34px, 3.2vw, 52px);
+    line-height: 1.04;
+    letter-spacing: 0;
+    margin-bottom: 14px;
+}
+.se-detail-price {
+    font-size: clamp(28px, 2.4vw, 40px);
+    font-weight: 900;
+    margin: 18px 0 22px !important;
+}
+.se-detail-hour-callout {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 18px;
+    border: 1px solid #e2d7b4;
+    border-left: 4px solid var(--se-yellow);
+    border-radius: 6px;
+    background: #fbfaf6;
+}
+.se-detail-hour-callout strong {
+    color: #7a6a37;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+}
+.se-detail-hour-callout span {
+    color: var(--se-charcoal);
+    font-size: 24px;
+    font-weight: 900;
+}
+.se-specs {
+    padding: 18px 0;
+    border-top: 1px solid #ded8cc;
+    border-bottom: 1px solid #ded8cc;
+    margin-bottom: 0;
+}
+.se-specs dt,
+.se-specs dd {
+    padding-top: 7px;
+    padding-bottom: 7px;
+}
+.se-inquiry-container {
+    padding-top: 20px !important;
+}
+.se-public-comps {
+    padding: 28px;
+    border: 1px solid #e1d9c8;
+    border-radius: 8px;
+    background: #f8f6ef;
+}
+.se-comp-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+    gap: 10px;
+}
+.se-comp-stat {
+    min-width: 180px;
+    padding: 12px 14px;
+    border-left: 4px solid var(--se-yellow);
+    background: #fff;
+}
+.se-comp-stat strong {
+    display: block;
+    color: #7a6a37;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+.se-comp-stat span {
+    color: #000;
+    font-size: 18px;
+    font-weight: 900;
+}
+.se-comp-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px;
+}
+.se-comp-card {
+    padding: 16px;
+    border: 1px solid #e5dfd4;
+    border-radius: 6px;
+    background: #fff;
+}
+.se-comp-card h3 {
+    color: var(--se-charcoal);
+    line-height: 1.25;
+}
+.se-comp-price {
+    color: #000;
+    white-space: nowrap;
+}
+.se-comp-meta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 12px;
+    margin-top: 12px;
+}
+.se-comp-meta span {
+    color: #252a30;
+    font-size: 13px;
+    line-height: 1.25;
+}
+.se-comp-meta strong {
+    display: block;
+    color: #7a6a37;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+.se-inquiry-panel {
+    border-radius: 8px !important;
+    padding: clamp(28px, 4vw, 48px) !important;
+}
+.se-inquiry-panel h2 {
+    font-size: clamp(30px, 3vw, 44px);
+    line-height: 1.06;
+}
+.se-inquiry-panel .form-control,
+.se-inquiry-panel .form-select {
+    min-height: 44px;
+    border-radius: 4px;
+}
+.se-inquiry-panel textarea.form-control {
+    min-height: 128px;
+}
+.se-disclosure {
+    margin-left: auto;
+    margin-right: auto;
+    padding: 14px 16px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #555;
+    background: #fbfaf6;
+}
+.se-home-opportunities { --se-green: #24452f; overflow: hidden; background: #f7f5ef; }
+.se-home-opportunity-card {
+    overflow: hidden;
+    box-shadow: 0 12px 34px rgba(28, 45, 32, .1);
+    transition: transform .2s ease, box-shadow .2s ease;
+}
+.se-home-opportunity-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 18px 42px rgba(28, 45, 32, .16);
+}
+.se-home-card-media {
+    position: relative;
+    display: block;
+    height: 220px;
+    background: #dfe4de;
+}
+.se-home-price { color: #000; white-space: nowrap; }
+.se-home-opportunity-empty {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding: 2rem;
+    border: 1px dashed #b9b5aa;
+    border-radius: 1rem;
+    background: #fff;
+}
+.se-home-disclosure {
+    color: #6b736d;
+    font-size: .82rem;
+    line-height: 1.55;
+}
+
+@media (max-width: 767px) {
+    .se-card-media { height: 220px; }
+    .se-detail-media { height: 360px; }
+    .se-thumb { height: 90px; }
+    .se-home-card-media { height: 210px; }
+    .se-home-opportunity-empty { align-items: flex-start; flex-direction: column; }
+}

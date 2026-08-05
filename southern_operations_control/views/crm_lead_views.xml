@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="crm.crm_lead_action_pipeline" model="ir.actions.act_window">
+        <field name="domain">[('type', '=', 'opportunity'), ('southern_record_class', '=', 'actual_opportunity')]</field>
+    </record>
+    <record id="crm.crm_lead_opportunities" model="ir.actions.act_window">
+        <field name="domain">[('type', '=', 'opportunity'), ('southern_record_class', '=', 'actual_opportunity')]</field>
+    </record>
+    <record id="crm.crm_lead_action_forecast" model="ir.actions.act_window">
+        <field name="domain">[('type', '=', 'opportunity'), ('southern_record_class', '=', 'actual_opportunity')]</field>
+    </record>
+
+    <record id="view_crm_lead_form_southern_record_class" model="ir.ui.view">
+        <field name="name">crm.lead.form.southern.record.class</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_lead_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="before">
+                <group string="Southern CRM Classification">
+                    <field name="southern_record_class"/>
+                    <field name="southern_classification_reason" readonly="1"/>
+                    <field name="southern_classified_at" readonly="1"/>
+                    <field name="southern_source_system"/>
+                    <field name="southern_import_batch_key"/>
+                    <field name="southern_imported_at" readonly="1"/>
+                    <field name="southern_classification_version" readonly="1"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_crm_lead_search_southern_record_class" model="ir.ui.view">
+        <field name="name">crm.lead.search.southern.record.class</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.view_crm_case_opportunities_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//search" position="inside">
+                <filter name="southern_actual_opportunities" string="Actual Opportunities"
+                        domain="[('southern_record_class', '=', 'actual_opportunity')]"/>
+                <filter name="southern_imported_references" string="Imported References"
+                        domain="[('southern_record_class', '=', 'imported_reference')]"/>
+                <filter name="group_southern_record_class" string="Record Class"
+                        context="{'group_by': 'southern_record_class'}"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_classify_southern_crm_references" model="ir.actions.server">
+        <field name="name">Classify Imported CRM References</field>
+        <field name="model_id" ref="crm.model_crm_lead"/>
+        <field name="binding_model_id" ref="crm.model_crm_lead"/>
+        <field name="state">code</field>
+        <field name="code">model.action_classify_reference_cohorts(apply=True, limit=500)</field>
+    </record>
+
+    <record id="action_southern_actual_opportunities" model="ir.actions.act_window">
+        <field name="name">Actual Opportunities</field>
+        <field name="res_model">crm.lead</field>
+        <field name="view_mode">kanban,list,form,pivot,graph,activity</field>
+        <field name="domain">[('southern_record_class', '=', 'actual_opportunity')]</field>
+    </record>
+
+    <record id="action_southern_imported_crm_references" model="ir.actions.act_window">
+        <field name="name">Imported CRM References</field>
+        <field name="res_model">crm.lead</field>
+        <field name="view_mode">list,form,pivot,graph</field>
+        <field name="domain">[('southern_record_class', '=', 'imported_reference')]</field>
+    </record>
+</odoo>

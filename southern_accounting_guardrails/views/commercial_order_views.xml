@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_sale_order_form_southern_accounting_guardrails" model="ir.ui.view">
+        <field name="name">sale.order.form.southern.accounting.guardrails</field>
+        <field name="model">sale.order</field>
+        <field name="active" eval="False"/>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet/div[@name='button_box']" position="before">
+                <field name="southern_accounting_readiness_state" invisible="1"/>
+                <field name="southern_accounting_issue_count" invisible="1"/>
+                <div class="alert alert-danger" role="alert"
+                     invisible="southern_accounting_readiness_state != 'blocked'">
+                    <strong>Accounting setup is incomplete.</strong>
+                    Correct the highlighted line classifications before confirmation.
+                    <field name="southern_accounting_issue_summary" nolabel="1" readonly="1"/>
+                </div>
+                <div class="alert alert-warning" role="alert"
+                     invisible="southern_accounting_readiness_state != 'warning'">
+                    <strong>Review before confirmation.</strong>
+                    <field name="southern_accounting_issue_summary" nolabel="1" readonly="1"/>
+                </div>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='product_id']" position="after">
+                <field name="southern_revenue_bucket" optional="show"/>
+                <field name="southern_revenue_account_id" optional="show"/>
+            </xpath>
+            <xpath expr="//field[@name='payment_term_id']" position="after">
+                <field name="southern_accounting_exception_reason"
+                       placeholder="Required only for intentional zero-price orders"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_quotation_list_southern_accounting_guardrails" model="ir.ui.view">
+        <field name="name">sale.order.quotation.list.southern.accounting.guardrails</field>
+        <field name="model">sale.order</field>
+        <field name="active" eval="False"/>
+        <field name="inherit_id" ref="sale.view_quotation_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="southern_accounting_readiness_state" optional="show"/>
+                <field name="southern_accounting_issue_count" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_purchase_order_form_southern_accounting_guardrails" model="ir.ui.view">
+        <field name="name">purchase.order.form.southern.accounting.guardrails</field>
+        <field name="model">purchase.order</field>
+        <field name="active" eval="False"/>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet/div[@name='button_box']" position="before">
+                <field name="southern_accounting_readiness_state" invisible="1"/>
+                <field name="southern_accounting_issue_count" invisible="1"/>
+                <div class="alert alert-danger" role="alert"
+                     invisible="southern_accounting_readiness_state != 'blocked'">
+                    <strong>Accounting setup is incomplete.</strong>
+                    Classify every purchase as inventory, direct cost, expense, or asset before confirmation.
+                    <field name="southern_accounting_issue_summary" nolabel="1" readonly="1"/>
+                </div>
+                <div class="alert alert-warning" role="alert"
+                     invisible="southern_accounting_readiness_state != 'warning'">
+                    <strong>Review before confirmation.</strong>
+                    <field name="southern_accounting_issue_summary" nolabel="1" readonly="1"/>
+                </div>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='product_id']" position="after">
+                <field name="southern_purchase_purpose" optional="show"/>
+                <field name="southern_expense_account_id" optional="show"
+                       invisible="southern_purchase_purpose == 'inventory'"/>
+            </xpath>
+            <xpath expr="//field[@name='payment_term_id']" position="after">
+                <field name="southern_accounting_exception_reason"
+                       placeholder="Required only for intentional zero-cost orders"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_purchase_order_list_southern_accounting_guardrails" model="ir.ui.view">
+        <field name="name">purchase.order.list.southern.accounting.guardrails</field>
+        <field name="model">purchase.order</field>
+        <field name="active" eval="False"/>
+        <field name="inherit_id" ref="purchase.purchase_order_view_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="southern_accounting_readiness_state" optional="show"/>
+                <field name="southern_accounting_issue_count" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

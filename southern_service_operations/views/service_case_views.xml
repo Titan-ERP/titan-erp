@@ -1,0 +1,289 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_southern_service_case_list" model="ir.ui.view">
+        <field name="name">southern.service.case.list</field>
+        <field name="model">southern.service.case</field>
+        <field name="arch" type="xml">
+            <list decoration-danger="state == 'cancelled'"
+                  decoration-success="state == 'closed'"
+                  decoration-warning="state in ('waiting_customer', 'waiting_parts')">
+                <field name="priority" widget="priority"/>
+                <field name="name"/>
+                <field name="service_domain"/>
+                <field name="partner_id" optional="show"/>
+                <field name="client_equipment_id" optional="show"/>
+                <field name="maintenance_equipment_id" optional="hide"/>
+                <field name="service_location"/>
+                <field name="advisor_id" widget="many2one_avatar_user"/>
+                <field name="requested_date"/>
+                <field name="state" widget="badge"
+                       decoration-info="state in ('intake', 'diagnosing', 'estimating')"
+                       decoration-warning="state in ('waiting_customer', 'waiting_parts')"
+                       decoration-success="state in ('work_complete', 'ready_invoice', 'invoiced', 'closed')"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_southern_service_case_kanban" model="ir.ui.view">
+        <field name="name">southern.service.case.kanban</field>
+        <field name="model">southern.service.case</field>
+        <field name="arch" type="xml">
+            <kanban default_group_by="state" class="o_kanban_small_column">
+                <field name="name"/>
+                <field name="priority"/>
+                <field name="service_domain"/>
+                <field name="partner_id"/>
+                <field name="client_equipment_id"/>
+                <field name="maintenance_equipment_id"/>
+                <field name="service_location"/>
+                <field name="advisor_id"/>
+                <field name="requested_date"/>
+                <templates>
+                    <t t-name="card">
+                        <div class="d-flex justify-content-between">
+                            <strong><field name="name"/></strong>
+                            <field name="priority" widget="priority"/>
+                        </div>
+                        <div class="text-muted">
+                            <field name="service_domain"/>
+                            <span> · </span>
+                            <field name="service_location"/>
+                        </div>
+                        <div t-if="record.partner_id.value">
+                            <i class="fa fa-user me-1" title="Customer"/>
+                            <field name="partner_id"/>
+                        </div>
+                        <div t-if="record.client_equipment_id.value">
+                            <i class="fa fa-wrench me-1" title="Equipment"/>
+                            <field name="client_equipment_id"/>
+                        </div>
+                        <div t-if="record.maintenance_equipment_id.value">
+                            <i class="fa fa-cogs me-1" title="Internal Equipment"/>
+                            <field name="maintenance_equipment_id"/>
+                        </div>
+                        <footer>
+                            <field name="advisor_id" widget="many2one_avatar_user"/>
+                            <field name="requested_date"/>
+                        </footer>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <record id="view_southern_service_case_form" model="ir.ui.view">
+        <field name="name">southern.service.case.form</field>
+        <field name="model">southern.service.case</field>
+        <field name="arch" type="xml">
+            <form string="Service">
+                <header>
+                    <button name="action_route_work" type="object" string="Route Work"
+                            class="btn-primary"
+                            invisible="state not in ('intake', 'diagnosing', 'estimating', 'ready')"/>
+                    <button name="action_create_quotation" type="object" string="Create Quotation"
+                            invisible="service_domain != 'customer' or sale_order_id or state in ('closed', 'cancelled')"/>
+                    <button name="action_set_diagnosing" type="object" string="Start Diagnosis"
+                            invisible="state != 'intake'"/>
+                    <button name="action_set_waiting_customer" type="object" string="Wait for Customer"
+                            invisible="state in ('waiting_customer', 'closed', 'cancelled')"/>
+                    <button name="action_set_in_progress" type="object" string="Start Work"
+                            invisible="state not in ('ready', 'scheduled', 'waiting_parts', 'waiting_customer')"/>
+                    <button name="action_set_waiting_parts" type="object" string="Wait for Parts"
+                            invisible="state in ('waiting_parts', 'work_complete', 'ready_invoice', 'invoiced', 'closed', 'cancelled')"/>
+                    <button name="action_set_work_complete" type="object" string="Work Complete"
+                            invisible="state not in ('in_progress', 'waiting_customer', 'waiting_parts')"/>
+                    <button name="action_set_ready_invoice" type="object" string="Ready to Invoice"
+                            invisible="state != 'work_complete' or service_domain != 'customer'"/>
+                    <button name="action_close" type="object" string="Close"
+                            invisible="state not in ('work_complete', 'ready_invoice', 'invoiced')"/>
+                    <button name="action_cancel" type="object" string="Cancel"
+                            invisible="state in ('closed', 'cancelled')"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="intake,diagnosing,estimating,waiting_customer,ready,scheduled,in_progress,waiting_parts,work_complete,ready_invoice,invoiced,closed"/>
+                </header>
+                <sheet>
+                    <widget name="web_ribbon" title="Cancelled" bg_color="text-bg-danger"
+                            invisible="state != 'cancelled'"/>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_sale_order" type="object"
+                                class="oe_stat_button" icon="fa-dollar"
+                                invisible="not sale_order_id">
+                            <div class="o_field_widget o_stat_info">
+                                <span class="o_stat_value"><field name="sale_order_id" nolabel="1"/></span>
+                                <span class="o_stat_text">Sales</span>
+                            </div>
+                        </button>
+                        <button name="action_view_tasks" type="object"
+                                class="oe_stat_button" icon="fa-calendar"
+                                invisible="not task_count">
+                            <field name="task_count" widget="statinfo"
+                                   string="Service Jobs"/>
+                        </button>
+                        <button name="action_view_repairs" type="object"
+                                class="oe_stat_button" icon="fa-wrench"
+                                invisible="not repair_count">
+                            <field name="repair_count" widget="statinfo" string="Shop"/>
+                        </button>
+                        <button name="action_view_maintenance" type="object"
+                                class="oe_stat_button" icon="fa-cogs"
+                                invisible="not maintenance_count">
+                            <field name="maintenance_count" widget="statinfo" string="Internal"/>
+                        </button>
+                        <button name="action_view_purchases" type="object"
+                                class="oe_stat_button" icon="fa-shopping-cart"
+                                invisible="not purchase_count">
+                            <field name="purchase_count" widget="statinfo" string="Purchases"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1>
+                            <field name="priority" widget="priority" class="me-2"/>
+                            <field name="name"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="service_domain" widget="radio" readonly="state != 'intake'"/>
+                            <field name="partner_id"
+                                   invisible="service_domain != 'customer'"
+                                   required="service_domain == 'customer'"/>
+                            <field name="client_equipment_id"
+                                   invisible="service_domain != 'customer'"
+                                   domain="[('client', 'child_of', partner_id)]"
+                                   options="{'no_create': False}"/>
+                            <field name="service_title"
+                                   invisible="service_domain != 'customer'"
+                                   required="service_domain == 'customer'"/>
+                            <field name="equipment_description"
+                                   invisible="service_domain != 'customer'"
+                                   required="service_domain == 'customer'"/>
+                            <field name="serial_number"
+                                   invisible="service_domain != 'customer'"
+                                   required="service_domain == 'customer'"/>
+                            <field name="equipment_run_hours"
+                                   invisible="service_domain != 'customer'"
+                                   required="service_domain == 'customer'"/>
+                            <field name="maintenance_equipment_id"
+                                   invisible="service_domain != 'internal'"
+                                   required="service_domain == 'internal'"/>
+                            <field name="service_location" readonly="state not in ('intake', 'diagnosing', 'estimating')"/>
+                            <field name="commercial_basis"/>
+                        </group>
+                        <group>
+                            <field name="advisor_id" widget="many2one_avatar_user"/>
+                            <field name="technician_id" widget="many2one_avatar_user"/>
+                            <field name="scheduled_start"/>
+                            <field name="estimated_hours"/>
+                            <field name="requested_date"/>
+                            <field name="sale_order_id" readonly="1"
+                                   invisible="service_domain != 'customer'"/>
+                            <field name="active" invisible="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page name="request" string="Request">
+                            <field name="complaint" placeholder="Describe the requested work, symptoms, and customer concerns."/>
+                            <group>
+                                <group string="Technician Findings">
+                                    <field name="diagnosis"/>
+                                    <field name="work_performed"/>
+                                </group>
+                                <group string="Customer Follow-up">
+                                    <field name="recommendations"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page name="linked_work" string="Linked Work">
+                            <group>
+                                <field name="task_ids" readonly="1"/>
+                                <field name="repair_order_ids" readonly="1"/>
+                                <field name="maintenance_request_ids" readonly="1"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_southern_service_case_search" model="ir.ui.view">
+        <field name="name">southern.service.case.search</field>
+        <field name="model">southern.service.case</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="client_equipment_id"/>
+                <field name="maintenance_equipment_id"/>
+                <field name="advisor_id"/>
+                <filter name="my_cases" string="My Service" domain="[('advisor_id', '=', uid)]"/>
+                <filter name="waiting_customer" string="Waiting for Customer"
+                        domain="[('state', '=', 'waiting_customer')]"/>
+                <filter name="waiting_parts" string="Waiting for Parts"
+                        domain="[('state', '=', 'waiting_parts')]"/>
+                <filter name="ready_invoice" string="Ready to Invoice"
+                        domain="[('state', '=', 'ready_invoice')]"/>
+                <separator/>
+                <filter name="customer" string="Customer"
+                        domain="[('service_domain', '=', 'customer')]"/>
+                <filter name="internal" string="Our Equipment"
+                        domain="[('service_domain', '=', 'internal')]"/>
+                <separator/>
+                <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
+                <filter name="group_domain" string="Service For" context="{'group_by': 'service_domain'}"/>
+                <filter name="group_advisor" string="Coordinator" context="{'group_by': 'advisor_id'}"/>
+                <filter name="group_customer" string="Customer" context="{'group_by': 'partner_id'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_southern_service_cases" model="ir.actions.act_window">
+        <field name="name">Service</field>
+        <field name="res_model">southern.service.case</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="search_view_id" ref="view_southern_service_case_search"/>
+        <field name="context">{'search_default_my_cases': 1}</field>
+    </record>
+
+    <record id="action_southern_service_new" model="ir.actions.act_window">
+        <field name="name">New Service</field>
+        <field name="res_model">southern.service.case</field>
+        <field name="view_mode">form</field>
+        <field name="target">current</field>
+    </record>
+
+    <record id="action_southern_service_new_internal" model="ir.actions.act_window">
+        <field name="name">New Internal Maintenance</field>
+        <field name="res_model">southern.service.case</field>
+        <field name="view_mode">form</field>
+        <field name="target">current</field>
+        <field name="context">{
+            'default_service_domain': 'internal',
+            'default_service_location': 'internal',
+            'default_commercial_basis': 'internal'
+        }</field>
+    </record>
+
+    <record id="action_southern_service_waiting_customer" model="ir.actions.act_window">
+        <field name="name">Waiting for Customer</field>
+        <field name="res_model">southern.service.case</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="domain">[('state', '=', 'waiting_customer')]</field>
+    </record>
+
+    <record id="action_southern_service_waiting_parts" model="ir.actions.act_window">
+        <field name="name">Waiting for Parts</field>
+        <field name="res_model">southern.service.case</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="domain">[('state', '=', 'waiting_parts')]</field>
+    </record>
+
+    <record id="action_southern_service_ready_invoice" model="ir.actions.act_window">
+        <field name="name">Ready to Invoice</field>
+        <field name="res_model">southern.service.case</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="domain">[('state', '=', 'ready_invoice')]</field>
+    </record>
+</odoo>

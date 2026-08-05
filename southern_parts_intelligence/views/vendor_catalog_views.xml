@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+  <record id="southern_vendor_catalog_source_list" model="ir.ui.view">
+    <field name="name">southern.vendor.catalog.source.list</field>
+    <field name="model">southern.vendor.catalog.source</field>
+    <field name="arch" type="xml">
+      <list>
+        <field name="sequence" widget="handle"/>
+        <field name="name"/>
+        <field name="code"/>
+        <field name="partner_id"/>
+        <field name="source_type"/>
+        <field name="default_category_id"/>
+        <field name="automatic_promotion_enabled"/>
+        <field name="promotion_batch_size"/>
+        <field name="active"/>
+      </list>
+    </field>
+  </record>
+
+  <record id="southern_vendor_catalog_source_form" model="ir.ui.view">
+    <field name="name">southern.vendor.catalog.source.form</field>
+    <field name="model">southern.vendor.catalog.source</field>
+    <field name="arch" type="xml">
+      <form>
+        <sheet>
+          <div class="oe_title"><h1><field name="name"/></h1></div>
+          <group>
+            <group>
+              <field name="code"/>
+              <field name="partner_id"/>
+              <field name="source_type"/>
+              <field name="base_url"/>
+              <field name="active"/>
+            </group>
+            <group>
+              <field name="internal_reference_prefix"/>
+              <field name="default_category_id"/>
+              <field name="automatic_promotion_enabled"/>
+              <field name="promotion_batch_size"/>
+              <field name="schema_version"/>
+            </group>
+          </group>
+          <div class="alert alert-info" role="alert">
+            Catalog ingestion stages evidence only. Automatic promotion creates unpublished products and remains disabled until this source is reviewed.
+          </div>
+        </sheet>
+      </form>
+    </field>
+  </record>
+
+  <record id="southern_vendor_catalog_item_list" model="ir.ui.view">
+    <field name="name">southern.vendor.catalog.item.list</field>
+    <field name="model">southern.vendor.catalog.item</field>
+    <field name="arch" type="xml">
+      <list decoration-success="promotion_state == 'promoted'" decoration-info="promotion_state in ['ready', 'requested']" decoration-danger="promotion_state == 'blocked'">
+        <field name="source_id"/>
+        <field name="internal_reference"/>
+        <field name="vendor_sku"/>
+        <field name="title"/>
+        <field name="vendor_cost"/>
+        <field name="sales_price"/>
+        <field name="currency_id" column_invisible="True"/>
+        <field name="availability"/>
+        <field name="match_state"/>
+        <field name="promotion_state"/>
+        <field name="blocker_code"/>
+        <field name="promotion_requested"/>
+        <field name="demand_count"/>
+        <field name="product_id"/>
+        <field name="last_seen_at"/>
+      </list>
+    </field>
+  </record>
+
+  <record id="southern_vendor_catalog_item_form" model="ir.ui.view">
+    <field name="name">southern.vendor.catalog.item.form</field>
+    <field name="model">southern.vendor.catalog.item</field>
+    <field name="arch" type="xml">
+      <form create="0" edit="0" delete="0">
+        <header>
+          <button name="action_request_promotion" type="object" string="Request Product" class="btn-primary" invisible="match_state == 'matched'"/>
+        </header>
+        <sheet>
+          <div class="oe_title"><h1><field name="title"/></h1></div>
+          <div class="oe_title"><h2><field name="internal_reference"/></h2></div>
+          <group>
+            <group>
+              <field name="source_id"/>
+              <field name="partner_id"/>
+              <field name="vendor_sku"/>
+              <field name="normalized_sku"/>
+              <field name="category_path"/>
+              <field name="availability"/>
+              <field name="active"/>
+            </group>
+            <group>
+              <field name="match_state"/>
+              <field name="promotion_state"/>
+              <field name="blocker_code"/>
+              <field name="promotion_requested"/>
+              <field name="demand_count"/>
+              <field name="last_requested_at"/>
+              <field name="product_id"/>
+              <field name="promoted_at"/>
+            </group>
+          </group>
+          <group string="Commercial Data">
+            <field name="vendor_cost"/>
+            <field name="sales_price"/>
+            <field name="currency_id"/>
+            <field name="customer_description"/>
+          </group>
+          <group string="Source Evidence">
+            <field name="source_url" password="1"/>
+            <field name="image_url" password="1"/>
+            <field name="content_sha256"/>
+            <field name="source_artifact_uri"/>
+            <field name="source_artifact_sha256"/>
+            <field name="schema_version"/>
+            <field name="first_seen_at"/>
+            <field name="last_seen_at"/>
+            <field name="observation_count"/>
+          </group>
+        </sheet>
+      </form>
+    </field>
+  </record>
+
+  <record id="southern_vendor_catalog_item_search" model="ir.ui.view">
+    <field name="name">southern.vendor.catalog.item.search</field>
+    <field name="model">southern.vendor.catalog.item</field>
+    <field name="arch" type="xml">
+      <search>
+        <field name="title"/>
+        <field name="internal_reference"/>
+        <field name="vendor_sku"/>
+        <field name="normalized_sku"/>
+        <field name="source_id"/>
+        <field name="product_id"/>
+        <filter name="ready" string="Ready" domain="[('promotion_state','in',['ready','requested'])]"/>
+        <filter name="requested" string="Requested" domain="[('promotion_requested','=',True)]"/>
+        <filter name="missing" string="Not Yet in Odoo" domain="[('match_state','=','missing')]"/>
+        <filter name="promoted" string="Promoted" domain="[('promotion_state','=','promoted')]"/>
+        <filter name="blocked" string="Blocked" domain="[('promotion_state','=','blocked')]"/>
+        <filter name="active_items" string="Active Items" domain="[('active','=',True)]"/>
+        <separator/>
+        <filter name="group_source" string="Vendor Source" context="{'group_by':'source_id'}"/>
+        <filter name="group_state" string="Promotion State" context="{'group_by':'promotion_state'}"/>
+        <filter name="group_blocker" string="Blocker" context="{'group_by':'blocker_code'}"/>
+      </search>
+    </field>
+  </record>
+
+  <record id="action_southern_vendor_catalog_items" model="ir.actions.act_window">
+    <field name="name">Vendor Catalog</field>
+    <field name="res_model">southern.vendor.catalog.item</field>
+    <field name="view_mode">list,form</field>
+    <field name="search_view_id" ref="southern_vendor_catalog_item_search"/>
+  </record>
+  <record id="action_southern_vendor_catalog_requested" model="ir.actions.act_window">
+    <field name="name">Requested Catalog Products</field>
+    <field name="res_model">southern.vendor.catalog.item</field>
+    <field name="view_mode">list,form</field>
+    <field name="domain">[('promotion_requested','=',True),('match_state','=','missing')]</field>
+    <field name="search_view_id" ref="southern_vendor_catalog_item_search"/>
+  </record>
+  <record id="action_southern_vendor_catalog_sources" model="ir.actions.act_window">
+    <field name="name">Vendor Catalog Sources</field>
+    <field name="res_model">southern.vendor.catalog.source</field>
+    <field name="view_mode">list,form</field>
+  </record>
+
+  <menuitem id="menu_southern_vendor_catalog_items" name="Vendor Catalog" parent="menu_southern_parts_intelligence_root" action="action_southern_vendor_catalog_items" sequence="3" groups="base.group_user"/>
+  <menuitem id="menu_southern_vendor_catalog_requested" name="Requested Catalog Products" parent="menu_southern_parts_intelligence_root" action="action_southern_vendor_catalog_requested" sequence="4" groups="stock.group_stock_manager"/>
+  <menuitem id="menu_southern_vendor_catalog_sources" name="Vendor Catalog Sources" parent="menu_southern_parts_intelligence_root" action="action_southern_vendor_catalog_sources" sequence="90" groups="base.group_system"/>
+</odoo>

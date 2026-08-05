@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <style>
+        body { font-family: Arial, sans-serif; color: #333; max-width: 900px; margin: 0 auto; padding: 24px; }
+        h1 { color: #00a09d; border-bottom: 2px solid #00a09d; padding-bottom: 8px; }
+        h2 { color: #555; margin-top: 32px; }
+        h3 { color: #666; }
+        .badge { display: inline-block; background: #00a09d; color: #fff; border-radius: 4px; padding: 2px 10px; font-size: 13px; margin-right: 6px; }
+        .badge-gray { background: #888; }
+        .step { background: #f7f7f7; border-left: 4px solid #00a09d; padding: 12px 16px; margin-bottom: 12px; border-radius: 0 6px 6px 0; }
+        .step h3 { margin: 0 0 4px 0; color: #00a09d; }
+        .step p { margin: 0; font-size: 14px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+        th { background: #00a09d; color: #fff; padding: 8px 12px; text-align: left; }
+        td { padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 14px; }
+        tr:hover td { background: #f9f9f9; }
+        .note { background: #fff8e1; border-left: 4px solid #ffc107; padding: 10px 14px; border-radius: 0 6px 6px 0; font-size: 14px; margin-top: 16px; }
+        .note strong { color: #e65100; }
+        ul li { margin-bottom: 6px; font-size: 14px; }
+        code { background: #f0f0f0; padding: 1px 5px; border-radius: 3px; font-family: monospace; font-size: 13px; }
+    </style>
+</head>
+<body>
+
+<h1>DMC Company Setup Wizard</h1>
+
+<p>
+    <span class="badge">Odoo 19</span>
+    <span class="badge badge-gray">Accounting</span>
+    <span class="badge badge-gray">Administration</span>
+    <span class="badge badge-gray">Multi-Company</span>
+</p>
+
+<p>
+    A multi-step wizard that automates the full accounting setup for a new company in a
+    multi-company Odoo environment. Eliminates the manual effort of configuring chart of
+    accounts, taxes, journals, and payment providers for each new entity.
+</p>
+
+<hr/>
+
+<h2>Features</h2>
+<ul>
+    <li>Creates a new company with address, logo, currency, and optional parent company</li>
+    <li>Auto-generates the next sequential Bank/Cash account code</li>
+    <li>Maps all existing shared Chart of Accounts to the new company (no duplicate records)</li>
+    <li>Copies tax groups and taxes from a selected source company</li>
+    <li>Creates standard journals: Sales, Purchase, Bank, Miscellaneous</li>
+    <li>Creates default payment providers: Wire Transfer, Cash on Delivery, Demo</li>
+    <li>Full rollback on any error — the database is never left in a partial state</li>
+    <li>Accessible via Settings → Technical (debug mode only)</li>
+</ul>
+
+<h2>Wizard Steps</h2>
+
+<div class="step">
+    <h3>Step 1 — Company Information</h3>
+    <p>Enter company name, address, logo, currency, optional parent company, and the source
+    company to copy taxes and payment providers from.</p>
+</div>
+
+<div class="step">
+    <h3>Step 2 — Bank Account Setup</h3>
+    <p>Review or override the auto-generated Bank account code. The code is computed by
+    finding the highest existing Bank/Cash account code and incrementing by 1.</p>
+</div>
+
+<div class="step">
+    <h3>Step 3 — Journal Prefixes</h3>
+    <p>Set unique journal sequence prefixes for Sales, Purchase, Bank, and Miscellaneous
+    journals. Prefixes must be unique across all companies.</p>
+</div>
+
+<div class="step">
+    <h3>Step 4 — Review &amp; Confirm</h3>
+    <p>Review all inputs before committing. A confirmation dialog is shown before any
+    database changes are made.</p>
+</div>
+
+<div class="step">
+    <h3>Step 5 — Done</h3>
+    <p>Success screen showing what was created, with links to the new company and journals.</p>
+</div>
+
+<h2>Configuration</h2>
+
+<table>
+    <thead>
+        <tr><th>Field</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr><td><code>Company Name</code></td><td>Required. The legal name of the new company.</td></tr>
+        <tr><td><code>Copy Setup From</code></td><td>Optional. Source company for copying taxes, tax groups, and payment providers. Leave blank to skip.</td></tr>
+        <tr><td><code>Bank Account Code</code></td><td>Auto-generated. Override if the next sequential code is not appropriate.</td></tr>
+        <tr><td><code>Parent Company</code></td><td>Optional. Sets the company hierarchy. When set, Chart of Accounts is inherited automatically — shared account mapping is skipped.</td></tr>
+        <tr><td><code>Journal Prefixes</code></td><td>Must be unique across all companies. Recommended to append a company abbreviation (e.g. INV-SEL, BNK-SEL).</td></tr>
+    </tbody>
+</table>
+
+<h2>Multi-Company Behavior</h2>
+<ul>
+    <li><strong>Chart of Accounts:</strong> Non-Bank/Cash accounts are shared (mapped) to the new company rather than duplicated. Only one new account record is created — the Bank account.</li>
+    <li><strong>Parent Company:</strong> When a parent is selected, Odoo automatically inherits the parent's chart. The mapping step is skipped to avoid duplicate code conflicts.</li>
+    <li><strong>Taxes:</strong> Copied from the selected source company. Names are made unique per company using an abbreviation suffix when a conflict exists (e.g. <code>0% (SC)</code>).</li>
+    <li><strong>Payment Providers:</strong> Wire Transfer, Cash on Delivery, and Demo are created in Test Mode for the new company.</li>
+</ul>
+
+<div class="note">
+    <strong>Debug Mode Required:</strong> This wizard is visible only in Odoo debug/developer mode
+    via <em>Settings → Technical → Company Setup Wizard</em>. It is intentionally hidden from
+    regular users to prevent accidental company creation.
+</div>
+
+<h2>Technical Notes</h2>
+<ul>
+    <li>All setup steps run inside a single <code>savepoint</code> — any failure rolls back the entire operation.</li>
+    <li>Per-company account code mappings are written atomically with <code>company_ids</code> to satisfy Odoo 19's uniqueness constraint.</li>
+    <li>Tax repartition line account references are intentionally cleared during copy to avoid Odoo's cross-company constraint. These can be set manually after setup.</li>
+    <li><code>payment.provider.custom_mode</code> is read from the source template at runtime to handle Odoo 19's <code>copy=False</code> behavior on that field.</li>
+</ul>
+
+<h2>Dependencies</h2>
+<ul>
+    <li><code>account</code> — Chart of Accounts, Taxes, Journals</li>
+    <li><code>payment</code> — Payment Providers</li>
+    <li><code>base_setup</code> — Company configuration</li>
+</ul>
+
+<h2>Author</h2>
+<p><strong>DMC Strategic IT</strong></p>
+
+</body>
+</html>

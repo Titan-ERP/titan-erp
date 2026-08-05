@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="southern_parts_catalog_sync_list" model="ir.ui.view">
+        <field name="name">southern.parts.catalog.sync.list</field>
+        <field name="model">southern.parts.catalog.sync</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="company_id"/>
+                <field name="active"/>
+                <field name="state"/>
+                <field name="mode"/>
+                <field name="batch_size"/>
+                <field name="last_product_id"/>
+                <field name="last_run_at"/>
+                <field name="processed_count"/>
+                <field name="error_count"/>
+                <field name="minimum_free_gb"/>
+                <field name="cooldown_until"/>
+                <field name="approval_state"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="southern_parts_catalog_sync_form" model="ir.ui.view">
+        <field name="name">southern.parts.catalog.sync.form</field>
+        <field name="model">southern.parts.catalog.sync</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_run_now" string="Run Now" type="object" class="btn-primary"/>
+                    <button name="action_pause" string="Pause" type="object" invisible="state == 'paused'"/>
+                    <button name="action_resume" string="Resume" type="object" invisible="state != 'paused'"/>
+                    <button name="action_reset_cursor" string="Reset Cursor" type="object"/>
+                    <button name="action_queue_approved_apply" string="Queue Approved Update" type="object"
+                            class="btn-primary"
+                            invisible="mode != 'sparex_discovery' or approval_state != 'approved'"/>
+                    <button name="action_enable_dispatch_schedule" string="Enable Schedule" type="object"
+                            class="btn-primary"
+                            invisible="mode != 'sparex_discovery' or internal_cron_enabled or approval_state != 'approved'"/>
+                    <button name="action_enable_continuous_release" string="Start Continuous Release" type="object"
+                            class="btn-primary"
+                            invisible="mode != 'sparex_discovery' or continuous_release_enabled or approval_state != 'approved'"/>
+                    <button name="action_disable_continuous_release" string="Stop Continuous Release" type="object"
+                            invisible="mode != 'sparex_discovery' or not continuous_release_enabled"/>
+                    <button name="action_enable_page_driven_creation" string="Create Missing Drafts" type="object"
+                            class="btn-primary"
+                            invisible="mode != 'sparex_discovery' or not continuous_release_enabled or page_driven_creation_enabled or approval_state != 'approved'"/>
+                    <button name="action_disable_page_driven_creation" string="Stop Draft Creation" type="object"
+                            invisible="mode != 'sparex_discovery' or not page_driven_creation_enabled"/>
+                    <button name="action_disable_dispatch_schedule" string="Disable Schedule" type="object"
+                            invisible="mode != 'sparex_discovery' or not internal_cron_enabled"/>
+                    <button name="action_request_approval" string="Request Approval" type="object"
+                            invisible="approval_state == 'requested'"/>
+                    <button name="action_approve" string="Approve" type="object" class="btn-primary"
+                            invisible="approval_state != 'requested'"/>
+                    <button name="action_reject" string="Reject" type="object"
+                            invisible="approval_state != 'requested'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="idle,running,paused,error"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button class="oe_stat_button" type="object" name="action_view_runs" icon="fa-history">
+                            <field name="run_record_count" widget="statinfo" string="Runs"/>
+                        </button>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="company_id"/>
+                            <field name="sequence"/>
+                            <field name="active"/>
+                            <field name="mode"/>
+                            <field name="batch_size"/>
+                        </group>
+                        <group>
+                            <field name="last_product_id"/>
+                            <field name="last_run_at"/>
+                            <field name="run_count"/>
+                            <field name="processed_count"/>
+                            <field name="error_count"/>
+                        </group>
+                    </group>
+                    <group string="External Worker Safety">
+                        <group>
+                            <field name="minimum_free_gb"/>
+                            <field name="internal_cron_enabled"/>
+                            <field name="continuous_release_enabled"/>
+                            <field name="page_driven_creation_enabled"/>
+                            <field name="continuous_release_started_at"/>
+                            <field name="continuous_release_completed_at"/>
+                            <field name="cooldown_until"/>
+                            <field name="next_allowed_run_at"/>
+                            <field name="last_external_command_id"/>
+                        </group>
+                        <group>
+                            <field name="approval_state"/>
+                            <field name="approved_by_id"/>
+                            <field name="approved_at"/>
+                            <field name="approval_note"/>
+                            <field name="continuous_release_batch_count"/>
+                            <field name="continuous_release_failure_streak"/>
+                        </group>
+                    </group>
+                    <group string="Latest Artifact">
+                        <field name="last_artifact_uri"/>
+                        <field name="last_artifact_sha256"/>
+                    </group>
+                    <group string="Last Message">
+                        <field name="last_message" nolabel="1"/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="southern_parts_automation_run_list" model="ir.ui.view">
+        <field name="name">southern.parts.automation.run.list</field>
+        <field name="model">southern.parts.automation.run</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'succeeded'"
+                  decoration-danger="state == 'failed'"
+                  decoration-warning="state == 'blocked'">
+                <field name="started_at"/>
+                <field name="sync_id"/>
+                <field name="company_id"/>
+                <field name="worker"/>
+                <field name="mode"/>
+                <field name="command_id"/>
+                <field name="job_type"/>
+                <field name="state"/>
+                <field name="processed_count"/>
+                <field name="changed_count"/>
+                <field name="error_count"/>
+                <field name="finished_at"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="southern_parts_automation_run_form" model="ir.ui.view">
+        <field name="name">southern.parts.automation.run.form</field>
+        <field name="model">southern.parts.automation.run</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="queued,running,succeeded,blocked,failed,cancelled"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group>
+                            <field name="sync_id"/>
+                            <field name="company_id"/>
+                            <field name="worker"/>
+                            <field name="mode"/>
+                            <field name="external_run_id"/>
+                            <field name="command_id"/>
+                            <field name="job_type"/>
+                            <field name="idempotency_key"/>
+                            <field name="free_gb"/>
+                        </group>
+                        <group>
+                            <field name="started_at"/>
+                            <field name="finished_at"/>
+                            <field name="requested_count"/>
+                            <field name="processed_count"/>
+                            <field name="changed_count"/>
+                            <field name="error_count"/>
+                            <field name="http_request_count"/>
+                            <field name="slow_page_count"/>
+                        </group>
+                    </group>
+                    <group string="Evidence and Archive">
+                        <field name="artifact_uri"/>
+                        <field name="artifact_sha256"/>
+                        <field name="artifact_schema_version"/>
+                        <field name="archive_uri"/>
+                        <field name="artifact_archived"/>
+                    </group>
+                    <field name="evidence_summary"/>
+                    <field name="error_message"/>
+                    <group string="Dispatch Contract">
+                        <field name="lease_owner"/>
+                        <field name="lease_expires_at"/>
+                        <field name="request_json"/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_southern_parts_automation_runs" model="ir.actions.act_window">
+        <field name="name">Automation Runs</field>
+        <field name="res_model">southern.parts.automation.run</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="action_southern_parts_catalog_sync" model="ir.actions.act_window">
+        <field name="name">Catalog Sync Jobs</field>
+        <field name="res_model">southern.parts.catalog.sync</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="menu_southern_parts_catalog_sync"
+              name="Catalog Sync Jobs"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_parts_catalog_sync"
+              sequence="5"/>
+    <menuitem id="menu_southern_parts_automation_runs"
+              name="Automation Runs"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_parts_automation_runs"
+              sequence="7"/>
+</odoo>

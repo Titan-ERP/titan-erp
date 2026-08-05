@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+#################################################################################
+# Author      : Cyder Solutions (<www.cyder.com.au>)                            #
+# Copyright(c): 2018-present                                                    #
+# All Rights Reserved.                                                          #
+#                                                                               #
+# This module is copyright property of the author mentioned above.              #
+# You can't redistribute/reshare/recreate it for any purpose.                   #
+#################################################################################
+-->
+<odoo>
+
+    <record id="view_equipment_systems_list" model="ir.ui.view">
+        <field name="name">equipment.systems.list</field>
+        <field name="model">equipment.systems</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="client_id"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_equipment_systems_form" model="ir.ui.view">
+        <field name="name">equipment.systems.form</field>
+        <field name="model">equipment.systems</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name" string="Name" placeholder="e.g. AUS LABS"/></h1>
+                    </div>
+                    <group>
+                        <field name="client_id"/>
+                    </group>
+                    <notebook>
+                        <page string="Equipment" name="equipment">
+                            <field name="equipment_ids"
+                                   domain="[('client', '=', client_id)]"
+                                   context="{'default_client': client_id}">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="model" optional="show"/>
+                                    <field name="serial_no" optional="show"/>
+                                    <field name="asset_tag" optional="show"/>
+                                    <field name="location" optional="show"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter class="oe_chatter">
+                    <field name="message_follower_ids" groups="base.group_user"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </chatter>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_equipment_systems_search" model="ir.ui.view">
+        <field name="name">equipment.systems.search</field>
+        <field name="model">equipment.systems</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="client_id"/>
+                <filter name="group_by_client" string="Client" context="{'group_by': 'client_id'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_equipment_systems" model="ir.actions.act_window">
+        <field name="name">Systems</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">equipment.systems</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_group_by_client': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Add your System!
+            </p>
+        </field>
+    </record>
+
+    <menuitem
+            id="menu_equipment_systems"
+            name="Systems"
+            action="action_equipment_systems"
+            parent="menu_client_equipment"
+            sequence="11"/>
+
+</odoo>

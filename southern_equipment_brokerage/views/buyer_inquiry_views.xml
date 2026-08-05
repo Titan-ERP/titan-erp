@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_southern_buyer_inquiry_list" model="ir.ui.view">
+        <field name="name">southern.buyer.inquiry.list</field>
+        <field name="model">southern.buyer.inquiry</field>
+        <field name="arch" type="xml">
+            <list decoration-info="stage == 'new'" decoration-success="stage == 'qualified'">
+                <field name="name"/>
+                <field name="listing_id"/>
+                <field name="contact_name"/>
+                <field name="phone" widget="phone" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                <field name="email" widget="email" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                <field name="budget" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                <field name="timeline"/>
+                <field name="broker_id"/>
+                <field name="stage"/>
+                <field name="create_date"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_southern_buyer_inquiry_kanban" model="ir.ui.view">
+        <field name="name">southern.buyer.inquiry.kanban</field>
+        <field name="model">southern.buyer.inquiry</field>
+        <field name="arch" type="xml">
+            <kanban default_group_by="stage" class="o_kanban_small_column">
+                <field name="contact_name"/>
+                <field name="listing_id"/>
+                <field name="budget"/>
+                <field name="currency_id"/>
+                <field name="timeline"/>
+                <field name="broker_id"/>
+                <templates>
+                    <t t-name="card">
+                        <strong><field name="contact_name"/></strong>
+                        <div><field name="listing_id"/></div>
+                        <div t-if="record.budget.raw_value"><field name="budget" widget="monetary"/></div>
+                        <div class="text-muted"><field name="timeline"/></div>
+                        <footer><field name="broker_id" widget="many2one_avatar_user"/></footer>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <record id="view_southern_buyer_inquiry_form" model="ir.ui.view">
+        <field name="name">southern.buyer.inquiry.form</field>
+        <field name="model">southern.buyer.inquiry</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_mark_contacted" string="Mark Contacted" type="object" invisible="stage != 'new'"
+                            groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                    <button name="action_qualify" string="Qualify Buyer" type="object" class="btn-primary" invisible="stage not in ['new', 'contacted']"
+                            groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                    <button name="action_create_deal" string="Create Brokered Deal" type="object" class="btn-primary"
+                            invisible="stage not in ['qualified', 'deposit_requested', 'deposit_received', 'active_deal']"
+                            groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                    <field name="stage" widget="statusbar" statusbar_visible="new,contacted,qualified,deposit_requested,deposit_received,active_deal,closed,lost"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button class="oe_stat_button" type="object" name="action_open_crm"
+                                icon="fa-star" invisible="not crm_lead_id"
+                                groups="southern_equipment_brokerage.group_southern_deal_broker">
+                            <div class="o_stat_info"><span class="o_stat_text">CRM Opportunity</span></div>
+                        </button>
+                    </div>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group string="Request">
+                            <field name="listing_id"/>
+                            <field name="timeline"/>
+                            <field name="buyer_location"/>
+                            <field name="broker_id"/>
+                            <field name="crm_lead_id" readonly="1" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                            <field name="deal_id" readonly="1" groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+                        </group>
+                        <group string="Buyer" groups="southern_equipment_brokerage.group_southern_deal_broker">
+                            <field name="partner_id"/>
+                            <field name="contact_name"/>
+                            <field name="company"/>
+                            <field name="phone" widget="phone"/>
+                            <field name="email" widget="email"/>
+                            <field name="budget"/>
+                            <field name="financing_needed"/>
+                            <field name="trade_in"/>
+                        </group>
+                    </group>
+                    <notebook groups="southern_equipment_brokerage.group_southern_deal_broker">
+                        <page string="Buyer Message"><field name="message"/></page>
+                        <page string="Website Consent">
+                            <group>
+                                <field name="website_submission" readonly="1"/>
+                                <field name="privacy_consent_at" readonly="1"/>
+                                <field name="privacy_notice_version" readonly="1"/>
+                                <field name="submission_fingerprint" readonly="1"
+                                       groups="southern_equipment_brokerage.group_southern_equipment_admin"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_southern_buyer_inquiries" model="ir.actions.act_window">
+        <field name="name">Buyer Inquiries</field>
+        <field name="res_model">southern.buyer.inquiry</field>
+        <field name="view_mode">kanban,list,form</field>
+    </record>
+</odoo>

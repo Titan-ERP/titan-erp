@@ -1,0 +1,78 @@
+from decimal import Decimal
+
+from odoo.tests.common import TransactionCase
+
+from ..models.mississippi_withholding import calculate_ms_withholding
+
+
+class TestMississippiWithholding(TransactionCase):
+    def test_single_monthly_under_threshold(self):
+        self.assertEqual(
+            calculate_ms_withholding(Decimal("1000"), "ms_single", 12),
+            Decimal("0.00"),
+        )
+
+    def test_single_monthly_over_threshold(self):
+        # Annual taxable base: 3,000 * 12 - 2,300 standard deduction
+        # - 6,000 exemption = 27,700. Tax is 4% over 10,000 = 708 annually,
+        # or 59 monthly after rounding.
+        self.assertEqual(
+            calculate_ms_withholding(Decimal("3000"), "ms_single", 12, exemption_claimed=Decimal("6000")),
+            Decimal("59"),
+        )
+
+    def test_head_of_family_biweekly(self):
+        # Annualized wages: 2,000 * 26 = 52,000.
+        # Taxable: 52,000 - 3,400 - 9,500 = 39,100.
+        # Tax: (39,100 - 10,000) * 4% = 1,164 annually / 26 = 44.77.
+        self.assertEqual(
+            calculate_ms_withholding(
+                Decimal("2000"),
+                "ms_head_of_family",
+                26,
+                exemption_claimed=Decimal("9500"),
+            ),
+            Decimal("45"),
+        )
+
+    def test_married_both_employed_requires_allocated_exemption(self):
+        # The joint $12,000 exemption is divided by the spouses on Form 89-350;
+        # it must not be granted in full to each spouse automatically.
+        self.assertEqual(
+            calculate_ms_withholding(
+                Decimal("3000"),
+                "ms_married_both_spouses_employed",
+                12,
+            ),
+            Decimal("79"),
+        )
+        self.assertEqual(
+            calculate_ms_withholding(
+                Decimal("3000"),
+                "ms_married_both_spouses_employed",
+                12,
+                exemption_claimed=Decimal("6000"),
+            ),
+            Decimal("59"),
+        )
+
+    def test_single_status_supplies_fixed_form_exemption(self):
+        self.assertEqual(
+            calculate_ms_withholding(
+                Decimal("3000"),
+                "ms_single",
+                12,
+                exemption_claimed=Decimal("0"),
+            ),
+            Decimal("59"),
+        )
+
+    def test_married_spouse_not_employed_weekly_uses_twelve_thousand_exemption(self):
+        self.assertEqual(
+            calculate_ms_withholding(
+                Decimal("1250"),
+                "ms_married_spouse_not_employed",
+                52,
+            ),
+            Decimal("30"),
+        )

@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_southern_service_ai_suggestion_form" model="ir.ui.view">
+        <field name="name">southern.service.ai.suggestion.form</field>
+        <field name="model">southern.service.ai.suggestion</field>
+        <field name="arch" type="xml">
+            <form string="Review AI Service Estimate">
+                <header>
+                    <button name="action_apply_selected" type="object"
+                            string="Apply Selected to Quote" class="btn-primary"
+                            invisible="state != 'draft'"/>
+                    <button name="action_reject" type="object"
+                            string="Reject Suggestions" class="btn-secondary"
+                            invisible="state != 'draft'"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,applied,rejected"/>
+                </header>
+                <sheet>
+                    <div class="alert alert-warning" role="status"
+                         invisible="state != 'draft'">
+                        AI output is a draft. Verify the diagnostic steps, hours,
+                        parts, manual references, and customer wording before applying it.
+                    </div>
+                    <group>
+                        <group>
+                            <field name="task_id" readonly="1"/>
+                            <field name="model_name" readonly="1"/>
+                            <field name="confidence" widget="badge" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="response_id" readonly="1"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="summary" readonly="1"/>
+                    </group>
+                    <group string="Selected Estimate Totals">
+                        <field name="selected_item_count" readonly="1"/>
+                        <field name="selected_labor_hours" readonly="1"/>
+                        <field name="selected_part_quantity" readonly="1"/>
+                    </group>
+                    <separator string="Suggested Tasks and Parts"/>
+                    <field name="line_ids" nolabel="1"
+                           readonly="state != 'draft'">
+                        <list editable="bottom">
+                            <field name="sequence" widget="handle"/>
+                            <field name="selected"/>
+                            <field name="work_type"/>
+                            <field name="name"/>
+                            <field name="estimated_hours"
+                                   invisible="work_type != 'labor'"/>
+                            <field name="hours_low" optional="hide"
+                                   invisible="work_type != 'labor'"/>
+                            <field name="hours_high" optional="hide"
+                                   invisible="work_type != 'labor'"/>
+                            <field name="quantity"
+                                   invisible="work_type != 'part'"/>
+                            <field name="product_id"
+                                   required="selected and work_type == 'part'"
+                                   invisible="work_type != 'part'"/>
+                            <field name="requested_product_code" optional="hide"/>
+                            <field name="confidence" widget="badge"/>
+                            <field name="manual_reference" optional="show"/>
+                            <field name="reason" optional="hide"/>
+                        </list>
+                    </field>
+                    <group>
+                        <group string="Assumptions and Missing Information">
+                            <field name="assumptions" readonly="1"/>
+                            <field name="questions" readonly="1"/>
+                        </group>
+                        <group string="Customer Quotation Note">
+                            <field name="customer_note"
+                                   readonly="state != 'draft'"
+                                   placeholder="Review and edit customer-facing wording before applying."/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+</odoo>

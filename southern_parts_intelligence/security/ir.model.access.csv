@@ -1,0 +1,27 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_southern_parts_specification_user,southern.parts.specification user,model_southern_parts_specification,base.group_user,1,1,1,1
+access_southern_parts_make_user,southern.parts.make user,model_southern_parts_make,base.group_user,1,1,1,1
+access_southern_parts_model_user,southern.parts.model user,model_southern_parts_model,base.group_user,1,1,1,1
+access_southern_parts_fitment_user,southern.parts.fitment user,model_southern_parts_fitment,base.group_user,1,1,1,1
+access_southern_parts_oem_reference_user,southern.parts.oem_reference user,model_southern_parts_oem_reference,base.group_user,1,1,1,1
+access_southern_parts_catalog_page_user,southern.parts.catalog_page user,model_southern_parts_catalog_page,base.group_user,1,1,1,1
+access_southern_parts_related_product_user,southern.parts.related_product user,model_southern_parts_related_product,base.group_user,1,1,1,1
+access_southern_parts_alternate_barcode_user,southern.parts.alternate_barcode user,model_southern_parts_alternate_barcode,base.group_user,1,1,1,1
+access_southern_parts_catalog_sync_user,southern.parts.catalog.sync user,model_southern_parts_catalog_sync,base.group_system,1,1,1,1
+access_southern_parts_evidence_queue_user,southern.parts.evidence.queue user,model_southern_parts_evidence_queue,base.group_user,1,1,1,1
+access_southern_parts_automation_run_user,southern.parts.automation.run user,model_southern_parts_automation_run,base.group_system,1,1,1,0
+access_southern_product_quality_issue_user,southern.product.quality.issue user,model_southern_product_quality_issue,base.group_user,1,1,1,0
+access_southern_product_quality_issue_manager,southern.product.quality.issue manager,model_southern_product_quality_issue,stock.group_stock_manager,1,1,1,1
+access_southern_sparex_sourcing_user,southern.sparex.sourcing.queue user,model_southern_sparex_sourcing_queue,base.group_user,1,0,0,0
+access_southern_sparex_sourcing_manager,southern.sparex.sourcing.queue manager,model_southern_sparex_sourcing_queue,stock.group_stock_manager,1,1,1,0
+access_southern_catalog_agent_admin,southern.catalog.agent admin,model_southern_catalog_agent,base.group_system,1,1,1,0
+access_southern_catalog_agent_task_admin,southern.catalog.agent.task admin,model_southern_catalog_agent_task,base.group_system,1,1,1,0
+access_southern_sparex_discovery_run_admin,southern.sparex.discovery.run admin,model_southern_sparex_discovery_run,base.group_system,1,1,1,0
+access_southern_sparex_discovery_page_admin,southern.sparex.discovery.page admin,model_southern_sparex_discovery_page,base.group_system,1,1,1,0
+access_southern_sparex_discovery_item_user,southern.sparex.discovery.item user,model_southern_sparex_discovery_item,base.group_user,1,0,0,0
+access_southern_sparex_discovery_item_admin,southern.sparex.discovery.item admin,model_southern_sparex_discovery_item,base.group_system,1,1,1,0
+access_southern_vendor_catalog_source_user,southern.vendor.catalog.source user,model_southern_vendor_catalog_source,base.group_user,1,0,0,0
+access_southern_vendor_catalog_source_admin,southern.vendor.catalog.source admin,model_southern_vendor_catalog_source,base.group_system,1,1,1,0
+access_southern_vendor_catalog_item_user,southern.vendor.catalog.item user,model_southern_vendor_catalog_item,base.group_user,1,0,0,0
+access_southern_vendor_catalog_item_manager,southern.vendor.catalog.item manager,model_southern_vendor_catalog_item,stock.group_stock_manager,1,1,0,0
+access_southern_vendor_catalog_item_admin,southern.vendor.catalog.item admin,model_southern_vendor_catalog_item,base.group_system,1,1,1,0

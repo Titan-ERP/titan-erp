@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_southern_revenue_bucket_line_list" model="ir.ui.view">
+        <field name="name">southern.revenue.bucket.line.list</field>
+        <field name="model">account.move.line</field>
+        <field name="arch" type="xml">
+            <list decoration-success="southern_revenue_bucket_review == 'ok'"
+                  decoration-warning="southern_revenue_bucket_review == 'needs_review'"
+                  decoration-danger="southern_revenue_bucket_review == 'exception'">
+                <button name="action_southern_apply_expected_income_account" type="object" string="Apply Account"/>
+                <button name="action_southern_accept_revenue_bucket" type="object" string="Accept"/>
+                <button name="action_southern_mark_revenue_exception" type="object" string="Exception"/>
+                <field name="date"/>
+                <field name="move_id"/>
+                <field name="partner_id"/>
+                <field name="product_id"/>
+                <field name="name"/>
+                <field name="account_id"/>
+                <field name="southern_manual_revenue_bucket"/>
+                <field name="southern_revenue_bucket"/>
+                <field name="southern_expected_income_account_id"/>
+                <field name="credit" sum="Revenue"/>
+                <field name="debit" sum="Credits"/>
+                <field name="southern_revenue_bucket_review"/>
+                <field name="southern_revenue_review_override"/>
+                <field name="southern_revenue_bucket_note"/>
+                <field name="southern_revenue_manual_note"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_southern_revenue_bucket_review" model="ir.actions.act_window">
+        <field name="name">Revenue Bucket Review</field>
+        <field name="res_model">account.move.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('move_id.move_type', 'in', ['out_invoice', 'out_refund']), ('account_id.account_type', '=', 'income'), ('display_type', '=', False)]</field>
+    </record>
+</odoo>

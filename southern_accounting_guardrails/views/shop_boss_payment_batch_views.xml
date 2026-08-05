@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_southern_shop_boss_payment_batch_list" model="ir.ui.view">
+        <field name="name">southern.shop.boss.payment.batch.list</field>
+        <field name="model">southern.shop_boss.payment.batch</field>
+        <field name="arch" type="xml">
+            <list decoration-success="review_status == 'matched'"
+                  decoration-warning="review_status in ['draft', 'needs_bank_match']"
+                  decoration-danger="review_status == 'exception'">
+                <field name="batch_date"/>
+                <field name="name"/>
+                <field name="payment_source"/>
+                <field name="shop_boss_reference"/>
+                <field name="gross_amount"/>
+                <field name="merchant_fee_amount"/>
+                <field name="net_expected_amount"/>
+                <field name="bank_total_amount"/>
+                <field name="variance_amount"/>
+                <field name="review_status"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_southern_shop_boss_payment_batch_form" model="ir.ui.view">
+        <field name="name">southern.shop.boss.payment.batch.form</field>
+        <field name="model">southern.shop_boss.payment.batch</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_mark_needs_bank_match" type="object" string="Needs Bank Match"/>
+                    <button name="action_mark_matched" type="object" string="Matched"/>
+                    <button name="action_mark_exception" type="object" string="Exception"/>
+                    <field name="review_status" widget="statusbar" statusbar_visible="draft,needs_bank_match,matched,exception"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group>
+                            <field name="company_id"/>
+                            <field name="batch_date"/>
+                            <field name="payment_source"/>
+                            <field name="shop_boss_reference"/>
+                        </group>
+                        <group string="Amounts">
+                            <field name="currency_id" invisible="1"/>
+                            <field name="gross_amount"/>
+                            <field name="merchant_fee_amount"/>
+                            <field name="net_expected_amount" readonly="1"/>
+                            <field name="bank_total_amount" readonly="1"/>
+                            <field name="variance_amount" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Shop Boss Documents">
+                            <field name="document_ids">
+                                <list>
+                                    <field name="document_date"/>
+                                    <field name="name"/>
+                                    <field name="customer_name"/>
+                                    <field name="total_amount"/>
+                                    <field name="coverage_status"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Bank Lines">
+                            <field name="bank_statement_line_ids">
+                                <list>
+                                    <field name="date"/>
+                                    <field name="payment_ref"/>
+                                    <field name="amount"/>
+                                    <field name="is_reconciled"/>
+                                    <field name="southern_review_bucket"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Review">
+                            <field name="review_note"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_southern_shop_boss_payment_batches" model="ir.actions.act_window">
+        <field name="name">Shop Boss Payment Batches</field>
+        <field name="res_model">southern.shop_boss.payment.batch</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>

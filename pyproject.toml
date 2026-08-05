@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "titan-odoo-automation"
+version = "0.2.0"
+description = "Shared runtime and controlled workflows for Titan ERP Odoo automation."
+requires-python = ">=3.12"
+dependencies = ["lxml>=5.3,<7", "requests>=2.32,<3"]
+
+[project.optional-dependencies]
+aws = ["boto3>=1.35,<2"]
+agents = ["openai-agents>=0.19.2,<0.20"]
+dev = ["lxml>=5.3,<7", "pytest>=8,<9", "ruff>=0.9,<1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.setuptools.packages.find]
+include = ["scripts.odoo_runtime*", "scripts.sparex_catalog_agents*"]

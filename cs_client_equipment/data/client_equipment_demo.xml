@@ -1,0 +1,333 @@
+<!--<odoo noupdate="1">-->
+<odoo>
+  <record id="Part01" model="res.partner">
+    <field name="name">ABC Company</field>
+    <field name="is_company" eval="True"/>
+    <field name="street">123 Headoffice Road</field>
+    <field name="city">Brisbane</field>
+    <field name="zip">4000</field>
+    <field name="email">abcaccounts@example.com</field>
+    <field name="country_id">13</field>
+    <field name="state_id">4</field>
+    <field name="phone">07 5656 4545</field>
+    <field name="site_contact">Barry Smith</field>
+    <field name="site_phone">0402 786 254</field>
+  </record>
+
+  <record id="Part02" model="res.partner">
+    <field name="name">Melbourne Company</field>
+    <field name="is_company" eval="True"/>
+    <field name="street">123 Melbourne Road</field>
+    <field name="city">Melbourne</field>
+    <field name="zip">3000</field>
+    <field name="email">abcmelbaccounts@example.com</field>
+    <field name="country_id">13</field>
+    <field name="state_id">7</field>
+    <field name="phone">03 5656 4545</field>
+    <field name="site_contact">Johnny Biggs</field>
+    <field name="site_phone">0425 862 144</field>
+  </record>
+
+  <record id="Part03" model="res.partner">
+    <field name="name">Perth Company</field>
+    <field name="is_company" eval="True"/>
+    <field name="street">123 Perth Road</field>
+    <field name="city">Perth</field>
+    <field name="zip">6000</field>
+    <field name="email">abcperaccounts@example.com</field>
+    <field name="country_id">13</field>
+    <field name="state_id">8</field>
+    <field name="phone">06 5656 4545</field>
+    <field name="site_contact">Peter Holm</field>
+    <field name="site_phone">0487 562 843</field>
+  </record>
+
+  <record id="Part04" model="res.partner">
+    <field name="name">Sydney Company</field>
+    <field name="is_company" eval="True"/>
+    <field name="street">123 Sydney Road</field>
+    <field name="city">Sydney</field>
+    <field name="zip">2000</field>
+    <field name="email">abcsydaccounts@example.com</field>
+    <field name="country_id">13</field>
+    <field name="state_id">2</field>
+    <field name="phone">02 5656 4545</field>
+    <field name="site_contact">Simon McLeod</field>
+    <field name="site_phone">0465 483 176</field>
+  </record>
+
+  <record id="categ0001" model="equipment.category">
+    <field name="name">Air Conditioners</field>
+  </record>
+
+  <record id="manuf0001" model="equipment.manufacturer">
+    <field name="name">Mitsubishi</field>
+  </record>
+
+  <record id="equip0001" model="equipment.details">
+    <field name="name">ABC_HVAC-MEL-NTH-L2-R264-01</field>
+    <field name="client" ref="Part02"/>
+    <field name="model">SETSRK63ZRA-W</field>
+    <field name="asset_tag">ASSET-7088-5289</field>
+    <field name="serial_no">2113-3340-6456-1701</field>
+    <field name="manufacturer_id" ref="manuf0001"/>
+    <field name="ref">4442102</field>
+    <field name="category_id" ref="categ0001"/>
+    <field name="location">Evap: Room 264 Cond: Lane-way</field>
+    <field name="street">54 High Street</field>
+    <field name="street2"></field>
+    <field name="city">Northcote</field>
+    <field name="state">7</field>
+    <field name="zip">3075</field>
+    <field name="site_contact">Mitchell Wright</field>
+    <field name="site_phone">0498 348 571</field>
+  </record>
+
+  <record id="equip0002" model="equipment.details">
+    <field name="name">ABC_HVAC-PER-L1-R002-01</field>
+    <field name="client" ref="Part03"/>
+    <field name="model">SETSRK63ZRA-W</field>
+    <field name="asset_tag">ASSET-7830-8777</field>
+    <field name="serial_no">2113-3340-6456-1702</field>
+    <field name="manufacturer_id" ref="manuf0001"/>
+    <field name="ref">4442102</field>
+    <field name="category_id" ref="categ0001"/>
+    <field name="location">Evap: Room 2 Cond: Plant room</field>
+    <field name="street">123 Perth Road</field>
+    <field name="street2"></field>
+    <field name="city">Perth</field>
+    <field name="state">8</field>
+    <field name="zip">6000</field>
+    <field name="site_contact">Peter Holm</field>
+    <field name="site_phone">0487 562 843</field>
+  </record>
+
+  <record id="equip0003" model="equipment.details">
+    <field name="name">ABC_HVAC-BNE-HQ-PLT-01</field>
+    <field name="client" ref="Part01"/>
+    <field name="model">SETSRK63ZRA-W</field>
+    <field name="asset_tag">ASSET-9134-9403</field>
+    <field name="serial_no">2113-3340-6456-1703</field>
+    <field name="manufacturer_id" ref="manuf0001"/>
+    <field name="ref">4442102</field>
+    <field name="category_id" ref="categ0001"/>
+    <field name="location">Plant room at rear of building</field>
+    <field name="street">123 Headoffice Road</field>
+    <field name="street2"></field>
+    <field name="city">Brisbane</field>
+    <field name="state">4</field>
+    <field name="zip">4000</field>
+    <field name="site_contact">Barry Smith</field>
+    <field name="site_phone">0402 786 254</field>
+  </record>
+
+  <record id="equip0004" model="equipment.details">
+    <field name="name">ABC_HVAC-SYD-L1-LRM-01</field>
+    <field name="client" ref="Part04"/>
+    <field name="model">SETSRK63ZRA-W</field>
+    <field name="asset_tag">ASSET-8960-5281</field>
+    <field name="serial_no">2113-3340-6456-1704</field>
+    <field name="manufacturer_id" ref="manuf0001"/>
+    <field name="ref">4442102</field>
+    <field name="category_id" ref="categ0001"/>
+    <field name="location">Evap: Lunch room Cond: Plant room at rear of building</field>
+    <field name="street">123 Sydney Road</field>
+    <field name="street2"></field>
+    <field name="city">Sydney</field>
+    <field name="state">2</field>
+    <field name="zip">2000</field>
+    <field name="site_contact">Simon McLeod</field>
+    <field name="site_phone">0465 483 176</field>
+  </record>
+
+  <record id="equip0005" model="equipment.details">
+    <field name="name">ABC_HVAC-PAR-L1-OFF-01</field>
+    <field name="client" ref="Part04"/>
+    <field name="model">SETSRK71ZRA-W</field>
+    <field name="asset_tag">ASSET-9070-2284</field>
+    <field name="serial_no">2113-3340-6456-1705</field>
+    <field name="manufacturer_id" ref="manuf0001"/>
+    <field name="ref">4442104</field>
+    <field name="category_id" ref="categ0001"/>
+    <field name="location">Evap: Office Cond: 3/4 down left lane-way </field>
+    <field name="street">57 Parramatta Road</field>
+    <field name="street2"></field>
+    <field name="city">Parramatta</field>
+    <field name="state">2</field>
+    <field name="zip">2150</field>
+    <field name="site_contact">Simon McLeod</field>
+    <field name="site_phone">0465 483 176</field>
+  </record>
+
+  <record id="equip0006" model="equipment.details">
+    <field name="name">ABC_HVAC-MEL-NTH-L5-R574-01</field>
+    <field name="client" ref="Part02"/>
+    <field name="model">SETSRK71ZRA-W</field>
+    <field name="asset_tag">ASSET-2466-2109</field>
+    <field name="serial_no">2113-3340-6456-1706</field>
+    <field name="manufacturer_id" ref="manuf0001"/>
+    <field name="ref">4442104</field>
+    <field name="category_id" ref="categ0001"/>
+    <field name="location">Evap: Room 574 Cond: Maintenance Room</field>
+    <field name="street">54 High Street</field>
+    <field name="street2"></field>
+    <field name="city">Northcote</field>
+    <field name="state">7</field>
+    <field name="zip">3075</field>
+    <field name="site_contact">Mitchell Wright</field>
+    <field name="site_phone">0498 348 571</field>
+  </record>
+
+  <record id="equip0007" model="equipment.details">
+    <field name="name">ABC_HVAC-SYD-RHD-L1-R022-01</field>
+    <field name="client" ref="Part04"/>
+    <field name="model">SETSRK71ZRA-W</field>
+    <field name="asset_tag">ASSET-1718-6152</field>
+    <field name="serial_no">2113-3340-6456-1707</field>
+    <field name="manufacturer_id" ref="manuf0001"/>
+    <field name="ref">4442104</field>
+    <field name="category_id" ref="categ0001"/>
+    <field name="location">Evap: Room 22 Cond: 3rd from the left</field>
+    <field name="street">Unit 4</field>
+    <field name="street2">45 Gauthorpe Street</field>
+    <field name="city">Rhodes</field>
+    <field name="state">2</field>
+    <field name="zip">2138</field>
+    <field name="site_contact">Simon McLeod</field>
+    <field name="site_phone">0465 483 176</field>
+  </record>
+
+  <record id="equip0008" model="equipment.details">
+    <field name="name">ABC_HVAC-PER-VPK-L2-MTG-01</field>
+    <field name="client" ref="Part03"/>
+    <field name="model">SETSRK80ZRA-W</field>
+    <field name="asset_tag">ASSET-5911-6724</field>
+    <field name="serial_no">2113-3340-6456-1708</field>
+    <field name="manufacturer_id" ref="manuf0001"/>
+    <field name="ref">4442105</field>
+    <field name="category_id" ref="categ0001"/>
+    <field name="location">Evap: Upstairs Meeting Room Cond: Under Stairwell</field>
+    <field name="street">Unit 7</field>
+    <field name="street2">465 McMillan Street</field>
+    <field name="city">Vic Park</field>
+    <field name="state">8</field>
+    <field name="zip">6100</field>
+    <field name="site_contact">Peter Holm</field>
+    <field name="site_phone">0487 562 843</field>
+  </record>
+
+  <record id="equip0009" model="equipment.details">
+    <field name="name">ABC_HVAC-BNE-MLA-L2-R203-01</field>
+    <field name="client" ref="Part01"/>
+    <field name="model">SETSRK80ZRA-W</field>
+    <field name="asset_tag">ASSET-3734-7964</field>
+    <field name="serial_no">2113-3340-6456-1709</field>
+    <field name="manufacturer_id" ref="manuf0001"/>
+    <field name="ref">4442105</field>
+    <field name="category_id" ref="categ0001"/>
+    <field name="location">Evap: Office 203 Cond: On roof beside AHU</field>
+    <field name="street">Unit 1</field>
+    <field name="street2">13 Mills Ave</field>
+    <field name="city">Brisbane</field>
+    <field name="state">4</field>
+    <field name="zip">4000</field>
+    <field name="site_contact">Barry Smith</field>
+    <field name="site_phone">0402 786 254</field>
+  </record>
+
+  <record id="equip0010" model="equipment.details">
+    <field name="name">ABC_HVAC-BNE-BKS-L1-MTG-01</field>
+    <field name="client" ref="Part01"/>
+    <field name="model">SETSRK95ZRA-W</field>
+    <field name="asset_tag">ASSET-6305-3820</field>
+    <field name="serial_no">2113-3340-6456-1710</field>
+    <field name="manufacturer_id" ref="manuf0001"/>
+    <field name="ref">4442176</field>
+    <field name="category_id" ref="categ0001"/>
+    <field name="location">Evap: Meeting Room 1 Cond: Beside Cooling Tower</field>
+    <field name="street">86 Back Street</field>
+    <field name="street2"></field>
+    <field name="city">Brisbane</field>
+    <field name="state">4</field>
+    <field name="zip">4000</field>
+    <field name="site_contact">Barry Smith</field>
+    <field name="site_phone">0402 786 254</field>
+  </record>
+
+  <record id="equip0011" model="equipment.details">
+    <field name="name">ABC_HVAC-MEL-NTH-L1-TRM-01</field>
+    <field name="client" ref="Part02"/>
+    <field name="model">SETSRK95ZRA-W</field>
+    <field name="asset_tag">ASSET-5408-9120</field>
+    <field name="serial_no">2113-3340-6456-1711</field>
+    <field name="manufacturer_id" ref="manuf0001"/>
+    <field name="ref">4442176</field>
+    <field name="category_id" ref="categ0001"/>
+    <field name="location">Evap: Tea Room Cond: Workshop</field>
+    <field name="street">54 High Street</field>
+    <field name="street2"></field>
+    <field name="city">Northcote</field>
+    <field name="state">7</field>
+    <field name="zip">3075</field>
+    <field name="site_contact">Mitchell Wright</field>
+    <field name="site_phone">0498 348 571</field>
+  </record>
+
+  <record id="equip0012" model="equipment.details">
+    <field name="name">ABC_HVAC-BNE-HQ-L1-R009-01</field>
+    <field name="client" ref="Part01"/>
+    <field name="model">SETSRK95ZRA-W</field>
+    <field name="asset_tag">ASSET-9091-6869</field>
+    <field name="serial_no">2113-3340-6456-1712</field>
+    <field name="manufacturer_id" ref="manuf0001"/>
+    <field name="ref">4442176</field>
+    <field name="category_id" ref="categ0001"/>
+    <field name="location">Evap: Room 9 Cond: Plant room at rear of building</field>
+    <field name="street">123 Headoffice Road</field>
+    <field name="street2"></field>
+    <field name="city">Brisbane</field>
+    <field name="state">4</field>
+    <field name="zip">4000</field>
+    <field name="site_contact">Barry Smith</field>
+    <field name="site_phone">0402 786 254</field>
+  </record>
+
+  <record id="equip0013" model="equipment.details">
+    <field name="name">ABC_HVAC-PER-OSP-L1-R032-01</field>
+    <field name="client" ref="Part03"/>
+    <field name="model">SETSRK95ZRA-W</field>
+    <field name="asset_tag">ASSET-4786-2036</field>
+    <field name="serial_no">2113-3340-6456-1713</field>
+    <field name="manufacturer_id" ref="manuf0001"/>
+    <field name="ref">4442176</field>
+    <field name="category_id" ref="categ0001"/>
+    <field name="location">Evap: Room 32 Cond: Right driveway</field>
+    <field name="street">33 Hutton Street</field>
+    <field name="street2"></field>
+    <field name="city">Osborne Park</field>
+    <field name="state">8</field>
+    <field name="zip">6017</field>
+    <field name="site_contact">Peter Holm</field>
+    <field name="site_phone">0487 562 843</field>
+  </record>
+
+  <record id="equip0014" model="equipment.details">
+    <field name="name">ABC_HVAC-MEL-CBD-L1-R007-01</field>
+    <field name="client" ref="Part02"/>
+    <field name="model">SETSRK95ZRA-W</field>
+    <field name="asset_tag">ASSET-1142-4228</field>
+    <field name="serial_no">2113-3340-6456-1714</field>
+    <field name="manufacturer_id" ref="manuf0001"/>
+    <field name="ref">4442176</field>
+    <field name="category_id" ref="categ0001"/>
+    <field name="location">Evap: Room 7 Cond: Maintenance Room</field>
+    <field name="street">123 Melbourne Road</field>
+    <field name="street2"></field>
+    <field name="city">Melbourne</field>
+    <field name="state">7</field>
+    <field name="zip">3000</field>
+    <field name="site_contact">Mitchell Wright</field>
+    <field name="site_phone">0498 348 571</field>
+  </record>
+
+</odoo>

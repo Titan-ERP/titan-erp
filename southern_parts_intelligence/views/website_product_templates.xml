@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <template id="southern_parts_all_products_link_name" inherit_id="website_sale.all_products_link_name" name="Southern Parts Shop Link Name">
+        <xpath expr="//span" position="replace">
+            <span placeholder="All products">Parts</span>
+        </xpath>
+    </template>
+
+    <template id="southern_parts_shop_title" inherit_id="website_sale.products" name="Southern Parts Shop Title">
+        <xpath expr="//t[@t-set='additional_title']" position="replace">
+            <t t-set="additional_title" t-value="category.name if category else 'Parts Catalog'"/>
+        </xpath>
+
+        <xpath expr="//h1[hasclass('o_wsale_shop_title')]" position="replace">
+            <h1 class="o_wsale_shop_title h4-fs" t-if="not category and not search">
+                Parts Catalog
+            </h1>
+        </xpath>
+    </template>
+
+    <template id="southern_shop_counter_band" inherit_id="website_sale.products" name="Southern Parts Counter Notice">
+        <xpath expr="//div[@id='oe_structure_website_sale_products_1']" position="replace">
+            <div class="oe_structure oe_empty oe_structure_not_nearest" id="oe_structure_website_sale_products_1">
+                <section class="se-shop-counter py-4 py-lg-5">
+                    <div class="container">
+                        <div class="row align-items-center g-4">
+                            <div class="col-lg-8">
+                                <p class="se-shop-counter__eyebrow mb-2">Southern Parts Counter</p>
+                                <h1 class="se-shop-counter__title mb-2">Find the parts you need.</h1>
+                                <p class="se-shop-counter__copy mb-3">Search by part number, OEM reference, product name, or category. If you do not see what you need, send the machine model, OEM number, or a photo and our parts desk will verify it.</p>
+                                <div class="se-shop-counter__fulfillment">
+                                    <span>Free pickup at Southern Equipment</span>
+                                    <span>Shipping and handling reviewed after order confirmation</span>
+                                    <span>Pickup or shipping details are confirmed by our parts desk</span>
+                                </div>
+                            </div>
+                            <div class="col-lg-4">
+                                <div class="d-grid gap-2">
+                                    <a class="btn se-shop-counter__primary" href="/request?request=parts">Request Parts Help</a>
+                                    <a class="btn btn-outline-light se-shop-counter__secondary" href="tel:+16016514555">Call (601) 651-4555</a>
+                                    <a class="btn btn-outline-light se-shop-counter__secondary" href="/membership">Membership Benefits</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </xpath>
+    </template>
+
+    <template id="southern_parts_product_fulfillment_note" inherit_id="website_sale.product" name="Southern Parts Fulfillment Note">
+        <xpath expr="//div[hasclass('o_wsale_product_details_content_section_price')]" position="after">
+            <div t-if="product.type != 'service' and product.default_code != 'SEC-MEMBERSHIP-STANDARD'" class="se-product-fulfillment-note">
+                <strong>Parts fulfillment:</strong>
+                <span>Southern confirms availability, fitment, and pickup or shipping details before fulfillment.</span>
+            </div>
+        </xpath>
+    </template>
+
+    <template id="southern_parts_quote_only_action" inherit_id="website_sale.product" name="Southern Ask for Pricing Action">
+        <xpath expr="//div[@id='contact_us_wrapper']//a[hasclass('btn_cta')]" position="replace">
+            <a t-if="product.southern_quote_only"
+               t-att-href="'/request?request=parts&amp;sku=%s' % product.default_code"
+               t-att-data-url="'/request?request=parts&amp;sku=%s' % product.default_code"
+               class="btn btn-primary btn_cta">
+                Ask for Pricing
+            </a>
+            <a t-else=""
+               t-att-href="website.contact_us_button_url"
+               t-att-data-url="website.contact_us_button_url"
+               class="btn btn-primary btn_cta">
+                Contact Us
+            </a>
+        </xpath>
+    </template>
+
+    <template id="southern_parts_product_detail_sections" inherit_id="website_sale.product" name="Southern Parts Product Detail Sections">
+        <xpath expr="//section[@id='product_detail']" position="inside">
+            <t t-set="southern_sections" t-value="product._southern_website_catalog_sections() if product._southern_has_parts_catalog_data() else []"/>
+            <div t-if="southern_sections" class="southern-part-jump-links">
+                <a t-if="'specifications' in southern_sections" href="#southern_specs">View Product Specifications</a>
+                <a t-if="'fitment' in southern_sections" href="#southern_fitment">View Suitable For</a>
+                <a t-if="'oem' in southern_sections" href="#southern_oem_refs">View OEM Part Numbers</a>
+                <a t-if="'catalog' in southern_sections" href="#southern_catalog_pages">View Catalog Pages</a>
+            </div>
+        </xpath>
+
+        <xpath expr="//section[@id='product_detail']" position="after">
+            <t t-set="southern_sections" t-value="product._southern_website_catalog_sections() if product._southern_has_parts_catalog_data() else []"/>
+            <section t-if="southern_sections" class="southern-parts-catalog">
+                <div class="container">
+                    <section t-if="'specifications' in southern_sections" id="southern_specs" class="southern-parts-section">
+                        <p class="southern-parts-eyebrow">Product Details</p>
+                        <h2>Specifications</h2>
+                        <div class="southern-spec-grid">
+                            <t t-foreach="product._southern_grouped_specifications()" t-as="spec_group">
+                                <div t-foreach="spec_group['items']" t-as="spec" class="southern-spec-row">
+                                    <div class="southern-spec-row__name" t-out="spec['name']"/>
+                                    <div class="southern-spec-row__value">
+                                        <span t-out="spec['value']"/>
+                                        <span t-if="spec['unit']"> <span t-out="spec['unit']"/></span>
+                                    </div>
+                                </div>
+                            </t>
+                        </div>
+                    </section>
+
+                    <section t-if="'fitment' in southern_sections" id="southern_fitment" class="southern-parts-section">
+                        <p class="southern-parts-eyebrow">Fitment</p>
+                        <h2>Suitable For Make/Model</h2>
+                        <div class="table-responsive">
+                            <table class="table southern-parts-table">
+                                <tbody>
+                                    <tr t-foreach="product._southern_grouped_fitments()" t-as="fitment_group">
+                                        <th t-out="fitment_group['make']"/>
+                                        <td>
+                                            <span t-foreach="fitment_group['items']" t-as="fitment" class="southern-token">
+                                                <span t-out="fitment['model']"/>
+                                                <span t-if="fitment['engine']">, <span t-out="fitment['engine']"/></span>
+                                                <span t-if="fitment['build_list']"> (<span t-out="fitment['build_list']"/>)</span>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section t-if="'oem' in southern_sections" id="southern_oem_refs" class="southern-parts-section">
+                        <p class="southern-parts-eyebrow">Cross Reference</p>
+                        <h2>OEM Part Numbers</h2>
+                        <div class="table-responsive">
+                            <table class="table southern-parts-table">
+                                <tbody>
+                                    <tr t-foreach="product._southern_grouped_oem_references()" t-as="ref_group">
+                                        <th t-out="ref_group['manufacturer']"/>
+                                        <td>
+                                            <span t-foreach="ref_group['numbers']" t-as="part_number" class="southern-token" t-out="part_number"/>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section t-if="'catalog' in southern_sections" id="southern_catalog_pages" class="southern-parts-section">
+                        <p class="southern-parts-eyebrow">Reference</p>
+                        <h2>Catalog Pages</h2>
+                        <div class="table-responsive">
+                            <table class="table southern-parts-table southern-parts-table--catalog">
+                                <thead>
+                                    <tr>
+                                        <th>Catalog</th>
+                                        <th>Page No.</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="product._southern_grouped_catalog_pages()" t-as="catalog_group">
+                                        <th>
+                                            <span t-out="catalog_group['catalog']"/>
+                                            <small t-if="catalog_group['code']" class="d-block" t-out="catalog_group['code']"/>
+                                        </th>
+                                        <td>
+                                            <t t-foreach="catalog_group['pages']" t-as="page">
+                                                <a t-if="page['source_url']" t-att-href="page['source_url']" class="southern-token" target="_blank" rel="noopener" t-out="page['page_number']"/>
+                                                <span t-else="" class="southern-token" t-out="page['page_number']"/>
+                                            </t>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section t-if="'related' in southern_sections" id="southern_related_parts" class="southern-parts-section">
+                        <p class="southern-parts-eyebrow">Related</p>
+                        <h2>Related Parts</h2>
+                        <div class="southern-related-grid">
+                            <a t-foreach="product._southern_related_parts_summary()" t-as="related"
+                               t-att-href="related['website_url'] or '#'"
+                               class="southern-related-card">
+                                <span class="southern-related-card__type" t-out="related['relationship_type']"/>
+                                <span class="southern-related-card__name" t-out="related['name']"/>
+                                <span t-if="related['default_code']" class="southern-related-card__sku" t-out="related['default_code']"/>
+                            </a>
+                        </div>
+                    </section>
+                </div>
+            </section>
+        </xpath>
+    </template>
+</odoo>

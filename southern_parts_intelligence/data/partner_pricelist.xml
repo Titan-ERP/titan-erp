@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="southern_partner_pricelist" model="product.pricelist">
+        <field name="name">Southern Partner Pricing</field>
+        <field name="currency_id" ref="base.USD"/>
+        <field name="active">True</field>
+    </record>
+</odoo>

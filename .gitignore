@@ -2,19 +2,30 @@
 *.pyc
 *.pyo
 __pycache__/
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
 *.egg-info/
 
 # Environment
 .env
-.venv/
-env/
+*.env
+.env.local
+!.env.example
+!*.env.example
+odoo_connection.env
 
-# Odoo
+# Generated output
+outputs/
+tmp/
+dist/
 *.log
+
+# Node
+node_modules/
 
 # OS
 .DS_Store
 Thumbs.db
-
-# Node
-node_modules/

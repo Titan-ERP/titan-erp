@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_southern_equipment_valuation_readiness_search" model="ir.ui.view">
+        <field name="name">southern.equipment.valuation.readiness.search</field>
+        <field name="model">southern.equipment.listing</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="public_title"/>
+                <field name="manufacturer"/>
+                <field name="model"/>
+                <filter name="ready" string="Valuation Ready" domain="[('valuation_readiness', '=', 'ready')]"/>
+                <filter name="missing_hours" string="Missing Hours" domain="[('valuation_readiness', '=', 'missing_hours')]"/>
+                <filter name="missing_spec" string="Missing Specifications" domain="[('valuation_readiness', '=', 'missing_specification')]"/>
+                <filter name="insufficient" string="Insufficient Comps" domain="[('valuation_readiness', '=', 'insufficient_comps')]"/>
+                <separator/>
+                <filter name="group_readiness" string="Readiness" context="{'group_by': 'valuation_readiness'}"/>
+                <filter name="group_type" string="Equipment Type" context="{'group_by': 'equipment_type'}"/>
+                <filter name="group_make" string="Manufacturer" context="{'group_by': 'manufacturer'}"/>
+                <filter name="group_model" string="Model" context="{'group_by': 'model'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_southern_equipment_valuation_readiness_list" model="ir.ui.view">
+        <field name="name">southern.equipment.valuation.readiness.list</field>
+        <field name="model">southern.equipment.listing</field>
+        <field name="arch" type="xml">
+            <list decoration-success="valuation_readiness == 'ready'"
+                  decoration-warning="valuation_readiness in ['missing_hours', 'insufficient_comps']"
+                  decoration-danger="valuation_readiness in ['missing_identity', 'missing_year', 'missing_specification']">
+                <header>
+                    <button name="action_recalculate_all_comp_analysis"
+                            string="Recalculate All Comps"
+                            type="object"
+                            display="always"
+                            class="btn-primary"/>
+                </header>
+                <field name="public_title"/>
+                <field name="equipment_type"/>
+                <field name="manufacturer"/>
+                <field name="model"/>
+                <field name="year"/>
+                <field name="hours"/>
+                <field name="valuation_readiness"/>
+                <field name="valuation_blockers"/>
+                <field name="comp_count"/>
+                <field name="comp_match_basis"/>
+                <field name="comp_hours_window"/>
+                <field name="comp_freshness"/>
+                <field name="comp_last_calculated_at"/>
+                <field name="website_published"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_southern_equipment_valuation_readiness" model="ir.actions.act_window">
+        <field name="name">Valuation Readiness</field>
+        <field name="res_model">southern.equipment.listing</field>
+        <field name="view_mode">list,pivot,form</field>
+        <field name="view_id" ref="view_southern_equipment_valuation_readiness_list"/>
+        <field name="search_view_id" ref="view_southern_equipment_valuation_readiness_search"/>
+        <field name="domain">[('company_id', '=', 2), ('public_status', 'not in', ['sold', 'archived'])]</field>
+        <field name="context">{'search_default_group_readiness': 1}</field>
+    </record>
+    <record id="action_southern_equipment_valuation_readiness_list_view"
+            model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_southern_equipment_valuation_readiness_list"/>
+        <field name="act_window_id" ref="action_southern_equipment_valuation_readiness"/>
+    </record>
+
+    <record id="view_southern_equipment_backtest_list" model="ir.ui.view">
+        <field name="name">southern.equipment.backtest.list</field>
+        <field name="model">southern.equipment.listing</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="public_title"/>
+                <field name="equipment_type"/>
+                <field name="manufacturer"/>
+                <field name="model"/>
+                <field name="year"/>
+                <field name="hours"/>
+                <field name="valuation_at_sale"/>
+                <field name="actual_sale_price"/>
+                <field name="valuation_error_pct"/>
+                <field name="valuation_absolute_error_pct" avg="Average Absolute Error"/>
+                <field name="valuation_accuracy"/>
+                <field name="comp_match_basis"/>
+                <field name="comp_count"/>
+                <field name="comp_method_version"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_southern_equipment_valuation_backtesting" model="ir.actions.act_window">
+        <field name="name">Valuation Backtesting</field>
+        <field name="res_model">southern.equipment.listing</field>
+        <field name="view_mode">list,pivot,graph,form</field>
+        <field name="view_id" ref="view_southern_equipment_backtest_list"/>
+        <field name="domain">[('company_id', '=', 2), ('actual_sale_price', '&gt;', 0)]</field>
+        <field name="context">{'group_by': ['equipment_type']}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No completed-sale backtests yet</p>
+            <p>When an actual sale price is recorded, this report measures valuation bias and absolute error.</p>
+        </field>
+    </record>
+    <record id="action_southern_equipment_valuation_backtesting_list_view"
+            model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_southern_equipment_backtest_list"/>
+        <field name="act_window_id" ref="action_southern_equipment_valuation_backtesting"/>
+    </record>
+</odoo>

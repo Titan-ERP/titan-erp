@@ -1,0 +1,2 @@
+# Odoo.sh runtime: custom addons use only Odoo-provided and Python stdlib packages.
+# Development and AWS tooling dependencies are managed in pyproject.toml and CI.

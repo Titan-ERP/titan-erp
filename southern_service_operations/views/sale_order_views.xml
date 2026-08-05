@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_new_parts_quotation" model="ir.actions.act_window">
+        <field name="name">New Parts Quotation</field>
+        <field name="res_model">sale.order</field>
+        <field name="view_mode">form</field>
+        <field name="target">current</field>
+        <field name="context">{'default_southern_quote_type': 'parts'}</field>
+    </record>
+
+    <record id="action_new_equipment_quotation" model="ir.actions.act_window">
+        <field name="name">New Equipment Quotation</field>
+        <field name="res_model">sale.order</field>
+        <field name="view_mode">form</field>
+        <field name="target">current</field>
+        <field name="context">{'default_southern_quote_type': 'equipment_sale'}</field>
+    </record>
+
+    <record id="action_new_rental_quotation" model="ir.actions.act_window">
+        <field name="name">New Rental Quotation</field>
+        <field name="res_model">sale.order</field>
+        <field name="view_mode">form</field>
+        <field name="target">current</field>
+        <field name="context">{
+            'default_southern_quote_type': 'rental',
+            'default_is_rental_order': True
+        }</field>
+    </record>
+
+    <record id="view_quotation_list_southern_service" model="ir.ui.view">
+        <field name="name">sale.order.quotation.list.southern.service</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_quotation_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list" position="attributes">
+                <attribute name="create">false</attribute>
+            </xpath>
+            <xpath expr="//list/header" position="inside">
+                <button name="%(action_new_parts_quotation)d" type="action"
+                        string="Parts" display="always" class="btn-secondary"/>
+                <button name="%(industry_fsm.project_task_action_fsm)d" type="action"
+                        string="Service" display="always" class="btn-primary"/>
+                <button name="%(action_new_equipment_quotation)d" type="action"
+                        string="Equipment Sale" display="always" class="btn-secondary"/>
+                <button name="%(action_new_rental_quotation)d" type="action"
+                        string="Rental" display="always" class="btn-secondary"/>
+            </xpath>
+            <xpath expr="//list/field[@name='partner_id']" position="after">
+                <field name="southern_quote_type" optional="show"/>
+                <field name="southern_client_equipment_id" optional="hide"/>
+                <field name="southern_technician_id" optional="hide"/>
+                <field name="southern_scheduled_start" optional="show"/>
+                <field name="southern_service_case_id" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_order_form_southern_service" model="ir.ui.view">
+        <field name="name">sale.order.form.southern.service</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form/header" position="inside">
+                <button name="action_route_southern_service_work" type="object"
+                        string="Create / Update Service Job" class="btn-primary"
+                        groups="southern_service_operations.group_southern_service_user"
+                        invisible="southern_quote_type != 'service' or state == 'cancel' or southern_service_state in ('closed', 'cancelled')"/>
+            </xpath>
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_southern_service_case" type="object"
+                        class="oe_stat_button" icon="fa-wrench"
+                        invisible="not southern_service_case_id">
+                    <div class="o_field_widget o_stat_info">
+                        <span class="o_stat_value">
+                            <field name="southern_service_case_id" nolabel="1"/>
+                        </span>
+                        <span class="o_stat_text">Service</span>
+                    </div>
+                </button>
+                <button name="action_view_southern_service_tasks" type="object"
+                        class="oe_stat_button" icon="fa-calendar"
+                        invisible="not southern_service_task_count">
+                    <field name="southern_service_task_count" widget="statinfo"
+                           string="Service Jobs"/>
+                </button>
+                <button name="action_view_southern_service_repairs" type="object"
+                        class="oe_stat_button" icon="fa-cogs"
+                        invisible="not southern_service_repair_count">
+                    <field name="southern_service_repair_count" widget="statinfo"
+                           string="Shop Work"/>
+                </button>
+                <button name="action_view_southern_service_purchases" type="object"
+                        class="oe_stat_button" icon="fa-shopping-cart"
+                        invisible="not southern_service_purchase_count">
+                    <field name="southern_service_purchase_count" widget="statinfo"
+                           string="Purchases"/>
+                </button>
+            </xpath>
+            <xpath expr="(//field[@name='partner_id'])[1]" position="after">
+                <field name="southern_quote_type"
+                       readonly="state not in ('draft', 'sent')"/>
+                <field name="southern_service_location"
+                       invisible="southern_quote_type != 'service'"
+                       required="southern_quote_type == 'service'"
+                       readonly="state not in ('draft', 'sent')"/>
+                <field name="southern_client_equipment_id"
+                       invisible="southern_quote_type != 'service'"
+                       domain="[('client', 'child_of', partner_id)]"
+                       readonly="state not in ('draft', 'sent')"/>
+                <field name="southern_service_title"
+                       invisible="southern_quote_type != 'service'"
+                       required="southern_quote_type == 'service'"
+                       placeholder="Example: Diagnose hydraulic leak"
+                       readonly="state not in ('draft', 'sent')"/>
+                <field name="southern_equipment_description"
+                       invisible="southern_quote_type != 'service'"
+                       required="southern_quote_type == 'service'"
+                       placeholder="Make, model, and equipment type"
+                       readonly="state not in ('draft', 'sent')"/>
+                <field name="southern_serial_number"
+                       invisible="southern_quote_type != 'service'"
+                       required="southern_quote_type == 'service'"
+                       placeholder="Enter the serial number or Unserialized"
+                       readonly="state not in ('draft', 'sent')"/>
+                <field name="southern_equipment_run_hours"
+                       invisible="southern_quote_type != 'service'"
+                       required="southern_quote_type == 'service'"
+                       readonly="state not in ('draft', 'sent')"/>
+                <field name="southern_technician_id"
+                       invisible="southern_quote_type != 'service'"
+                       readonly="state == 'cancel'"/>
+                <field name="southern_scheduled_start"
+                       invisible="southern_quote_type != 'service'"
+                       readonly="state == 'cancel'"/>
+                <field name="southern_estimated_hours"
+                       invisible="southern_quote_type != 'service'"
+                       readonly="state == 'cancel'"/>
+                <field name="southern_service_case_id" readonly="1"
+                       invisible="not southern_service_case_id"/>
+            </xpath>
+            <xpath expr="//sheet/notebook" position="inside">
+                <page name="southern_service_work" string="Service Work"
+                      invisible="southern_quote_type != 'service'">
+                    <group>
+                        <group>
+                            <field name="southern_service_request"
+                                   required="southern_quote_type == 'service'"
+                                   readonly="state == 'cancel'"
+                                   placeholder="Describe the requested work, symptoms, diagnosis, and customer concerns."/>
+                            <field name="southern_commercial_basis"
+                                   readonly="state == 'cancel'"/>
+                        </group>
+                        <group>
+                            <field name="southern_service_state" readonly="1"
+                                   invisible="not southern_service_case_id"/>
+                            <field name="southern_service_case_id" readonly="1"
+                                   invisible="not southern_service_case_id"/>
+                        </group>
+                    </group>
+                    <div class="alert alert-info" role="status">
+                        Quote labor and parts on <strong>Order Lines</strong>.
+                        Use <strong>Create / Update Service Job</strong> to
+                        prepare the assigned technician's operational record.
+                        On-site work, shop repair, or both stay linked to this
+                        quotation and Sales Order, together with purchases,
+                        customer approval, and invoicing.
+                    </div>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

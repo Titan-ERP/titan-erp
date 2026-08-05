@@ -1,0 +1,86 @@
+# Southern Parts Intelligence
+
+Adds Sparex-style parts catalog functionality to Odoo products.
+
+## What It Adds
+
+Backend product tabs:
+
+- Product Specifications
+- Fits Make/Model
+- OEM Part Numbers
+- Catalog Pages
+- Related Parts
+- Alternate Barcodes
+- Source tracking
+
+Website product detail sections:
+
+- Product Specifications
+- Suitable For Make/Model
+- OEM Part Numbers
+- Catalog Pages
+- Related Parts
+
+Search support:
+
+- Adds `Parts Search Text` to products.
+- Aggregates SKU, barcode, manufacturer, OEM references, fitment, catalog pages, specs, and alternate barcodes.
+- Extends the product search view with a `Parts Intelligence` search field.
+
+Internal sync support:
+
+- Adds a `Catalog Sync Jobs` menu under Parts Intelligence.
+- Refreshes cached website snapshots every 10 minutes in small batches.
+- Keeps product detail pages from loading every specification, fitment, OEM reference, catalog page, and related-part record during each website request.
+- Does not publish, price, categorize, import, or change product references. Publication and sourcing still require the guarded external scripts and review workflow.
+
+Evidence queue support:
+
+- Adds an `Evidence Queue` menu under Parts Intelligence.
+- Tracks pricing, image, Parts Intelligence, taxonomy, and publication-readiness evidence as structured Odoo records.
+- Stores source URLs, observed prices, currency, confidence, retry state, blocker reason, and review/apply status.
+- Keeps exact evidence separate from live catalog writes. Queue rows may be created continuously; applying prices, images, or publication still requires a separate guarded workflow.
+- Refreshes saved pricing evidence URLs hourly in small batches, detects observed retail price changes, routes non-USD prices to currency review, and pauses a supplier lane when that source rate-limits.
+- Adds a guarded USD pricing apply lane: exact USD evidence can be approved, then separately applied to the product sale price. Non-USD, low-confidence, placeholder, and unlinked evidence stays blocked from direct apply.
+- Adds dedicated internal menus for pricing evidence, image evidence, publication readiness, and supplier coverage so the catalog agent can work continuously from one controlled cockpit.
+- Links evidence rows to products using normalized Sparex SKU variants, including `S.00610`, `S.610`, and `S610` style references.
+
+## Deployment
+
+Install on staging before production.
+
+1. Copy this addon folder into the Odoo.sh repository.
+2. Commit and push to a staging branch.
+3. Update the app list.
+4. Install `Southern Parts Intelligence`.
+5. Open a Sparex or Blumaq product and verify the new `Parts Intelligence` backend tab.
+6. Import a small detail JSON through `scripts/odoo_import_parts_intelligence_json.py` in dry-run mode first.
+7. Apply detail import only after the dry run is clean.
+8. Import the first live ecommerce detail batch:
+
+```powershell
+py -3 scripts\odoo_import_parts_intelligence_json.py outputs\southern_parts_sparex_style_detail_batch_001.json --apply
+```
+
+9. Check the website product pages. The product page should use Sparex-style anchored sections: product specifications, suitable make/model, OEM part numbers, catalog pages, and related parts.
+10. Open `Parts Intelligence > Catalog Sync Jobs` and run `Website Parts Snapshot Refresh` once after the module upgrade to seed the first cache batch.
+11. Open `Parts Intelligence > Evidence Queue` and verify pricing/image/intelligence evidence is landing in review states instead of being buried in CSV files.
+
+## Importer
+
+Detail records are imported with:
+
+```powershell
+py -3 scripts\odoo_import_parts_intelligence_json.py path\to\detail.json
+```
+
+Apply after review:
+
+```powershell
+py -3 scripts\odoo_import_parts_intelligence_json.py path\to\detail.json --apply
+```
+
+## Important Rule
+
+Make/model fitment is relationship data, not product variant data. Do not create product variants for every compatible machine.

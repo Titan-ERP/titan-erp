@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem id="menu_southern_brokerage_root" name="Equipment Brokerage" sequence="45"
+              groups="southern_equipment_brokerage.group_southern_deal_broker,southern_equipment_brokerage.group_southern_inspector_coordinator"/>
+    <menuitem id="menu_southern_brokerage_pipeline" name="Pipeline" parent="menu_southern_brokerage_root" sequence="10"/>
+    <menuitem id="menu_southern_equipment_listings" name="Sourced Listings" parent="menu_southern_brokerage_pipeline"
+              action="action_southern_equipment_listings" sequence="10"/>
+    <menuitem id="menu_southern_equipment_discovery" name="Discovery Queue" parent="menu_southern_brokerage_pipeline"
+              action="action_southern_equipment_discovery_candidates" sequence="5"/>
+    <menuitem id="menu_southern_equipment_facebook_intake" name="Paste Facebook Listing"
+              parent="menu_southern_brokerage_pipeline"
+              action="action_southern_equipment_facebook_intake_wizard" sequence="12"
+              groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+    <menuitem id="menu_southern_equipment_import" name="Import Equipment Opportunity CSV" parent="menu_southern_brokerage_pipeline"
+              action="action_southern_equipment_import_wizard" sequence="15"
+              groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+    <menuitem id="menu_southern_buyer_inquiries" name="Buyer Inquiries" parent="menu_southern_brokerage_pipeline"
+              action="action_southern_buyer_inquiries" sequence="20"/>
+    <menuitem id="menu_southern_brokered_deals" name="Brokered Deals" parent="menu_southern_brokerage_pipeline"
+              action="action_southern_brokered_deals" sequence="30"/>
+    <menuitem id="menu_southern_brokerage_operations" name="Operations" parent="menu_southern_brokerage_root" sequence="20"/>
+    <menuitem id="menu_southern_inspection_orders" name="Inspection Orders" parent="menu_southern_brokerage_operations"
+              action="action_southern_inspection_orders" sequence="10"/>
+    <menuitem id="menu_southern_contract_assignments" name="Contract Assignments" parent="menu_southern_brokerage_operations"
+              action="action_southern_contract_assignments" sequence="20"
+              groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+    <menuitem id="menu_southern_deposit_ledger" name="Deposit Ledger" parent="menu_southern_brokerage_operations"
+              action="action_southern_deposit_ledger" sequence="30"
+              groups="southern_equipment_brokerage.group_southern_equipment_admin"/>
+    <menuitem id="menu_southern_brokerage_analysis" name="Analysis" parent="menu_southern_brokerage_root" sequence="30"
+              groups="southern_equipment_brokerage.group_southern_deal_broker"/>
+    <menuitem id="menu_southern_equipment_comps" name="Equipment Comps" parent="menu_southern_brokerage_analysis"
+              action="action_southern_equipment_comps" sequence="20"/>
+    <menuitem id="menu_southern_equipment_spec_profiles" name="Specification Catalog"
+              parent="menu_southern_brokerage_analysis"
+              action="action_southern_equipment_spec_profiles" sequence="10"/>
+    <menuitem id="menu_southern_equipment_model_aliases" name="Reviewed Model Aliases"
+              parent="menu_southern_brokerage_analysis"
+              action="action_southern_equipment_model_aliases" sequence="15"/>
+    <menuitem id="menu_southern_equipment_valuation_readiness" name="Valuation Readiness"
+              parent="menu_southern_brokerage_analysis"
+              action="action_southern_equipment_valuation_readiness" sequence="30"/>
+    <menuitem id="menu_southern_equipment_valuation_backtesting" name="Valuation Backtesting"
+              parent="menu_southern_brokerage_analysis"
+              action="action_southern_equipment_valuation_backtesting" sequence="40"/>
+</odoo>
