@@ -42,6 +42,8 @@ MAX_EXTERNAL_REPAIR_BATCH = 5
 MAX_AI_CALLS = 5
 MAX_SOURCE_IMAGE_BYTES = 10 * 1024 * 1024
 DEFAULT_COST_RECOVERY_LIMIT = 5
+PUBLIC_VERIFICATION_ATTEMPTS = 3
+PUBLIC_VERIFICATION_RETRY_SECONDS = 2.0
 AGENT_SEQUENCE: tuple[AgentCode, ...] = (
     "coordinator",
     "sparex_discovery",
@@ -201,18 +203,25 @@ def verify_public_pages(base_url: str, published: list[dict[str, Any]]) -> list[
     verification = []
     for row in published:
         url = _public_url(base_url, row["public_path"])
-        request = urllib.request.Request(url, headers={"User-Agent": "Titan-Catalog-Release-Verifier/1.0"})
-        try:
-            with urllib.request.urlopen(request, timeout=45) as response:
-                body = response.read().decode("utf-8", errors="replace")
-                status = int(response.status)
-        except (urllib.error.URLError, TimeoutError, OSError) as exc:
-            raise RuntimeError(
-                f"Public verification failed for product {row['product_id']}: {type(exc).__name__}"
-            ) from exc
         sku = str(row["sku"])
-        if status != 200 or sku.casefold() not in body.casefold():
-            raise RuntimeError(f"Public verification failed for product {row['product_id']}: status_or_sku")
+        request = urllib.request.Request(url, headers={"User-Agent": "Titan-Catalog-Release-Verifier/1.0"})
+        status = 0
+        body = ""
+        last_error = "status_or_sku"
+        for attempt in range(1, PUBLIC_VERIFICATION_ATTEMPTS + 1):
+            try:
+                with urllib.request.urlopen(request, timeout=45) as response:
+                    body = response.read().decode("utf-8", errors="replace")
+                    status = int(response.status)
+                if status == 200 and sku.casefold() in body.casefold():
+                    break
+                last_error = "status_or_sku"
+            except (urllib.error.URLError, TimeoutError, OSError) as exc:
+                last_error = type(exc).__name__
+            if attempt < PUBLIC_VERIFICATION_ATTEMPTS:
+                time.sleep(PUBLIC_VERIFICATION_RETRY_SECONDS)
+        else:
+            raise RuntimeError(f"Public verification failed for product {row['product_id']}: {last_error}")
         verification.append(
             {
                 "task_id": row["task_id"],
@@ -221,6 +230,7 @@ def verify_public_pages(base_url: str, published: list[dict[str, Any]]) -> list[
                 "public_url": url,
                 "http_status": status,
                 "exact_sku_present": True,
+                "attempts": attempt,
             }
         )
     return verification
