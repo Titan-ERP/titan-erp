@@ -30,11 +30,21 @@ from scripts.sparex_catalog_discovery import (
 )
 
 COST_RECOVERY_CONFIRMATION = "sparex-dealer-cost-recovery"
-PARSER_VERSION = "sparex-exact-priceb-v1"
+PARSER_VERSION = "sparex-exact-priceb-title-v2"
 PORTAL_COOLDOWN_MINUTES = 60
 MAX_COST_RECOVERY_BATCH = 50
 MAX_SOURCE_IMAGE_BYTES = 10 * 1024 * 1024
 MONEY_PATTERN = re.compile(r"(?<![0-9])\$\s*(?P<price>[0-9][0-9,]*(?:\.\d{1,2})?)(?![0-9])")
+DETAIL_TITLE_PLACEHOLDERS = {
+    "access denied",
+    "error",
+    "home",
+    "login",
+    "page not found",
+    "product",
+    "search results",
+    "sign in",
+}
 
 
 def _canonical_sha256(value: Any) -> str:
@@ -89,6 +99,25 @@ def parse_exact_priceb(content: bytes | str, sku: str) -> dict[str, Any]:
     if len(values) != 1:
         return {"status": "price_ambiguous"}
     return {"status": "accepted", "price": next(iter(values)), "currency": "USD"}
+
+
+def parse_detail_title(content: bytes | str) -> str:
+    """Return one bounded, customer-usable title from the exact product detail scope."""
+    document = lxml_html.fromstring(content)
+    titles = document.xpath("//main//h1[@itemprop='name']")
+    if len(titles) != 1:
+        return ""
+    title = " ".join(" ".join(titles[0].itertext()).split()).strip()
+    folded = re.sub(r"[^a-z0-9]+", " ", title.casefold()).strip()
+    if (
+        len(title) < 3
+        or len(title) > 255
+        or not re.search(r"[A-Za-z]", title)
+        or bool(re.fullmatch(r"S[.\s-]*\d+", title, flags=re.IGNORECASE))
+        or folded in DETAIL_TITLE_PLACEHOLDERS
+    ):
+        return ""
+    return title
 
 
 def parse_detail_image_url(content: bytes | str, page_url: str) -> str:
@@ -267,6 +296,31 @@ def recover_dealer_costs(
                 )
                 outcomes.append({"item_id": claim["item_id"], "sku": claim["sku"], "status": parsed["status"]})
                 continue
+            detail_title = parse_detail_title(response.content)
+            if not detail_title:
+                client.call(
+                    "southern.sparex.discovery.item",
+                    "record_cost_recovery_result",
+                    item_id=claim["item_id"],
+                    worker_id=worker_id,
+                    outcome="manual_review",
+                    error_code="detail_title_invalid",
+                )
+                outcomes.append(
+                    {"item_id": claim["item_id"], "sku": claim["sku"], "status": "detail_title_invalid"}
+                )
+                continue
+            page_sha256 = hashlib.sha256(response.content).hexdigest()
+            raw_page_record = store.write_bytes(
+                f"dealer-detail-{re.sub(r'[^A-Za-z0-9]+', '-', claim['sku']).strip('-')}.html",
+                response.content,
+                kind="html",
+            )
+            raw_page_archive = store.archive_s3(
+                raw_page_record,
+                bucket=s3_bucket,
+                prefix=s3_prefix,
+            )
             image_evidence: dict[str, Any] = {}
             if not claim.get("has_image"):
                 image_url = parse_detail_image_url(response.content, url)
@@ -308,7 +362,12 @@ def recover_dealer_costs(
                 "currency": parsed["currency"],
                 "evidence_url": url,
                 "evidence_url_sha256": claim["source_url_sha256"],
-                "evidence_sha256": hashlib.sha256(response.content).hexdigest(),
+                "evidence_sha256": page_sha256,
+                "detail_title": detail_title,
+                "detail_title_sha256": hashlib.sha256(detail_title.encode("utf-8")).hexdigest(),
+                "detail_title_page_sha256": page_sha256,
+                "detail_page_artifact_uri": raw_page_archive["artifact_uri"],
+                "detail_page_artifact_sha256": raw_page_archive["sha256"],
                 "parser_version": PARSER_VERSION,
                 "retrieved_at_utc": datetime.now(UTC).isoformat(),
                 **image_evidence,
@@ -340,7 +399,7 @@ def recover_dealer_costs(
     evidence_record = _archive(
         store,
         "dealer-cost-evidence.json",
-        {"schema_version": "1.0", "parser_version": PARSER_VERSION, "records": accepted, "outcomes": outcomes},
+        {"schema_version": "1.1", "parser_version": PARSER_VERSION, "records": accepted, "outcomes": outcomes},
         s3_bucket,
         s3_prefix,
     )
@@ -362,6 +421,13 @@ def recover_dealer_costs(
                     "price_basis_before": row["price_basis_before"],
                     "cost_plus_margin_before": row["cost_plus_margin_before"],
                     "price_basis_updated_at_before": row["price_basis_updated_at_before"],
+                    "listing_title_before": row["listing_title_before"],
+                    "detail_title_sha256_before": row["detail_title_sha256_before"],
+                    "detail_title_page_sha256_before": row["detail_title_page_sha256_before"],
+                    "detail_title_parser_version_before": row["detail_title_parser_version_before"],
+                    "detail_title_recovered_at_before": row["detail_title_recovered_at_before"],
+                    "detail_page_artifact_uri_before": row["detail_page_artifact_uri_before"],
+                    "detail_page_artifact_sha256_before": row["detail_page_artifact_sha256_before"],
                     "snapshot_sha256": row["snapshot_sha256"],
                 }
                 for row in accepted
@@ -412,6 +478,28 @@ def recover_dealer_costs(
                     or product["southern_price_basis"] != row["price_basis_applied"]
                 ):
                     raise RuntimeError("cost_plus_post_write_verification_failed")
+                item = client.call(
+                    "southern.sparex.discovery.item",
+                    "read",
+                    ids=[row["item_id"]],
+                    fields=[
+                        "listing_title",
+                        "detail_title_sha256",
+                        "detail_title_page_sha256",
+                        "detail_title_parser_version",
+                        "detail_page_artifact_uri",
+                        "detail_page_artifact_sha256",
+                    ],
+                )[0]
+                if (
+                    item["listing_title"] != row["detail_title_applied"]
+                    or item["detail_title_sha256"] != row["detail_title_sha256_applied"]
+                    or item["detail_title_page_sha256"] != row["detail_title_page_sha256_applied"]
+                    or item["detail_title_parser_version"] != PARSER_VERSION
+                    or item["detail_page_artifact_uri"] != row["detail_page_artifact_uri_applied"]
+                    or item["detail_page_artifact_sha256"] != row["detail_page_artifact_sha256_applied"]
+                ):
+                    raise RuntimeError("detail_title_post_write_verification_failed")
     except Exception as exc:  # noqa: BLE001 - every partial verified write must be rolled back
         error = f"{type(exc).__name__}:dealer_cost_apply_failed"
         if applied:

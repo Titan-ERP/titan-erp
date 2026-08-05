@@ -35,6 +35,16 @@ DESCRIPTION_REPAIR_CONFIRMATION = "sparex-listing-description-repair"
 COST_RECOVERY_CONFIRMATION = "sparex-dealer-cost-recovery"
 PRODUCT_CREATION_CONFIRMATION = "sparex-page-driven-draft-creation"
 DEFAULT_COST_PLUS_MARGIN_PERCENT = 35.0
+DETAIL_TITLE_PLACEHOLDERS = {
+    "access denied",
+    "error",
+    "home",
+    "login",
+    "page not found",
+    "product",
+    "search results",
+    "sign in",
+}
 PRODUCT_DETAIL_PATH = re.compile(r"(?:^|[-/])\d+\.html$", re.IGNORECASE)
 LISTING_PATH_DENY_PREFIXES = (
     "/about",
@@ -83,6 +93,22 @@ def _sha256_text(value):
 def _canonical_sha256(value):
     payload = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _verified_detail_title(value):
+    title = " ".join(str(value or "").split()).strip()
+    folded = re.sub(r"[^a-z0-9]+", " ", title.casefold()).strip()
+    if (
+        len(title) < 3
+        or len(title) > 255
+        or not re.search(r"[A-Za-z]", title)
+        or bool(re.fullmatch(r"S[.\s-]*\d+", title, flags=re.IGNORECASE))
+        or "<" in title
+        or ">" in title
+        or folded in DETAIL_TITLE_PLACEHOLDERS
+    ):
+        return ""
+    return title
 
 
 def _frontier_priority(value):
@@ -734,7 +760,11 @@ class SouthernSparexDiscoveryRun(models.Model):
             )
             values = {
                 "raw_sku": raw_sku,
-                "listing_title": listing_title or False,
+                "listing_title": (
+                    item.listing_title
+                    if item and item.detail_title_sha256
+                    else (listing_title or False)
+                ),
                 "source_url": source_url,
                 "source_url_sha256": _sha256_text(source_url),
                 "image_url": image_url or False,
@@ -1056,6 +1086,12 @@ class SouthernSparexDiscoveryItem(models.Model):
     cost_evidence_url_sha256 = fields.Char(readonly=True, copy=False)
     cost_recovery_parser_version = fields.Char(readonly=True, copy=False)
     cost_recovered_at = fields.Datetime(readonly=True)
+    detail_title_sha256 = fields.Char(readonly=True, copy=False)
+    detail_title_page_sha256 = fields.Char(readonly=True, copy=False)
+    detail_title_parser_version = fields.Char(readonly=True, copy=False)
+    detail_title_recovered_at = fields.Datetime(readonly=True)
+    detail_page_artifact_uri = fields.Char(readonly=True, copy=False)
+    detail_page_artifact_sha256 = fields.Char(readonly=True, copy=False)
     reconciliation_state = fields.Selection(
         [("pending", "Awaiting Current Run"), ("current", "Current Run Verified"), ("stale", "Not Seen")],
         default="pending",
@@ -1438,7 +1474,19 @@ class SouthernSparexDiscoveryItem(models.Model):
         return rolled_back
 
     @api.constrains(
-        "normalized_sku", "source_url", "source_url_sha256", "image_url", "image_url_sha256", "source_artifact_sha256"
+        "normalized_sku",
+        "source_url",
+        "source_url_sha256",
+        "image_url",
+        "image_url_sha256",
+        "source_artifact_sha256",
+        "listing_title",
+        "detail_title_sha256",
+        "detail_title_page_sha256",
+        "detail_page_artifact_uri",
+        "detail_page_artifact_sha256",
+        "detail_title_parser_version",
+        "detail_title_recovered_at",
     )
     def _check_contract(self):
         for item in self:
@@ -1454,9 +1502,34 @@ class SouthernSparexDiscoveryItem(models.Model):
                 raise ValidationError(_("The discovery image URL or hash is invalid."))
             if any(
                 value and not SHA256_PATTERN.fullmatch(value.casefold())
-                for value in (item.source_url_sha256, item.image_url_sha256, item.source_artifact_sha256)
+                for value in (
+                    item.source_url_sha256,
+                    item.image_url_sha256,
+                    item.source_artifact_sha256,
+                    item.detail_title_sha256,
+                    item.detail_title_page_sha256,
+                    item.detail_page_artifact_sha256,
+                )
             ):
                 raise ValidationError(_("Discovery evidence hashes must be SHA-256 hexadecimal values."))
+            if item.detail_title_sha256 and (
+                not _verified_detail_title(item.listing_title)
+                or item.detail_title_sha256 != _sha256_text(item.listing_title)
+                or not item.detail_title_page_sha256
+                or not item.detail_title_parser_version
+                or not item.detail_title_recovered_at
+            ):
+                raise ValidationError(_("Verified detail-title evidence does not match the retained title."))
+            if bool(item.detail_title_sha256) != bool(item.detail_title_page_sha256):
+                raise ValidationError(_("Detail-title and detail-page evidence hashes must be retained together."))
+            if bool(item.detail_page_artifact_uri) != bool(item.detail_page_artifact_sha256) or (
+                item.detail_page_artifact_uri and not item.detail_page_artifact_uri.startswith("s3://")
+            ):
+                raise ValidationError(_("Raw detail-page evidence requires an S3 URI and matching hash."))
+            if item.detail_page_artifact_sha256 and (
+                item.detail_page_artifact_sha256 != item.detail_title_page_sha256
+            ):
+                raise ValidationError(_("The raw detail-page artifact hash must match the title evidence page."))
 
     def _positive_sparex_supplier(self):
         self.ensure_one()
@@ -1527,6 +1600,10 @@ class SouthernSparexDiscoveryItem(models.Model):
             "listing_title": title,
             "source_url_sha256": self.source_url_sha256,
             "source_artifact_sha256": self.source_artifact_sha256,
+            "detail_title_sha256": self.detail_title_sha256 or "",
+            "detail_title_page_sha256": self.detail_title_page_sha256 or "",
+            "detail_page_artifact_uri": self.detail_page_artifact_uri or "",
+            "detail_page_artifact_sha256": self.detail_page_artifact_sha256 or "",
             "descriptions_before": descriptions_before,
             "descriptions_before_sha256": _canonical_sha256(descriptions_before),
             "descriptions_after": {
@@ -1595,7 +1672,12 @@ class SouthernSparexDiscoveryItem(models.Model):
             )
             recovery_priority = 0
             recovery_values = {}
-            if has_cost:
+            needs_detail_title = bool(
+                product
+                and not product_has_description
+                and not _verified_detail_title(item.listing_title)
+            )
+            if has_cost and not needs_detail_title:
                 recovery_values = {
                     "cost_recovery_state": "resolved",
                     "cost_recovery_priority": 0,
@@ -1604,14 +1686,15 @@ class SouthernSparexDiscoveryItem(models.Model):
                     "cost_recovery_last_error": False,
                 }
             elif (
-                not has_cost
+                (not has_cost or needs_detail_title)
                 and item.reconciliation_state == "current"
                 and item.source_state in {"verified", "missing_image"}
                 and item.odoo_match_state == "matched_active"
                 and bool(product and product.active)
+                and not currently_published
                 and product_has_exact_url
             ):
-                recovery_priority = 100
+                recovery_priority = 100 if not has_cost else 80
                 recovery_priority += 30 if has_sales_price else 0
                 recovery_priority += 20 if product_has_exact_url else 0
                 recovery_priority += 10 if product_has_image else 0
@@ -1837,6 +1920,13 @@ class SouthernSparexDiscoveryItem(models.Model):
                 "cost_plus_margin_before": product.southern_cost_plus_margin_percent,
                 "price_basis_updated_at_before": str(product.southern_price_basis_updated_at or ""),
                 "product_write_date": str(product.write_date or ""),
+                "listing_title_before": item.listing_title or "",
+                "detail_title_sha256_before": item.detail_title_sha256 or "",
+                "detail_title_page_sha256_before": item.detail_title_page_sha256 or "",
+                "detail_title_parser_version_before": item.detail_title_parser_version or "",
+                "detail_title_recovered_at_before": str(item.detail_title_recovered_at or ""),
+                "detail_page_artifact_uri_before": item.detail_page_artifact_uri or "",
+                "detail_page_artifact_sha256_before": item.detail_page_artifact_sha256 or "",
             }
             snapshot["snapshot_sha256"] = _canonical_sha256(snapshot)
             claimed.append(snapshot)
@@ -1910,6 +2000,13 @@ class SouthernSparexDiscoveryItem(models.Model):
                     "cost_plus_margin_before",
                     "price_basis_updated_at_before",
                     "product_write_date",
+                    "listing_title_before",
+                    "detail_title_sha256_before",
+                    "detail_title_page_sha256_before",
+                    "detail_title_parser_version_before",
+                    "detail_title_recovered_at_before",
+                    "detail_page_artifact_uri_before",
+                    "detail_page_artifact_sha256_before",
                 )
             }
             if _canonical_sha256(expected_snapshot) != (record.get("snapshot_sha256") or "").casefold():
@@ -1922,6 +2019,19 @@ class SouthernSparexDiscoveryItem(models.Model):
             evidence_sha = (record.get("evidence_sha256") or "").casefold()
             if not SHA256_PATTERN.fullmatch(evidence_sha):
                 raise UserError(_("Dealer-cost page evidence requires a SHA-256 hash."))
+            detail_title = _verified_detail_title(record.get("detail_title"))
+            detail_title_sha = (record.get("detail_title_sha256") or "").casefold()
+            detail_title_page_sha = (record.get("detail_title_page_sha256") or "").casefold()
+            detail_page_artifact_uri = (record.get("detail_page_artifact_uri") or "").strip()
+            detail_page_artifact_sha = (record.get("detail_page_artifact_sha256") or "").casefold()
+            if (
+                not detail_title
+                or detail_title_sha != _sha256_text(detail_title)
+                or detail_title_page_sha != evidence_sha
+                or not detail_page_artifact_uri.startswith("s3://")
+                or detail_page_artifact_sha != evidence_sha
+            ):
+                raise UserError(_("The exact detail-page title or its evidence hash is invalid."))
             image_applied = False
             image_sha = (record.get("detail_image_sha256") or "").casefold()
             image_content = record.get("detail_image_base64") or ""
@@ -2002,6 +2112,13 @@ class SouthernSparexDiscoveryItem(models.Model):
                 raise UserError(_("The provisional Sparex cost-plus sales price did not verify."))
             item.write(
                 {
+                    "listing_title": detail_title,
+                    "detail_title_sha256": detail_title_sha,
+                    "detail_title_page_sha256": detail_title_page_sha,
+                    "detail_title_parser_version": (record.get("parser_version") or "")[:80],
+                    "detail_title_recovered_at": fields.Datetime.now(),
+                    "detail_page_artifact_uri": detail_page_artifact_uri,
+                    "detail_page_artifact_sha256": detail_page_artifact_sha,
                     "cost_recovery_state": "resolved",
                     "cost_recovery_priority": 0,
                     "cost_recovery_next_at": False,
@@ -2039,6 +2156,18 @@ class SouthernSparexDiscoveryItem(models.Model):
                     "image_sha256_applied": stored_image_sha if image_applied else "",
                     "evidence_sha256": evidence_sha,
                     "evidence_url_sha256": item.source_url_sha256,
+                    "detail_title_applied": detail_title,
+                    "detail_title_sha256_applied": detail_title_sha,
+                    "detail_title_page_sha256_applied": detail_title_page_sha,
+                    "detail_page_artifact_uri_applied": detail_page_artifact_uri,
+                    "detail_page_artifact_sha256_applied": detail_page_artifact_sha,
+                    "listing_title_before": record.get("listing_title_before") or "",
+                    "detail_title_sha256_before": record.get("detail_title_sha256_before") or "",
+                    "detail_title_page_sha256_before": record.get("detail_title_page_sha256_before") or "",
+                    "detail_title_parser_version_before": record.get("detail_title_parser_version_before") or "",
+                    "detail_title_recovered_at_before": record.get("detail_title_recovered_at_before") or "",
+                    "detail_page_artifact_uri_before": record.get("detail_page_artifact_uri_before") or "",
+                    "detail_page_artifact_sha256_before": record.get("detail_page_artifact_sha256_before") or "",
                     "publication_candidate": item.publication_candidate,
                 }
             )
@@ -2087,6 +2216,13 @@ class SouthernSparexDiscoveryItem(models.Model):
             supplier.write({"price": float(record.get("supplier_price_before") or 0.0)})
             item.write(
                 {
+                    "listing_title": record.get("listing_title_before") or False,
+                    "detail_title_sha256": record.get("detail_title_sha256_before") or False,
+                    "detail_title_page_sha256": record.get("detail_title_page_sha256_before") or False,
+                    "detail_title_parser_version": record.get("detail_title_parser_version_before") or False,
+                    "detail_title_recovered_at": record.get("detail_title_recovered_at_before") or False,
+                    "detail_page_artifact_uri": record.get("detail_page_artifact_uri_before") or False,
+                    "detail_page_artifact_sha256": record.get("detail_page_artifact_sha256_before") or False,
                     "cost_recovery_state": "manual_review",
                     "cost_recovery_worker_id": False,
                     "cost_recovery_next_at": False,
