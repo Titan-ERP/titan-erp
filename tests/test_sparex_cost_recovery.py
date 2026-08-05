@@ -2,6 +2,8 @@ import json
 import urllib.error
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from scripts.sparex_catalog_agents.cost_recovery import (
     cooldown_active,
     parse_detail_image_url,
@@ -109,3 +111,17 @@ def test_public_verification_retries_during_storefront_propagation(monkeypatch):
     assert result[0]["attempts"] == 2
     assert result[0]["http_status"] == 200
     assert sleeps == [2.0]
+
+
+def test_public_verification_reports_bounded_failure_reason(monkeypatch):
+    monkeypatch.setattr(
+        "scripts.sparex_catalog_agents.orchestrator.urllib.request.urlopen",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(urllib.error.URLError("not ready")),
+    )
+    monkeypatch.setattr("scripts.sparex_catalog_agents.orchestrator.time.sleep", lambda _seconds: None)
+
+    with pytest.raises(RuntimeError, match=r"product 2: URLError"):
+        verify_public_pages(
+            "https://example.com",
+            [{"task_id": 1, "product_id": 2, "sku": "S.165551", "public_path": "/shop/example"}],
+        )
