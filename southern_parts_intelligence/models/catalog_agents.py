@@ -34,6 +34,7 @@ MAX_AGENT_BATCH = 50
 SPAREX_HOSTS = {"us.sparex.com"}
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 SPAREX_SKU_PATTERN = re.compile(r"^S[.\s-]?0*(\d+)$", re.IGNORECASE)
+SPAREX_REFERENCE_PREFIX_PATTERN = re.compile(r"^S[.\s-]", re.IGNORECASE)
 MIN_CUSTOMER_READY_PRICE = 1.49
 PLACEHOLDER_DESCRIPTION_MARKERS = (
     "internal catalog record",
@@ -47,6 +48,10 @@ def normalized_sparex_sku(value):
     if not match:
         return ""
     return f"S.{int(match.group(1))}"
+
+
+def is_sparex_catalog_reference(value):
+    return bool(SPAREX_REFERENCE_PREFIX_PATTERN.match((value or "").strip()))
 
 
 def exact_sparex_url(value, normalized_sku):
@@ -195,7 +200,7 @@ class ProductTemplate(models.Model):
         SupplierInfo = self.env["product.supplierinfo"].sudo()
         for product in self.filtered(
             lambda record: (record.website_published or record.is_published)
-            and bool(normalized_sparex_sku(record.default_code))
+            and is_sparex_catalog_reference(record.default_code)
         ):
             supplier = SupplierInfo.search(
                 [

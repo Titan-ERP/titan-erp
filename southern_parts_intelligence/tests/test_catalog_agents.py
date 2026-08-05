@@ -156,6 +156,23 @@ class TestCatalogAgents(TransactionCase):
         with self.assertRaises(ValidationError), self.env.cr.savepoint():
             product.website_published = True
 
+    def test_native_publication_gate_blocks_malformed_sparex_reference(self):
+        product = self.env["product.template"].create(
+            {
+                "name": "Malformed Sparex reference",
+                "default_code": "S.57887,57887,32/42",
+                "active": True,
+                "list_price": 20.0,
+                "website_published": False,
+            }
+        )
+
+        with self.assertRaisesRegex(ValidationError, "invalid_sparex_sku"), self.env.cr.savepoint():
+            product.website_published = True
+
+        product.invalidate_recordset()
+        self.assertFalse(product.website_published)
+
     def test_native_publication_gate_allows_verified_low_cost_plus_price(self):
         product = self.env["product.template"].create(
             {
@@ -206,9 +223,10 @@ class TestCatalogAgents(TransactionCase):
         )
         self._record_current_discovery(product, "https://us.sparex.com/example-880002.html")
 
-        with self.assertRaisesRegex(ValidationError, "missing_exact_dealer_cost_evidence"):
-            with self.env.cr.savepoint():
-                product.website_published = True
+        with self.assertRaisesRegex(
+            ValidationError, "missing_exact_dealer_cost_evidence"
+        ), self.env.cr.savepoint():
+            product.website_published = True
 
     def test_native_publication_gate_requires_verified_price_basis(self):
         product = self.env["product.template"].create(
@@ -231,9 +249,8 @@ class TestCatalogAgents(TransactionCase):
         )
         self._record_current_dealer_evidence(product, "https://us.sparex.com/example-880003.html")
 
-        with self.assertRaisesRegex(ValidationError, "missing_verified_price_basis"):
-            with self.env.cr.savepoint():
-                product.website_published = True
+        with self.assertRaisesRegex(ValidationError, "missing_verified_price_basis"), self.env.cr.savepoint():
+            product.website_published = True
 
     def test_native_publication_gate_blocks_evidence_complete_quote_only_product(self):
         product = self.env["product.template"].create(
