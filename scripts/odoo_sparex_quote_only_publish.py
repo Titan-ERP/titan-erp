@@ -5,7 +5,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from datetime import UTC, datetime
+import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 
 if __package__:
@@ -38,17 +39,33 @@ def build_parser() -> argparse.ArgumentParser:
 def archive(store: ArtifactStore, name: str, payload, bucket: str, prefix: str) -> dict:
     count = len(payload) if isinstance(payload, list) else 1
     record = store.write_json(name, payload, record_count=count)
-    return store.archive_s3(record, bucket=bucket, prefix=prefix)
+    if hasattr(store, "archive_s3"):
+        return store.archive_s3(record, bucket=bucket, prefix=prefix)
+    key = f"{prefix.strip('/')}/{name}"
+    artifact_uri = f"s3://{bucket}/{key}"
+    subprocess.run(
+        ["aws", "s3", "cp", record["path"], artifact_uri, "--only-show-errors"],
+        check=True,
+    )
+    return {**record, "artifact_uri": artifact_uri}
+
+
+def call_named(client: OdooClient, model: str, method: str, **params):
+    """Use JSON-2 named calls while supporting the deployed legacy worker client."""
+    if hasattr(client, "call"):
+        return client.call(model, method, **params)
+    return client.execute(model, method, [], params)
 
 
 def main() -> int:
     args = build_parser().parse_args()
     limit = max(1, min(int(args.limit or MAX_BATCH), MAX_BATCH))
     client = OdooClient(OdooConfig.from_env(args.odoo_env_file)).connect()
-    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     store = ArtifactStore(args.artifact_root / stamp, schema_version="1.0")
     prefix = f"{args.s3_prefix.strip('/')}/{stamp}"
-    plan = client.call(
+    plan = call_named(
+        client,
         "southern.vendor.catalog.item",
         "prepare_quote_publication_plan",
         limit=limit,
@@ -64,7 +81,8 @@ def main() -> int:
     }
     if args.apply and plan:
         ApplyGate(WORKFLOW, True, args.confirm, args.reason, MAX_BATCH).authorize(len(plan))
-        applied = client.call(
+        applied = call_named(
+            client,
             "southern.vendor.catalog.item",
             "apply_quote_publication_plan",
             records=plan,
