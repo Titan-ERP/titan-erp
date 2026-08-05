@@ -475,8 +475,8 @@ class SouthernVendorCatalogItem(models.Model):
             if field_name in product._fields
         }
         publication_fields = self._publication_fields()
-        customer_copy = self.customer_description or (
-            f"{self.title}. Contact Southern Equipment for current pricing, fitment, and availability."
+        customer_copy = (
+            f"{product.name}. Contact Southern Equipment for current pricing, fitment, and availability."
         )
         descriptions_after = dict(descriptions)
         if not customer_description_ready(product):
@@ -505,27 +505,62 @@ class SouthernVendorCatalogItem(models.Model):
         snapshot["snapshot_sha256"] = _canonical_sha256(snapshot)
         return snapshot
 
-    def _quote_publication_eligible(self):
+    def _quote_publication_blockers(self):
         self.ensure_one()
         product = self.product_id.sudo()
-        normalized = normalized_sparex_sku(product.default_code)
-        return bool(
-            self.active
-            and self.source_id.code == "sparex"
-            and self.match_state == "matched"
-            and product
-            and normalized
-            and exact_sparex_url(self.source_url, normalized)
-            and self.source_artifact_uri.startswith("s3://")
-            and SHA256_PATTERN.fullmatch((self.source_artifact_sha256 or "").casefold())
-            and product.active
-            and product.sale_ok
-            and not product.website_published
-            and float(product.list_price or 0.0) <= 1.49
-            and bool(product.image_1920)
-            and bool(product.public_categ_ids)
-            and bool(self.title)
+        normalized = normalized_sparex_sku(product.default_code) if product else ""
+        blockers = []
+        checks = (
+            (self.active, "staged_item_inactive"),
+            (self.source_id.code == "sparex", "not_sparex_source"),
+            (self.match_state == "matched" and bool(product), "missing_matched_product"),
+            (bool(normalized), "invalid_sparex_sku"),
+            (exact_sparex_url(self.source_url, normalized), "missing_exact_sparex_url"),
+            (self.source_artifact_uri.startswith("s3://"), "missing_s3_evidence"),
+            (
+                bool(SHA256_PATTERN.fullmatch((self.source_artifact_sha256 or "").casefold())),
+                "invalid_evidence_sha256",
+            ),
+            (bool(product and product.active), "product_archived"),
+            (bool(product and product.sale_ok), "product_not_saleable"),
+            (bool(product and not product.website_published), "already_published"),
+            (bool(product and float(product.list_price or 0.0) <= 1.49), "non_placeholder_sales_price"),
+            (bool(product and product.image_1920), "missing_image"),
+            (bool(product and product.public_categ_ids), "missing_website_category"),
+            (bool(product and product.name), "missing_product_name"),
         )
+        for passed, blocker in checks:
+            if not passed:
+                blockers.append(blocker)
+        return blockers
+
+    def _quote_publication_eligible(self):
+        self.ensure_one()
+        return not self._quote_publication_blockers()
+
+    @api.model
+    def quote_publication_diagnostics(self, limit=5_000):
+        bounded = max(1, min(int(limit or 5_000), 5_000))
+        items = self.sudo().search(
+            [
+                ("company_id", "=", self.env.company.id),
+                ("source_id.code", "=", "sparex"),
+                ("match_state", "=", "matched"),
+                ("product_id", "!=", False),
+                ("active", "=", True),
+            ],
+            order="last_seen_at desc, id",
+            limit=bounded,
+        )
+        counts = {}
+        eligible = 0
+        for item in items:
+            blockers = item._quote_publication_blockers()
+            if not blockers:
+                eligible += 1
+            for blocker in blockers:
+                counts[blocker] = counts.get(blocker, 0) + 1
+        return {"scanned": len(items), "eligible": eligible, "blockers": counts}
 
     @api.model
     def prepare_quote_publication_plan(self, limit=MAX_PROMOTION_BATCH):
