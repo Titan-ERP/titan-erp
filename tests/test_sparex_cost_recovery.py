@@ -125,3 +125,31 @@ def test_public_verification_reports_bounded_failure_reason(monkeypatch):
             "https://example.com",
             [{"task_id": 1, "product_id": 2, "sku": "S.165551", "public_path": "/shop/example"}],
         )
+
+
+def test_public_verification_accepts_quote_publication_item_identity(monkeypatch):
+    class Response:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        @staticmethod
+        def read():
+            return b"Published product S.165551"
+
+    monkeypatch.setattr(
+        "scripts.sparex_catalog_agents.orchestrator.urllib.request.urlopen",
+        lambda *_args, **_kwargs: Response(),
+    )
+
+    result = verify_public_pages(
+        "https://example.com",
+        [{"item_id": 9, "product_id": 2, "sku": "S.165551", "public_path": "/shop/example"}],
+    )
+
+    assert result[0]["item_id"] == 9
+    assert "task_id" not in result[0]

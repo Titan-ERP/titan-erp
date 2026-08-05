@@ -222,17 +222,19 @@ def verify_public_pages(base_url: str, published: list[dict[str, Any]]) -> list[
                 time.sleep(PUBLIC_VERIFICATION_RETRY_SECONDS)
         else:
             raise RuntimeError(f"Public verification failed for product {row['product_id']}: {last_error}")
-        verification.append(
-            {
-                "task_id": row["task_id"],
-                "product_id": row["product_id"],
-                "sku": sku,
-                "public_url": url,
-                "http_status": status,
-                "exact_sku_present": True,
-                "attempts": attempt,
-            }
-        )
+        verified = {
+            "product_id": row["product_id"],
+            "sku": sku,
+            "public_url": url,
+            "http_status": status,
+            "exact_sku_present": True,
+            "attempts": attempt,
+        }
+        if row.get("task_id"):
+            verified["task_id"] = row["task_id"]
+        if row.get("item_id"):
+            verified["item_id"] = row["item_id"]
+        verification.append(verified)
     return verification
 
 
