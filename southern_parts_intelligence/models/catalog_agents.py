@@ -866,6 +866,9 @@ class SouthernCatalogAgentTask(models.Model):
                     "worker_id": worker_id,
                 }
             )
+            discovery_item = self._current_discovery_item(product, task.normalized_sku)
+            if discovery_item:
+                discovery_item._refresh_readiness()
             results.append(
                 {"task_id": task.id, "product_id": product.id, "sku": task.normalized_sku, "public_path": public_path}
             )
@@ -912,6 +915,11 @@ class SouthernCatalogAgentTask(models.Model):
                     "finished_at": fields.Datetime.now(),
                 }
             )
+            discovery_item = self._current_discovery_item(
+                task.product_tmpl_id.sudo(), task.normalized_sku
+            )
+            if discovery_item:
+                discovery_item._refresh_readiness()
         return True
 
     def action_cancel(self):

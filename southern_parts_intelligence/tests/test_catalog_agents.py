@@ -359,6 +359,13 @@ class TestCatalogAgents(TransactionCase):
         self.assertTrue(product.website_published)
         self.assertEqual(product.list_price, list_price)
         self.assertEqual(product.standard_price, standard_price)
+        discovery_item = self.env["southern.sparex.discovery.item"].search(
+            [("matched_product_id", "=", product.id), ("reconciliation_state", "=", "current")],
+            limit=1,
+        )
+        self.assertTrue(discovery_item.currently_published)
+        self.assertFalse(discovery_item.publication_candidate)
+        self.assertEqual(discovery_item.primary_blocker, "already_published")
         release_task = self.env["southern.catalog.agent.task"].browse(published[0]["task_id"])
         self.env["southern.catalog.agent.task"].rollback_publications(
             [release_task.id], "Synthetic verification rollback"
@@ -366,6 +373,9 @@ class TestCatalogAgents(TransactionCase):
         self.assertFalse(product.website_published)
         self.assertEqual(product.list_price, list_price)
         self.assertEqual(product.standard_price, standard_price)
+        self.assertFalse(discovery_item.currently_published)
+        self.assertTrue(discovery_item.publication_candidate)
+        self.assertEqual(discovery_item.primary_blocker, "ready")
 
     def test_verified_history_does_not_block_republication_of_hidden_product(self):
         product = self.env["product.template"].create(
