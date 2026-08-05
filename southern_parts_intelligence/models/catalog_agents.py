@@ -1,5 +1,6 @@
 import hashlib
 import json
+import math
 import re
 import uuid
 from urllib.parse import unquote, urlsplit
@@ -38,6 +39,7 @@ PLACEHOLDER_DESCRIPTION_MARKERS = (
     "internal catalog record",
     "not published to the website until",
 )
+REQUIRED_COST_PLUS_MARGIN_PERCENT = 35.0
 
 
 def normalized_sparex_sku(value):
@@ -95,6 +97,44 @@ def sales_price_blocker(product, supplier):
     return ""
 
 
+def exact_dealer_cost_evidence_ready(product):
+    source_url = (product.southern_source_url or "").strip()
+    source_sha = hashlib.sha256(source_url.encode("utf-8")).hexdigest()
+    evidence = product.env["southern.sparex.discovery.item"].sudo().search(
+        [
+            ("matched_product_id", "=", product.id),
+            ("normalized_sku", "=", normalized_sparex_sku(product.default_code)),
+            ("source_url_sha256", "=", source_sha),
+            ("cost_recovery_state", "=", "resolved"),
+            ("cost_evidence_url_sha256", "=", source_sha),
+            ("cost_evidence_sha256", "!=", False),
+            ("cost_recovered_at", "!=", False),
+        ],
+        order="id desc",
+        limit=1,
+    )
+    return bool(evidence and SHA256_PATTERN.fullmatch((evidence.cost_evidence_sha256 or "").casefold()))
+
+
+def pricing_basis_blockers(product, supplier):
+    supplier_cost = float(supplier.price or 0.0) if supplier else 0.0
+    sale_price = float(product.list_price or 0.0)
+    basis = product.southern_price_basis or "none"
+    if basis == "retail_evidence":
+        return []
+    if basis != "cost_plus":
+        return ["missing_verified_price_basis"]
+    blockers = []
+    margin = float(product.southern_cost_plus_margin_percent or 0.0)
+    if abs(margin - REQUIRED_COST_PLUS_MARGIN_PERCENT) > 1e-9:
+        blockers.append("cost_plus_margin_not_35_percent")
+    if supplier_cost > 0:
+        expected = math.ceil((supplier_cost / 0.65) * 100.0) / 100.0
+        if abs(sale_price - expected) > 0.01:
+            blockers.append("cost_plus_price_not_35_percent_margin")
+    return blockers
+
+
 def sparex_publication_blockers(product, supplier, normalized_sku=None):
     normalized = normalized_sparex_sku(normalized_sku or product.default_code)
     blockers = []
@@ -109,9 +149,16 @@ def sparex_publication_blockers(product, supplier, normalized_sku=None):
     else:
         if not supplier:
             blockers.append("missing_positive_sparex_cost")
+        if float(product.standard_price or 0.0) <= 0:
+            blockers.append("missing_positive_standard_cost")
+        elif supplier and abs(float(product.standard_price) - float(supplier.price or 0.0)) > 0.000001:
+            blockers.append("standard_cost_not_equal_verified_supplier_cost")
+        if supplier and not exact_dealer_cost_evidence_ready(product):
+            blockers.append("missing_exact_dealer_cost_evidence")
         price_blocker = sales_price_blocker(product, supplier)
         if price_blocker:
             blockers.append(price_blocker)
+        blockers.extend(pricing_basis_blockers(product, supplier))
     if not exact_sparex_url(product.southern_source_url, normalized):
         blockers.append("missing_exact_sparex_url")
     if not product.image_1920:
@@ -126,7 +173,24 @@ def sparex_publication_blockers(product, supplier, normalized_sku=None):
 class ProductTemplate(models.Model):
     _inherit = "product.template"
 
-    @api.constrains("is_published", "website_published", "southern_quote_only", "list_price")
+    @api.constrains(
+        "active",
+        "default_code",
+        "description_ecommerce",
+        "description_sale",
+        "image_1920",
+        "is_published",
+        "list_price",
+        "public_categ_ids",
+        "sale_ok",
+        "southern_cost_plus_margin_percent",
+        "southern_price_basis",
+        "southern_quote_only",
+        "southern_source_url",
+        "standard_price",
+        "website_description",
+        "website_published",
+    )
     def _check_sparex_publication_readiness(self):
         SupplierInfo = self.env["product.supplierinfo"].sudo()
         for product in self.filtered(

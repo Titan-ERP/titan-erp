@@ -13,8 +13,10 @@ from odoo.exceptions import UserError, ValidationError
 from .catalog_agents import (
     SHA256_PATTERN,
     customer_description_ready,
+    exact_dealer_cost_evidence_ready,
     exact_sparex_url,
     normalized_sparex_sku,
+    pricing_basis_blockers,
     sales_price_blocker,
 )
 
@@ -1545,8 +1547,20 @@ class SouthernSparexDiscoveryItem(models.Model):
         for item in self:
             product = item.matched_product_id.sudo()
             supplier = item._positive_sparex_supplier()
-            has_cost = bool(supplier)
-            has_sales_price = bool(product and not sales_price_blocker(product, supplier))
+            supplier_cost = float(supplier.price or 0.0) if supplier else 0.0
+            standard_cost = float(product.standard_price or 0.0) if product else 0.0
+            has_cost = bool(
+                product
+                and supplier
+                and standard_cost > 0
+                and abs(standard_cost - supplier_cost) <= 0.000001
+                and exact_dealer_cost_evidence_ready(product)
+            )
+            has_sales_price = bool(
+                product
+                and not sales_price_blocker(product, supplier)
+                and not pricing_basis_blockers(product, supplier)
+            )
             product_has_exact_url = bool(product and exact_sparex_url(product.southern_source_url, item.normalized_sku))
             product_has_image = bool(product and product.image_1920)
             product_has_category = bool(product and product.public_categ_ids)
@@ -1563,8 +1577,6 @@ class SouthernSparexDiscoveryItem(models.Model):
             enrichment = bool(
                 source_ready
                 and not currently_published
-                and has_cost
-                and has_sales_price
                 and (not product_has_exact_url or not product_has_image)
             )
             primary_blocker = _primary_publication_blocker(
@@ -1952,7 +1964,11 @@ class SouthernSparexDiscoveryItem(models.Model):
                 margin_percent = DEFAULT_COST_PLUS_MARGIN_PERCENT
             if margin_percent <= 0 or margin_percent >= 90:
                 raise UserError(_("The provisional cost-plus gross margin must be greater than 0 and less than 90."))
-            apply_cost_plus_price = bool(product.southern_quote_only or product.list_price <= 0)
+            apply_cost_plus_price = bool(
+                product.southern_quote_only
+                or product.list_price <= 0
+                or product.southern_price_basis == "none"
+            )
             provisional_price = math.ceil((price / (1.0 - (margin_percent / 100.0))) * 100.0) / 100.0
             product_values = {"standard_price": price}
             if apply_cost_plus_price:
@@ -2145,8 +2161,6 @@ class SouthernSparexDiscoveryItem(models.Model):
                 not item.source_enrichment_candidate
                 or not product
                 or not product.active
-                or not item._positive_sparex_supplier()
-                or product.list_price <= 0
             ):
                 continue
             prepared.append(item._source_link_snapshot())
@@ -2167,7 +2181,6 @@ class SouthernSparexDiscoveryItem(models.Model):
                 ("currently_published", "=", False),
                 ("has_exact_sparex_url", "=", True),
                 ("has_image", "=", True),
-                ("primary_blocker", "=", "missing_customer_description"),
                 ("listing_title", "!=", False),
             ],
             order="last_seen_at, id",
@@ -2178,11 +2191,8 @@ class SouthernSparexDiscoveryItem(models.Model):
             item._refresh_readiness()
             product = item.matched_product_id.sudo()
             if (
-                item.primary_blocker != "missing_customer_description"
-                or not product
+                not product
                 or not product.active
-                or not item._positive_sparex_supplier()
-                or sales_price_blocker(product, item._positive_sparex_supplier())
                 or not product.public_categ_ids
                 or customer_description_ready(product)
             ):
@@ -2212,8 +2222,7 @@ class SouthernSparexDiscoveryItem(models.Model):
             self.env.cr.execute("SELECT id FROM product_template WHERE id = %s FOR UPDATE NOWAIT", [product.id])
             product.invalidate_recordset()
             if (
-                item.primary_blocker != "missing_customer_description"
-                or product.id != int(prepared.get("product_id") or 0)
+                product.id != int(prepared.get("product_id") or 0)
                 or item.normalized_sku != normalized_sparex_sku(prepared.get("sku"))
                 or item.source_url_sha256 != prepared.get("source_url_sha256")
                 or item._description_repair_snapshot().get("snapshot_sha256") != prepared.get("snapshot_sha256")
