@@ -76,6 +76,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cost-recovery-limit", type=int, default=DEFAULT_COST_RECOVERY_LIMIT)
     parser.add_argument("--source-repair-limit", type=int, default=MAX_EXTERNAL_REPAIR_BATCH)
     parser.add_argument("--skip-cost-recovery", action="store_true")
+    parser.add_argument(
+        "--skip-quote-publication",
+        action="store_true",
+        help="Do not publish zero-price Ask for Pricing products during this run.",
+    )
     parser.add_argument("--throttle-seconds", type=float, default=3.0)
     parser.add_argument("--worker-id", default=socket.gethostname())
     parser.add_argument("--run-ai", action="store_true")
@@ -341,11 +346,15 @@ def main() -> int:
         "prepare_description_repair_plan",
         limit=limit,
     )
-    quote_preview = client.call(
-        "southern.vendor.catalog.item",
-        "prepare_quote_publication_plan",
-        limit=limit,
-        company_id=config.company_id or False,
+    quote_preview = (
+        []
+        if args.skip_quote_publication
+        else client.call(
+            "southern.vendor.catalog.item",
+            "prepare_quote_publication_plan",
+            limit=limit,
+            company_id=config.company_id or False,
+        )
     )
     preview = client.call("southern.catalog.agent.task", "preview_ready_candidates", limit=limit)
     safe_preview = {
@@ -514,11 +523,15 @@ def main() -> int:
         worker_id=args.worker_id,
         limit=limit,
     )
-    quote_prepared = client.call(
-        "southern.vendor.catalog.item",
-        "prepare_quote_publication_plan",
-        limit=limit,
-        company_id=config.company_id or False,
+    quote_prepared = (
+        []
+        if args.skip_quote_publication
+        else client.call(
+            "southern.vendor.catalog.item",
+            "prepare_quote_publication_plan",
+            limit=limit,
+            company_id=config.company_id or False,
+        )
     )
     rollback_payload = {
         "schema_version": "1.1",
