@@ -121,6 +121,27 @@ class SparexCatalogDiscoveryParserTests(unittest.TestCase):
         self.assertEqual(parsed["items"][0]["image_url"], "")
         self.assertEqual(parsed["items"][0]["source_state"], "missing_image")
 
+    def test_uses_sparex_cdn_image_from_migrated_list_card(self):
+        page = b"""
+        <li class="item pm-listitem">
+          <a href="/battery-hold-down-152774.html" class="product-image cdn-switch-img"
+             data-cdnimg="https://cdn.example.com/imagelibrary_med/152774_pic1.jpg">
+            <img src="https://us.sparex.com/media/catalog/product/placeholder/default/SJN1789_285x285.jpg" />
+          </a>
+          <h2 class="product-name">
+            <a href="/battery-hold-down-152774.html">Battery Hold Down</a>
+          </h2>
+          <div class="product-icons"><img src="https://cdn.example.com/imagelibrary_itemicons/65.png" /></div>
+        </li>
+        """
+        parsed = parse_listing_page(page, "https://us.sparex.com/products")
+        self.assertEqual(parsed["items"][0]["listing_title"], "Battery Hold Down")
+        self.assertEqual(
+            parsed["items"][0]["image_url"],
+            "https://cdn.example.com/imagelibrary_med/152774_pic1.jpg",
+        )
+        self.assertEqual(parsed["items"][0]["source_state"], "verified")
+
     def test_duplicate_same_product_anchor_keeps_image_backed_card_verified(self):
         page = b"""
         <li class="item pm-listitem">
@@ -154,7 +175,7 @@ class SparexCatalogDiscoveryParserTests(unittest.TestCase):
         self.assertIn('parser.add_argument("--create-missing-products"', source)
         self.assertNotIn("session.get(source_url", source)
         self.assertIn("RequestThrottle(max(3.0, throttle_seconds))", source)
-        self.assertIn('PARSER_VERSION = "sparex-listing-frontier-v5"', source)
+        self.assertIn('PARSER_VERSION = "sparex-listing-frontier-v6"', source)
         self.assertIn('kind="html"', source)
 
     def test_adaptive_checkpoint_expands_only_for_healthy_mature_runs(self):
