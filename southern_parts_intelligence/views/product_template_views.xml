@@ -7,6 +7,8 @@
         <field name="arch" type="xml">
             <xpath expr="//field[@name='list_price']" position="after">
                 <field name="southern_partner_price" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                <field name="southern_price_basis" readonly="1"/>
+                <field name="southern_cost_plus_margin_percent" readonly="1" invisible="southern_price_basis != 'cost_plus'"/>
             </xpath>
             <xpath expr="//notebook" position="inside">
                 <page string="Parts Intelligence" name="southern_parts_intelligence">
@@ -18,6 +20,7 @@
                         <group>
                             <field name="southern_enrichment_status"/>
                             <field name="southern_quote_only" readonly="1"/>
+                            <field name="southern_price_basis_updated_at" readonly="1"/>
                             <field name="southern_sparex_publication_eligible" readonly="1"/>
                             <field name="southern_parts_search_text" invisible="1"/>
                             <field name="southern_parts_snapshot_refreshed_at" readonly="1"/>

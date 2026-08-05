@@ -2,6 +2,7 @@ import base64
 import hashlib
 import html
 import json
+import math
 import re
 from datetime import timedelta
 from urllib.parse import parse_qs, urlsplit
@@ -31,6 +32,7 @@ SOURCE_LINK_CONFIRMATION = "sparex-discovery-source-link"
 DESCRIPTION_REPAIR_CONFIRMATION = "sparex-listing-description-repair"
 COST_RECOVERY_CONFIRMATION = "sparex-dealer-cost-recovery"
 PRODUCT_CREATION_CONFIRMATION = "sparex-page-driven-draft-creation"
+DEFAULT_COST_PLUS_MARGIN_PERCENT = 38.0
 PRODUCT_DETAIL_PATH = re.compile(r"(?:^|[-/])\d+\.html$", re.IGNORECASE)
 LISTING_PATH_DENY_PREFIXES = (
     "/about",
@@ -117,10 +119,10 @@ def _primary_publication_blocker(
         return "duplicate_odoo"
     if match_state == "matched_archived" or not product_active:
         return "archived"
-    if currently_published:
-        return "already_published"
     if not has_cost:
         return "missing_cost"
+    if currently_published:
+        return "already_published"
     if not has_sales_price:
         return "missing_sales_price"
     if not product_has_exact_url:
@@ -1589,7 +1591,14 @@ class SouthernSparexDiscoveryItem(models.Model):
                     "cost_recovery_worker_id": False,
                     "cost_recovery_last_error": False,
                 }
-            elif primary_blocker == "missing_cost":
+            elif (
+                not has_cost
+                and item.reconciliation_state == "current"
+                and item.source_state in {"verified", "missing_image"}
+                and item.odoo_match_state == "matched_active"
+                and bool(product and product.active)
+                and product_has_exact_url
+            ):
                 recovery_priority = 100
                 recovery_priority += 30 if has_sales_price else 0
                 recovery_priority += 20 if product_has_exact_url else 0
@@ -1761,7 +1770,6 @@ class SouthernSparexDiscoveryItem(models.Model):
             SELECT id FROM southern_sparex_discovery_item
              WHERE company_id = %s
                AND reconciliation_state = 'current'
-               AND primary_blocker = 'missing_cost'
                AND cost_recovery_state IN ('queued', 'retry_wait')
                AND (cost_recovery_next_at IS NULL OR cost_recovery_next_at <= %s)
              ORDER BY cost_recovery_priority DESC, readiness_refreshed_at, id
@@ -1810,6 +1818,12 @@ class SouthernSparexDiscoveryItem(models.Model):
                 "supplierinfo_id": supplier.id if supplier else None,
                 "supplier_price_before": supplier.price if supplier else None,
                 "supplier_write_date": str(supplier.write_date or "") if supplier else "",
+                "standard_price_before": product.standard_price,
+                "list_price_before": product.list_price,
+                "quote_only_before": bool(product.southern_quote_only),
+                "price_basis_before": product.southern_price_basis,
+                "cost_plus_margin_before": product.southern_cost_plus_margin_percent,
+                "price_basis_updated_at_before": str(product.southern_price_basis_updated_at or ""),
                 "product_write_date": str(product.write_date or ""),
             }
             snapshot["snapshot_sha256"] = _canonical_sha256(snapshot)
@@ -1877,6 +1891,12 @@ class SouthernSparexDiscoveryItem(models.Model):
                     "supplierinfo_id",
                     "supplier_price_before",
                     "supplier_write_date",
+                    "standard_price_before",
+                    "list_price_before",
+                    "quote_only_before",
+                    "price_basis_before",
+                    "cost_plus_margin_before",
+                    "price_basis_updated_at_before",
                     "product_write_date",
                 )
             }
@@ -1890,10 +1910,80 @@ class SouthernSparexDiscoveryItem(models.Model):
             evidence_sha = (record.get("evidence_sha256") or "").casefold()
             if not SHA256_PATTERN.fullmatch(evidence_sha):
                 raise UserError(_("Dealer-cost page evidence requires a SHA-256 hash."))
+            image_applied = False
+            image_sha = (record.get("detail_image_sha256") or "").casefold()
+            image_content = record.get("detail_image_base64") or ""
+            image_url = (record.get("detail_image_url") or "").strip()
+            if image_content or image_sha or image_url:
+                if product.image_1920 or record.get("has_image"):
+                    raise UserError(_("Detail-page image recovery is allowed only when the product snapshot had no image."))
+                if not _https_url(image_url) or _sha256_text(image_url) != (
+                    record.get("detail_image_url_sha256") or ""
+                ).casefold():
+                    raise UserError(_("The recovered detail-page image URL is invalid."))
+                if not SHA256_PATTERN.fullmatch(image_sha):
+                    raise UserError(_("The recovered detail-page image requires a SHA-256 hash."))
+                try:
+                    decoded_image = base64.b64decode(image_content, validate=True)
+                except (ValueError, TypeError) as exc:
+                    raise UserError(_("The recovered detail-page image is not valid base64.")) from exc
+                if not decoded_image or len(decoded_image) > 10 * 1024 * 1024 or hashlib.sha256(decoded_image).hexdigest() != image_sha:
+                    raise UserError(_("The recovered detail-page image content does not match its evidence hash."))
+                product.write({"image_1920": image_content})
+                product.invalidate_recordset(["image_1920"])
+                if not product.image_1920:
+                    raise UserError(_("The recovered Sparex product image did not verify."))
+                image_applied = True
+                stored_image = product.image_1920
+                if isinstance(stored_image, str):
+                    stored_image = stored_image.encode("ascii", errors="ignore")
+                stored_image_sha = hashlib.sha256(stored_image).hexdigest()
             supplier_lines.write({"price": price})
             supplier_lines.invalidate_recordset(["price"])
             if abs(float(supplier_lines.price) - price) > 1e-9:
                 raise UserError(_("The recovered Sparex supplier price did not verify."))
+            margin_parameter = self.env["ir.config_parameter"].sudo().get_param(
+                "southern_parts_intelligence.provisional_cost_plus_margin_percent",
+                DEFAULT_COST_PLUS_MARGIN_PERCENT,
+            )
+            try:
+                margin_percent = float(margin_parameter)
+            except (TypeError, ValueError):
+                margin_percent = DEFAULT_COST_PLUS_MARGIN_PERCENT
+            if margin_percent <= 0 or margin_percent >= 90:
+                raise UserError(_("The provisional cost-plus gross margin must be greater than 0 and less than 90."))
+            apply_cost_plus_price = bool(product.southern_quote_only or product.list_price <= 0)
+            provisional_price = math.ceil((price / (1.0 - (margin_percent / 100.0))) * 100.0) / 100.0
+            product_values = {"standard_price": price}
+            if apply_cost_plus_price:
+                product_values.update(
+                    {
+                        "southern_quote_only": False,
+                        "list_price": provisional_price,
+                        "southern_price_basis": "cost_plus",
+                        "southern_cost_plus_margin_percent": margin_percent,
+                        "southern_price_basis_updated_at": fields.Datetime.now(),
+                    }
+                )
+            product.write(product_values)
+            product.invalidate_recordset(
+                [
+                    "standard_price",
+                    "list_price",
+                    "southern_quote_only",
+                    "southern_price_basis",
+                    "southern_cost_plus_margin_percent",
+                    "southern_price_basis_updated_at",
+                ]
+            )
+            if abs(float(product.standard_price) - price) > 1e-9:
+                raise UserError(_("The recovered Sparex standard cost did not verify."))
+            if apply_cost_plus_price and (
+                product.southern_quote_only
+                or abs(float(product.list_price) - provisional_price) > 1e-9
+                or product.southern_price_basis != "cost_plus"
+            ):
+                raise UserError(_("The provisional Sparex cost-plus sales price did not verify."))
             item.write(
                 {
                     "cost_recovery_state": "resolved",
@@ -1916,6 +2006,21 @@ class SouthernSparexDiscoveryItem(models.Model):
                     "supplierinfo_id": supplier_lines.id,
                     "supplier_price_before": float(record.get("supplier_price_before") or 0.0),
                     "supplier_price_applied": price,
+                    "standard_price_before": float(record.get("standard_price_before") or 0.0),
+                    "standard_price_applied": price,
+                    "list_price_before": float(record.get("list_price_before") or 0.0),
+                    "list_price_applied": float(product.list_price),
+                    "quote_only_before": bool(record.get("quote_only_before")),
+                    "quote_only_applied": bool(product.southern_quote_only),
+                    "price_basis_before": record.get("price_basis_before") or "none",
+                    "price_basis_applied": product.southern_price_basis,
+                    "cost_plus_margin_before": float(record.get("cost_plus_margin_before") or 0.0),
+                    "cost_plus_margin_applied": float(product.southern_cost_plus_margin_percent or 0.0),
+                    "price_basis_updated_at_before": record.get("price_basis_updated_at_before") or "",
+                    "cost_plus_price_applied": apply_cost_plus_price,
+                    "image_applied": image_applied,
+                    "image_source_sha256": image_sha if image_applied else "",
+                    "image_sha256_applied": stored_image_sha if image_applied else "",
                     "evidence_sha256": evidence_sha,
                     "evidence_url_sha256": item.source_url_sha256,
                     "publication_candidate": item.publication_candidate,
@@ -1940,6 +2045,29 @@ class SouthernSparexDiscoveryItem(models.Model):
                 or abs(float(supplier.price) - float(record.get("supplier_price_applied") or 0.0)) > 1e-9
             ):
                 raise UserError(_("Dealer-cost rollback scope or current value does not match."))
+            product = item.matched_product_id.sudo()
+            if (
+                abs(float(product.standard_price) - float(record.get("standard_price_applied") or 0.0)) > 1e-9
+                or abs(float(product.list_price) - float(record.get("list_price_applied") or 0.0)) > 1e-9
+                or bool(product.southern_quote_only) != bool(record.get("quote_only_applied"))
+                or product.southern_price_basis != (record.get("price_basis_applied") or "none")
+            ):
+                raise UserError(_("Dealer-cost rollback product values no longer match the applied snapshot."))
+            if record.get("image_applied"):
+                current_image_sha = hashlib.sha256(base64.b64decode(product.image_1920 or b"")).hexdigest()
+                if current_image_sha != (record.get("image_sha256_applied") or "").casefold():
+                    raise UserError(_("Dealer-cost rollback image no longer matches the applied snapshot."))
+            product.write(
+                {
+                    "standard_price": float(record.get("standard_price_before") or 0.0),
+                    "list_price": float(record.get("list_price_before") or 0.0),
+                    "southern_quote_only": bool(record.get("quote_only_before")),
+                    "southern_price_basis": record.get("price_basis_before") or "none",
+                    "southern_cost_plus_margin_percent": float(record.get("cost_plus_margin_before") or 0.0),
+                    "southern_price_basis_updated_at": record.get("price_basis_updated_at_before") or False,
+                    **({"image_1920": False} if record.get("image_applied") else {}),
+                }
+            )
             supplier.write({"price": float(record.get("supplier_price_before") or 0.0)})
             item.write(
                 {

@@ -1,7 +1,12 @@
 import json
 from datetime import UTC, datetime, timedelta
 
-from scripts.sparex_catalog_agents.cost_recovery import cooldown_active, parse_exact_priceb, write_cooldown
+from scripts.sparex_catalog_agents.cost_recovery import (
+    cooldown_active,
+    parse_detail_image_url,
+    parse_exact_priceb,
+    write_cooldown,
+)
 
 
 def _page(container: str, title: str = "Exact Part") -> str:
@@ -40,6 +45,24 @@ def test_rejects_ambiguous_exact_container():
 def test_requires_scoped_product_title():
     page = "<html><body><h1>Cookie dialog</h1><div id='priceb_165551'>$14.99</div></body></html>"
     assert parse_exact_priceb(page, "S.165551")["status"] == "identity_incomplete"
+
+
+def test_extracts_one_canonical_detail_image_url():
+    page = (
+        "<html><head><meta property='og:image' content='/media/catalog/product/part.jpg'></head>"
+        "<body><main><h1 itemprop='name'>Exact Part</h1></main></body></html>"
+    )
+    assert parse_detail_image_url(page, "https://us.sparex.com/exact-part-165551.html") == (
+        "https://us.sparex.com/media/catalog/product/part.jpg"
+    )
+
+
+def test_rejects_ambiguous_detail_image_urls():
+    page = (
+        "<html><head><meta property='og:image' content='/one.jpg'></head><body><main>"
+        "<img itemprop='image' src='/two.jpg'></main></body></html>"
+    )
+    assert not parse_detail_image_url(page, "https://us.sparex.com/exact-part-165551.html")
 
 
 def test_portal_cooldown_is_persisted(tmp_path):
