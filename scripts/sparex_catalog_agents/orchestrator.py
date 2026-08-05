@@ -574,7 +574,8 @@ def main() -> int:
             )
             quote_verification = verify_public_pages(config.url, quote_published)
     except Exception as exc:  # noqa: BLE001 - rollback must run for every verification failure
-        error = f"{type(exc).__name__}: publication_or_verification_failed"
+        error_detail = " ".join(str(exc).split())[:300] or "publication_or_verification_failed"
+        error = f"{type(exc).__name__}: {error_detail}"
         if quote_published:
             client.call(
                 "southern.vendor.catalog.item",
