@@ -32,7 +32,7 @@ DEFAULT_ODOO_ENV = ROOT / "odoo_connection.env"
 DEFAULT_ARTIFACT_ROOT = ROOT / "outputs" / "sparex-catalog-discovery"
 WORKFLOW = "sparex-discovery-queue"
 CONFIRMATION = "sparex-discovery-queue"
-PARSER_VERSION = "sparex-listing-frontier-v5"
+PARSER_VERSION = "sparex-listing-frontier-v6"
 SCHEMA_VERSION = "1.1"
 SPAREX_HOST = "us.sparex.com"
 MAX_PAGE_ITEMS = 100
@@ -114,7 +114,8 @@ def _listing_container(anchor):
             break
         classes = f" {current.get('class', '').casefold()} "
         if any(
-            token in classes for token in (" product-item ", " product-item-info ", " item product ", " product-card ")
+            token in classes
+            for token in (" product-item ", " product-item-info ", " item product ", " product-card ", " pm-listitem ")
         ):
             return current
         current = current.getparent()
@@ -124,6 +125,13 @@ def _listing_container(anchor):
 
 def _image_url(container, page_url: str) -> str:
     candidates: list[str] = []
+    for node in [container, *container.xpath(".//*[@data-cdnimg or @data-image]")]:
+        for attribute in ("data-cdnimg", "data-image"):
+            value = (node.get(attribute) or "").strip()
+            if value:
+                candidate = urljoin(page_url, unescape(value))
+                if urlsplit(candidate).scheme.casefold() == "https" and urlsplit(candidate).hostname:
+                    candidates.append(candidate)
     for image in container.xpath(".//source | .//img"):
         for attribute in ("data-src", "data-original", "data-lazy", "data-srcset", "srcset", "src"):
             value = (image.get(attribute) or "").strip()
