@@ -17,6 +17,7 @@
                         </group>
                         <group>
                             <field name="southern_enrichment_status"/>
+                            <field name="southern_quote_only" readonly="1"/>
                             <field name="southern_sparex_publication_eligible" readonly="1"/>
                             <field name="southern_parts_search_text" invisible="1"/>
                             <field name="southern_parts_snapshot_refreshed_at" readonly="1"/>

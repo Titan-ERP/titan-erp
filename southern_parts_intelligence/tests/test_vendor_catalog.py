@@ -1,3 +1,5 @@
+import base64
+
 from odoo.exceptions import UserError
 from odoo.tests.common import TransactionCase
 
@@ -83,3 +85,69 @@ class VendorCatalogTests(TransactionCase):
         self.assertEqual(len(supplier), 1)
         self.assertEqual(supplier.partner_id, self.vendor)
         self.assertEqual(supplier.price, 10)
+
+    def test_quote_only_plan_repairs_staged_fields_publishes_and_rolls_back(self):
+        Item = self.env["southern.vendor.catalog.item"]
+        website_category = self.env["product.public.category"].create({"name": "Quote Parts"})
+        product = self.env["product.template"].create(
+            {
+                "name": "Quote Test Part",
+                "default_code": "S.990001",
+                "list_price": 1.0,
+                "image_1920": base64.b64encode(b"quote-product-image"),
+                "public_categ_ids": [(6, 0, website_category.ids)],
+                "description_sale": "Internal catalog record. Not published to the website until pricing is reviewed.",
+                "website_published": False,
+            }
+        )
+        source = self.env["southern.vendor.catalog.source"].search(
+            [("company_id", "=", self.env.company.id), ("code", "=", "sparex")], limit=1
+        )
+        if not source:
+            source = self.env["southern.vendor.catalog.source"].create(
+                {
+                    "name": "Sparex",
+                    "code": "sparex",
+                    "partner_id": self.vendor.id,
+                    "source_type": "web_listing",
+                    "base_url": "https://us.sparex.com",
+                    "default_category_id": self.category.id,
+                }
+            )
+        Item.upsert_catalog_items(
+            "sparex",
+            [
+                {
+                    "vendor_sku": "S.990001",
+                    "title": "Quote Test Part",
+                    "source_url": "https://us.sparex.com/quote-test-part-990001.html",
+                    "image_url": "https://cdn.example.com/quote-test-part.jpg",
+                }
+            ],
+            "s3://catalog/sparex/quote-test.jsonl",
+            HASH,
+        )
+        item = Item.search([("source_id", "=", source.id), ("normalized_sku", "=", "S.990001")])
+        self.assertEqual(item.product_id, product)
+        plan = Item.prepare_quote_publication_plan(limit=200)
+        prepared = [record for record in plan if record["product_id"] == product.id]
+        self.assertEqual(len(prepared), 1)
+        applied = Item.apply_quote_publication_plan(
+            prepared,
+            "s3://catalog/sparex/quote-publication-plan.json",
+            PLAN_HASH,
+            "sparex-quote-only-publication",
+            "Test quote-only publication",
+        )
+        product.invalidate_recordset()
+        self.assertEqual(len(applied), 1)
+        self.assertTrue(product.website_published)
+        self.assertTrue(product.southern_quote_only)
+        self.assertEqual(product.list_price, 0)
+        self.assertEqual(product.southern_source_url, item.source_url)
+        self.assertIn("current pricing", product.description_sale)
+        Item.rollback_quote_publications(applied, "Test rollback")
+        product.invalidate_recordset()
+        self.assertFalse(product.website_published)
+        self.assertFalse(product.southern_quote_only)
+        self.assertEqual(product.list_price, 1.0)
