@@ -105,8 +105,7 @@ def sparex_publication_blockers(product, supplier, normalized_sku=None):
     if not product.sale_ok:
         blockers.append("product_not_saleable")
     if product.southern_quote_only:
-        if float(product.list_price or 0.0) != 0.0:
-            blockers.append("quote_only_price_must_be_zero")
+        blockers.append("quote_only_not_publishable")
     else:
         if not supplier:
             blockers.append("missing_positive_sparex_cost")
