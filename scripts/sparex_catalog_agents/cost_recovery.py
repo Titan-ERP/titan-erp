@@ -208,12 +208,17 @@ def recover_dealer_costs(
             "claimed": 0,
             "accepted": 0,
             "applied": 0,
+            "http_requests": 0,
+            "slow_pages": 0,
+            "http_backoffs": 0,
+            "max_page_seconds": 0.0,
             "plan_sha256": plan_record["sha256"],
             "plan_uri": plan_record["artifact_uri"],
         }
 
     accepted: list[dict[str, Any]] = []
     outcomes: list[dict[str, Any]] = []
+    throttle = None
     try:
         session, throttle, _products_url = authenticated_session(dealer_env_file, throttle_seconds)
         for claim in claims:
@@ -540,6 +545,16 @@ def recover_dealer_costs(
         "outcomes": outcomes,
         "terminal_state": "failed" if error else "succeeded",
         "error": error or None,
+        **(
+            throttle.telemetry()
+            if throttle
+            else {
+                "http_requests": 0,
+                "slow_pages": 0,
+                "http_backoffs": 0,
+                "max_page_seconds": 0.0,
+            }
+        ),
     }
     result_record = _archive(store, "dealer-cost-result.json", result, s3_bucket, s3_prefix)
     return {

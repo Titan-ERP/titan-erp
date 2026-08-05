@@ -657,6 +657,10 @@ def main() -> int:
         "quote_published": quote_verification if not error else [],
         "error": error or None,
         "terminal_state": "failed" if error else "succeeded",
+        "http_requests": int(cost_recovery.get("http_requests") or 0),
+        "slow_pages": int(cost_recovery.get("slow_pages") or 0),
+        "http_backoffs": int(cost_recovery.get("http_backoffs") or 0),
+        "max_page_seconds": float(cost_recovery.get("max_page_seconds") or 0.0),
     }
     result_record = _archive(store, "result.json", result, args.s3_bucket, archive_prefix)
     summary = {
@@ -672,6 +676,10 @@ def main() -> int:
         "failed": bool(error),
         "ai_calls": ai_state["calls"],
         "ai_failures": ai_state["failures"],
+        "http_requests": result["http_requests"],
+        "slow_pages": result["slow_pages"],
+        "http_backoffs": result["http_backoffs"],
+        "max_page_seconds": result["max_page_seconds"],
         "plan_sha256": plan_record["sha256"],
         "rollback_sha256": rollback_record["sha256"],
         "result_sha256": result_record["sha256"],
