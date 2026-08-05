@@ -997,6 +997,7 @@ class SouthernSparexDiscoveryItem(models.Model):
             ("missing_sales_price", "Missing Positive Sales Price"),
             ("missing_product_url", "Missing Product Sparex URL"),
             ("missing_product_image", "Missing Product Image"),
+            ("missing_customer_description", "Missing Customer Description"),
         ],
         readonly=True,
         index=True,

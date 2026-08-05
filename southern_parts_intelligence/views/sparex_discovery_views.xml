@@ -332,6 +332,7 @@
                 <filter name="missing_sales_price" string="Missing Sales Price" domain="[('primary_blocker','=','missing_sales_price')]"/>
                 <filter name="missing_product_url" string="Missing Product URL" domain="[('primary_blocker','=','missing_product_url')]"/>
                 <filter name="missing_product_image" string="Missing Product Image" domain="[('primary_blocker','=','missing_product_image')]"/>
+                <filter name="missing_customer_description" string="Missing Customer Description" domain="[('primary_blocker','=','missing_customer_description')]"/>
                 <separator/>
                 <filter name="group_match" string="Odoo Match" context="{'group_by':'odoo_match_state'}"/>
                 <filter name="group_source" string="Source Status" context="{'group_by':'source_state'}"/>
