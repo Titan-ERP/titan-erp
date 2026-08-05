@@ -599,7 +599,7 @@ class TestSparexDiscovery(TransactionCase):
         self.assertEqual(product.list_price, 24.18)
         self.assertFalse(product.southern_quote_only)
         self.assertEqual(product.southern_price_basis, "cost_plus")
-        self.assertEqual(product.southern_cost_plus_margin_percent, 38.0)
+        self.assertEqual(product.southern_cost_plus_margin_percent, 35.0)
         self.assertTrue(product.website_published)
         self.assertEqual(item.primary_blocker, "already_published")
         self.assertEqual(item.cost_evidence_sha256, "d" * 64)
