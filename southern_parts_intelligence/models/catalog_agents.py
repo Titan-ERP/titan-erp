@@ -98,11 +98,15 @@ def sparex_publication_blockers(product, supplier, normalized_sku=None):
         blockers.append("product_archived")
     if not product.sale_ok:
         blockers.append("product_not_saleable")
-    if not supplier:
-        blockers.append("missing_positive_sparex_cost")
-    price_blocker = sales_price_blocker(product, supplier)
-    if price_blocker:
-        blockers.append(price_blocker)
+    if product.southern_quote_only:
+        if float(product.list_price or 0.0) != 0.0:
+            blockers.append("quote_only_price_must_be_zero")
+    else:
+        if not supplier:
+            blockers.append("missing_positive_sparex_cost")
+        price_blocker = sales_price_blocker(product, supplier)
+        if price_blocker:
+            blockers.append(price_blocker)
     if not exact_sparex_url(product.southern_source_url, normalized):
         blockers.append("missing_exact_sparex_url")
     if not product.image_1920:
@@ -117,7 +121,7 @@ def sparex_publication_blockers(product, supplier, normalized_sku=None):
 class ProductTemplate(models.Model):
     _inherit = "product.template"
 
-    @api.constrains("is_published", "website_published")
+    @api.constrains("is_published", "website_published", "southern_quote_only", "list_price")
     def _check_sparex_publication_readiness(self):
         SupplierInfo = self.env["product.supplierinfo"].sudo()
         for product in self.filtered(

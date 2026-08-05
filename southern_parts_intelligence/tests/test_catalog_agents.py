@@ -140,6 +140,26 @@ class TestCatalogAgents(TransactionCase):
         )
         with self.assertRaises(ValidationError), self.env.cr.savepoint():
             product.website_published = True
+
+    def test_native_publication_gate_allows_evidence_complete_quote_only_product(self):
+        product = self.env["product.template"].create(
+            {
+                "name": "Quote-only Sparex part",
+                "default_code": "S.880009",
+                "active": True,
+                "list_price": 0.0,
+                "southern_quote_only": True,
+                "southern_source_url": "https://us.sparex.com/example-880009.html",
+                "image_1920": base64.b64encode(b"quote-image"),
+                "public_categ_ids": [(6, 0, self.website_category.ids)],
+                "description_ecommerce": "Customer-ready quote-only replacement part.",
+                "website_published": False,
+            }
+        )
+        product.website_published = True
+        self.assertTrue(product.website_published)
+        with self.assertRaises(ValidationError), self.env.cr.savepoint():
+            product.list_price = 10.0
         product.invalidate_recordset()
         product.list_price = 4.99
         with self.assertRaises(ValidationError), self.env.cr.savepoint():

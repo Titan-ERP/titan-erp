@@ -6,10 +6,18 @@ from urllib.parse import urlsplit
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
+from .catalog_agents import (
+    customer_description_ready,
+    exact_sparex_url,
+    normalized_sparex_sku,
+    sparex_publication_blockers,
+)
+
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 MAX_CATALOG_UPSERT_BATCH = 2_000
 MAX_PROMOTION_BATCH = 200
 PROMOTION_CONFIRMATION = "vendor-catalog-product-promotion"
+QUOTE_PUBLICATION_CONFIRMATION = "sparex-quote-only-publication"
 
 
 def _canonical_sha256(value):
@@ -442,3 +450,207 @@ class SouthernVendorCatalogItem(models.Model):
                 }
             )
         return promoted
+
+    @api.model
+    def _publication_fields(self):
+        details = self.env["product.template"].fields_get(
+            ["is_published", "website_published"], attributes=["readonly"]
+        )
+        fields_to_write = [
+            name
+            for name in ("is_published", "website_published")
+            if name in details and not details[name].get("readonly")
+        ]
+        if not fields_to_write:
+            raise UserError(_("No writable website publication field is available."))
+        return fields_to_write
+
+    def _quote_publication_snapshot(self):
+        self.ensure_one()
+        product = self.product_id.sudo()
+        normalized = normalized_sparex_sku(product.default_code)
+        descriptions = {
+            field_name: product[field_name] or ""
+            for field_name in ("description_ecommerce", "website_description", "description_sale")
+            if field_name in product._fields
+        }
+        publication_fields = self._publication_fields()
+        customer_copy = self.customer_description or (
+            f"{self.title}. Contact Southern Equipment for current pricing, fitment, and availability."
+        )
+        descriptions_after = dict(descriptions)
+        if not customer_description_ready(product):
+            descriptions_after = {field_name: customer_copy for field_name in descriptions}
+        source_url_after = product.southern_source_url or self.source_url
+        if not exact_sparex_url(source_url_after, normalized):
+            source_url_after = self.source_url
+        snapshot = {
+            "item_id": self.id,
+            "product_id": product.id,
+            "sku": normalized,
+            "item_write_date": str(self.write_date or ""),
+            "product_write_date": str(product.write_date or ""),
+            "content_sha256": self.content_sha256,
+            "source_artifact_uri": self.source_artifact_uri,
+            "source_artifact_sha256": self.source_artifact_sha256,
+            "source_name_before": product.southern_source_name or "",
+            "source_url_before": product.southern_source_url or "",
+            "source_url_after": source_url_after,
+            "descriptions_before": descriptions,
+            "descriptions_after": descriptions_after,
+            "list_price_before": product.list_price,
+            "quote_only_before": bool(product.southern_quote_only),
+            "publication_fields_before": {name: bool(product[name]) for name in publication_fields},
+        }
+        snapshot["snapshot_sha256"] = _canonical_sha256(snapshot)
+        return snapshot
+
+    def _quote_publication_eligible(self):
+        self.ensure_one()
+        product = self.product_id.sudo()
+        normalized = normalized_sparex_sku(product.default_code)
+        return bool(
+            self.active
+            and self.source_id.code == "sparex"
+            and self.match_state == "matched"
+            and product
+            and normalized
+            and exact_sparex_url(self.source_url, normalized)
+            and self.source_artifact_uri.startswith("s3://")
+            and SHA256_PATTERN.fullmatch((self.source_artifact_sha256 or "").casefold())
+            and product.active
+            and product.sale_ok
+            and not product.website_published
+            and float(product.list_price or 0.0) <= 1.49
+            and bool(product.image_1920)
+            and bool(product.public_categ_ids)
+            and bool(self.title)
+        )
+
+    @api.model
+    def prepare_quote_publication_plan(self, limit=MAX_PROMOTION_BATCH):
+        bounded = max(1, min(int(limit or MAX_PROMOTION_BATCH), MAX_PROMOTION_BATCH))
+        items = self.sudo().search(
+            [
+                ("company_id", "=", self.env.company.id),
+                ("source_id.code", "=", "sparex"),
+                ("match_state", "=", "matched"),
+                ("product_id", "!=", False),
+                ("active", "=", True),
+            ],
+            order="last_seen_at desc, id",
+            limit=bounded * 8,
+        )
+        records = []
+        seen_products = set()
+        for item in items:
+            if item.product_id.id in seen_products or not item._quote_publication_eligible():
+                continue
+            records.append(item._quote_publication_snapshot())
+            seen_products.add(item.product_id.id)
+            if len(records) >= bounded:
+                break
+        return records
+
+    @api.model
+    def apply_quote_publication_plan(self, records, artifact_uri, artifact_sha256, confirmation, reason):
+        records = list(records or [])
+        if confirmation != QUOTE_PUBLICATION_CONFIRMATION or not (reason or "").strip():
+            raise UserError(_("Quote-only publication requires explicit confirmation and a business reason."))
+        if not records or len(records) > MAX_PROMOTION_BATCH:
+            raise UserError(_("Quote-only publication plans must contain between 1 and 200 products."))
+        if not (artifact_uri or "").startswith("s3://") or not SHA256_PATTERN.fullmatch(
+            (artifact_sha256 or "").casefold()
+        ):
+            raise UserError(_("Quote-only publication requires an archived SHA-256 plan artifact."))
+        results = []
+        publication_fields = self._publication_fields()
+        for prepared in records:
+            item = self.sudo().browse(int(prepared.get("item_id") or 0)).exists()
+            if not item or item.company_id != self.env.company:
+                raise UserError(_("The prepared Sparex catalog item is unavailable."))
+            self.env.cr.execute(
+                "SELECT id FROM southern_vendor_catalog_item WHERE id = %s FOR UPDATE NOWAIT", [item.id]
+            )
+            item.invalidate_recordset()
+            product = item.product_id.sudo()
+            if not product:
+                raise UserError(_("The prepared Sparex product is unavailable."))
+            self.env.cr.execute("SELECT id FROM product_template WHERE id = %s FOR UPDATE NOWAIT", [product.id])
+            product.invalidate_recordset()
+            current = item._quote_publication_snapshot()
+            if not item._quote_publication_eligible() or current != prepared:
+                raise UserError(_("Sparex quote-only evidence changed; prepare a fresh publication plan."))
+            expected_sha = _canonical_sha256({key: value for key, value in prepared.items() if key != "snapshot_sha256"})
+            if expected_sha != (prepared.get("snapshot_sha256") or "").casefold():
+                raise UserError(_("The quote-only publication snapshot checksum is invalid."))
+            values = {
+                "list_price": 0.0,
+                "southern_quote_only": True,
+                "southern_source_name": product.southern_source_name or item.source_id.name,
+                "southern_source_url": prepared["source_url_after"],
+                **prepared["descriptions_after"],
+                **{name: True for name in publication_fields},
+            }
+            product.write(values)
+            product.invalidate_recordset(list(values))
+            blockers = sparex_publication_blockers(product, self.env["product.supplierinfo"])
+            if (
+                blockers
+                or not product.website_published
+                or not product.southern_quote_only
+                or product.list_price != 0
+                or not exact_sparex_url(product.southern_source_url, prepared["sku"])
+                or not customer_description_ready(product)
+                or not product.image_1920
+                or not product.public_categ_ids
+            ):
+                rollback = {
+                    "list_price": prepared["list_price_before"],
+                    "southern_quote_only": prepared["quote_only_before"],
+                    "southern_source_name": prepared["source_name_before"] or False,
+                    "southern_source_url": prepared["source_url_before"] or False,
+                    **prepared["descriptions_before"],
+                    **prepared["publication_fields_before"],
+                }
+                product.write(rollback)
+                raise UserError(_("Quote-only publication verification failed and the product was restored."))
+            results.append(
+                {
+                    **prepared,
+                    "artifact_uri": artifact_uri,
+                    "artifact_sha256": artifact_sha256,
+                    "public_path": product.website_url or f"/shop/product/{product.id}",
+                }
+            )
+        return results
+
+    @api.model
+    def rollback_quote_publications(self, records, reason):
+        if not (reason or "").strip():
+            raise UserError(_("Quote-only publication rollback requires a reason."))
+        publication_fields = set(self._publication_fields())
+        for prepared in records or []:
+            item = self.sudo().browse(int(prepared.get("item_id") or 0)).exists()
+            product = item.product_id.sudo() if item else self.env["product.template"]
+            if not product or product.id != int(prepared.get("product_id") or 0):
+                continue
+            self.env.cr.execute("SELECT id FROM product_template WHERE id = %s FOR UPDATE NOWAIT", [product.id])
+            product.invalidate_recordset()
+            if not product.southern_quote_only or product.list_price != 0:
+                raise UserError(_("Quote-only rollback stopped because the product changed after publication."))
+            product.write(
+                {
+                    "list_price": prepared.get("list_price_before") or 0.0,
+                    "southern_quote_only": bool(prepared.get("quote_only_before")),
+                    "southern_source_name": prepared.get("source_name_before") or False,
+                    "southern_source_url": prepared.get("source_url_before") or False,
+                    **prepared.get("descriptions_before", {}),
+                    **{
+                        name: bool(value)
+                        for name, value in prepared.get("publication_fields_before", {}).items()
+                        if name in publication_fields
+                    },
+                }
+            )
+        return True

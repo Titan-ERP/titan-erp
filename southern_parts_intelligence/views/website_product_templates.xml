@@ -57,6 +57,23 @@
         </xpath>
     </template>
 
+    <template id="southern_parts_quote_only_action" inherit_id="website_sale.product" name="Southern Ask for Pricing Action">
+        <xpath expr="//div[@id='contact_us_wrapper']//a[hasclass('btn_cta')]" position="replace">
+            <a t-if="product.southern_quote_only"
+               t-att-href="'/request?request=parts&amp;sku=%s' % product.default_code"
+               t-att-data-url="'/request?request=parts&amp;sku=%s' % product.default_code"
+               class="btn btn-primary btn_cta">
+                Ask for Pricing
+            </a>
+            <a t-else=""
+               t-att-href="website.contact_us_button_url"
+               t-att-data-url="website.contact_us_button_url"
+               class="btn btn-primary btn_cta">
+                Contact Us
+            </a>
+        </xpath>
+    </template>
+
     <template id="southern_parts_product_detail_sections" inherit_id="website_sale.product" name="Southern Parts Product Detail Sections">
         <xpath expr="//section[@id='product_detail']" position="inside">
             <t t-set="southern_sections" t-value="product._southern_website_catalog_sections() if product._southern_has_parts_catalog_data() else []"/>

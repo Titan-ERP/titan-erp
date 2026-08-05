@@ -39,6 +39,11 @@ class ProductTemplate(models.Model):
     )
     southern_source_url = fields.Char(string="Source URL", index=True)
     southern_source_name = fields.Char(string="Source Name", index=True)
+    southern_quote_only = fields.Boolean(
+        string="Ask for Pricing",
+        index=True,
+        help="Publishes this evidence-complete product without a sales price and replaces purchasing controls with an Ask for Pricing action.",
+    )
     southern_partner_price = fields.Float(
         string="Partner Price",
         digits="Product Price",
@@ -174,6 +179,12 @@ class ProductTemplate(models.Model):
         for product in self:
             if product.southern_partner_price < 0:
                 raise ValidationError("Partner Price cannot be negative.")
+
+    @api.constrains("southern_quote_only", "list_price")
+    def _check_southern_quote_only_price(self):
+        for product in self:
+            if product.southern_quote_only and product.list_price > 0:
+                raise ValidationError("Ask for Pricing products must have a zero sales price.")
 
     @api.model_create_multi
     def create(self, vals_list):
