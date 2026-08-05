@@ -8,6 +8,7 @@ from scripts.sparex_catalog_agents.orchestrator import (
     DEFAULT_COST_RECOVERY_LIMIT,
     MAX_AI_CALLS,
     MAX_BATCH,
+    MAX_EXTERNAL_REPAIR_BATCH,
     _public_url,
     _run_agent_tasks,
     hydrate_source_repair_images,
@@ -19,7 +20,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_fixed_chain_and_batch_limit():
     assert MAX_BATCH == 50
-    assert DEFAULT_COST_RECOVERY_LIMIT == 25
+    assert MAX_EXTERNAL_REPAIR_BATCH == 5
+    assert DEFAULT_COST_RECOVERY_LIMIT == 5
     assert MAX_AI_CALLS == 5
     assert AGENT_SEQUENCE == (
         "coordinator",
@@ -129,7 +131,7 @@ def test_service_uses_non_overlapping_secure_runtime():
     assert "--run-ai" not in launcher
     assert "export ODOO_API_MODE=json2" in launcher
     assert "--limit 50" in launcher
-    assert "--cost-recovery-limit 25" in launcher
+    assert "--cost-recovery-limit 5" in launcher
     assert "--publish" in launcher
     assert "OPENAI_API_KEY=" not in service
     assert "Environment=ODOO_COMPANY_ID=1" in service

@@ -37,9 +37,10 @@ PUBLICATION_CONFIRMATION = "catalog-agent-publication"
 SOURCE_LINK_CONFIRMATION = "sparex-discovery-source-link"
 DESCRIPTION_REPAIR_CONFIRMATION = "sparex-listing-description-repair"
 MAX_BATCH = 50
+MAX_EXTERNAL_REPAIR_BATCH = 5
 MAX_AI_CALLS = 5
 MAX_SOURCE_IMAGE_BYTES = 10 * 1024 * 1024
-DEFAULT_COST_RECOVERY_LIMIT = 25
+DEFAULT_COST_RECOVERY_LIMIT = 5
 AGENT_SEQUENCE: tuple[AgentCode, ...] = (
     "coordinator",
     "sparex_discovery",
@@ -70,6 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--limit", type=int, default=MAX_BATCH)
     parser.add_argument("--cost-recovery-limit", type=int, default=DEFAULT_COST_RECOVERY_LIMIT)
+    parser.add_argument("--source-repair-limit", type=int, default=MAX_EXTERNAL_REPAIR_BATCH)
     parser.add_argument("--skip-cost-recovery", action="store_true")
     parser.add_argument("--throttle-seconds", type=float, default=3.0)
     parser.add_argument("--worker-id", default=socket.gethostname())
@@ -262,6 +264,14 @@ def hydrate_source_repair_images(records: list[dict[str, Any]], throttle_seconds
 def main() -> int:
     args = build_parser().parse_args()
     limit = max(1, min(int(args.limit), MAX_BATCH))
+    source_repair_limit = max(
+        1,
+        min(int(args.source_repair_limit), MAX_EXTERNAL_REPAIR_BATCH),
+    )
+    cost_recovery_limit = max(
+        1,
+        min(int(args.cost_recovery_limit), MAX_EXTERNAL_REPAIR_BATCH),
+    )
     throttle = max(3.0, float(args.throttle_seconds))
     if args.publish and not args.apply:
         raise RuntimeError("--publish requires --apply.")
@@ -273,14 +283,12 @@ def main() -> int:
     archive_prefix = run_s3_prefix(args.s3_prefix, run_stamp)
     cost_recovery: dict[str, Any] = {"state": "skipped", "claimed": 0, "accepted": 0, "applied": 0}
     if args.apply and not args.skip_cost_recovery:
-        ApplyGate(WORKFLOW, True, args.confirm, args.reason, MAX_BATCH).authorize(
-            min(max(1, int(args.cost_recovery_limit)), MAX_BATCH)
-        )
+        ApplyGate(WORKFLOW, True, args.confirm, args.reason, MAX_BATCH).authorize(cost_recovery_limit)
         try:
             cost_recovery = recover_dealer_costs(
                 client,
                 worker_id=args.worker_id,
-                limit=args.cost_recovery_limit,
+                limit=cost_recovery_limit,
                 dealer_env_file=(args.dealer_env_file or args.odoo_env_file),
                 throttle_seconds=throttle,
                 store=store,
@@ -313,7 +321,7 @@ def main() -> int:
     source_prepared = client.call(
         "southern.sparex.discovery.item",
         "prepare_source_link_plan",
-        limit=limit,
+        limit=source_repair_limit,
     )
     description_prepared = client.call(
         "southern.sparex.discovery.item",
@@ -329,6 +337,7 @@ def main() -> int:
         "candidate_count": len(preview),
         "candidates": preview,
         "limit": limit,
+        "source_repair_limit": source_repair_limit,
         "cost_recovery": cost_recovery,
     }
     if not args.apply:
@@ -336,7 +345,7 @@ def main() -> int:
         return 0
 
     gate = ApplyGate(WORKFLOW, True, args.confirm, args.reason, MAX_BATCH)
-    gate.authorize(max(len(preview), len(source_prepared)))
+    gate.authorize(max(len(preview), len(source_prepared), len(description_prepared)))
     if args.run_ai and ai_max_calls:
         if args.openai_env_file.exists():
             load_env_file(args.openai_env_file)

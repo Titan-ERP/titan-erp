@@ -15,7 +15,8 @@ class SparexDiscoveryReconciliationContractTests(unittest.TestCase):
         self.assertIn('"prepare_reconciliation_run"', source)
         self.assertIn("scripts.odoo_product_dispatch_worker", launcher)
         dispatcher = (ROOT / "scripts" / "odoo_product_dispatch_worker.py").read_text(encoding="utf-8")
-        self.assertIn("min(int(request.get(\"limit\") or 5), 5)", dispatcher)
+        self.assertIn("MAX_PORTAL_LIMIT = 5", dispatcher)
+        self.assertIn('min(int(request.get("limit") or MAX_PORTAL_LIMIT), MAX_PORTAL_LIMIT)', dispatcher)
         self.assertIn("sparex-full-catalog-inventory-v3", dispatcher)
 
     def test_odoo_model_has_reconciliation_recovery_and_source_link_contracts(self):

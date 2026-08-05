@@ -19,6 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ENV = ROOT / "odoo_connection.env"
 DEFAULT_ARTIFACT_ROOT = ROOT / "outputs" / "product-dispatch"
 SUPPORTED_JOBS = ("sparex_discovery", "catalog_release")
+MAX_PORTAL_LIMIT = 5
+MAX_RELEASE_LIMIT = 50
 WARNING_PATTERNS = (
     r"portal_",
     r"html_proxy_error",
@@ -43,12 +45,16 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _bounded_request(request: dict[str, Any]) -> tuple[int, float]:
-    limit = max(1, min(int(request.get("limit") or 5), 5))
+def _bounded_request(request: dict[str, Any]) -> tuple[int, int, float]:
+    portal_limit = max(1, min(int(request.get("limit") or MAX_PORTAL_LIMIT), MAX_PORTAL_LIMIT))
+    release_limit = max(
+        1,
+        min(int(request.get("release_limit") or portal_limit), MAX_RELEASE_LIMIT),
+    )
     throttle = max(3.0, float(request.get("throttle_seconds") or 3.0))
     if int(request.get("http_retries") or 0) != 0:
         raise RuntimeError("Product dispatches must disable HTTP retries.")
-    return limit, throttle
+    return portal_limit, release_limit, throttle
 
 
 def build_job_command(
@@ -62,7 +68,7 @@ def build_job_command(
     s3_bucket: str,
 ) -> list[str]:
     request = dict(claim.get("request") or {})
-    limit, throttle = _bounded_request(request)
+    portal_limit, release_limit, throttle = _bounded_request(request)
     common = [
         "--odoo-env-file",
         str(odoo_env_file),
@@ -87,7 +93,7 @@ def build_job_command(
             "--run-key",
             str(run_key),
             "--max-pages-per-checkpoint",
-            str(limit),
+            str(portal_limit),
             "--throttle-seconds",
             str(throttle),
             "--apply",
@@ -108,9 +114,11 @@ def build_job_command(
             "scripts.sparex_catalog_agents.orchestrator",
             *common,
             "--limit",
-            str(limit),
+            str(release_limit),
             "--cost-recovery-limit",
-            str(limit),
+            str(portal_limit),
+            "--source-repair-limit",
+            str(portal_limit),
             "--throttle-seconds",
             str(throttle),
             "--apply",
