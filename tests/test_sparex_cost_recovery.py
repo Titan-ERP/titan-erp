@@ -7,6 +7,7 @@ import pytest
 from scripts.sparex_catalog_agents.cost_recovery import (
     cooldown_active,
     parse_detail_image_url,
+    parse_detail_title,
     parse_exact_priceb,
     write_cooldown,
 )
@@ -49,6 +50,15 @@ def test_rejects_ambiguous_exact_container():
 def test_requires_scoped_product_title():
     page = "<html><body><h1>Cookie dialog</h1><div id='priceb_165551'>$14.99</div></body></html>"
     assert parse_exact_priceb(page, "S.165551")["status"] == "identity_incomplete"
+
+
+def test_extracts_normalized_detail_title():
+    assert parse_detail_title(_page("", "  Hydraulic   Top Link  ")) == "Hydraulic Top Link"
+
+
+@pytest.mark.parametrize("title", ["Product", "Page Not Found", "S.165551", "", "x" * 256])
+def test_rejects_placeholder_or_malformed_detail_title(title):
+    assert not parse_detail_title(_page("", title))
 
 
 def test_extracts_one_canonical_detail_image_url():

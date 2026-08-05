@@ -1,6 +1,8 @@
 import base64
 import hashlib
 
+from odoo import fields
+from odoo.exceptions import UserError
 from odoo.tests import tagged
 from odoo.tests.common import TransactionCase
 
@@ -582,9 +584,28 @@ class TestSparexDiscovery(TransactionCase):
                 "evidence_url": claim["source_url"],
                 "evidence_url_sha256": claim["source_url_sha256"],
                 "evidence_sha256": "d" * 64,
-                "parser_version": "sparex-exact-priceb-v1",
+                "detail_title": "Verified Hydraulic Part",
+                "detail_title_sha256": hashlib.sha256(b"Verified Hydraulic Part").hexdigest(),
+                "detail_title_page_sha256": "d" * 64,
+                "detail_page_artifact_uri": "s3://test-bucket/detail/S-720002.html",
+                "detail_page_artifact_sha256": "d" * 64,
+                "parser_version": "sparex-exact-priceb-title-v2",
             }
         )
+        invalid_claim = dict(claim)
+        invalid_claim.update(
+            {
+                "detail_title": "Product",
+                "detail_title_sha256": hashlib.sha256(b"Product").hexdigest(),
+            }
+        )
+        with self.assertRaises(UserError):
+            Item.apply_cost_recovery_plan(
+                [invalid_claim],
+                "cost-apply-worker",
+                "sparex-dealer-cost-recovery",
+                "Reject placeholder detail title evidence",
+            )
         applied = Item.apply_cost_recovery_plan(
             [claim],
             "cost-apply-worker",
@@ -597,7 +618,49 @@ class TestSparexDiscovery(TransactionCase):
         self.assertFalse(product.southern_quote_only)
         self.assertEqual(product.southern_price_basis, "cost_plus")
         self.assertEqual(product.southern_cost_plus_margin_percent, 35.0)
+        self.assertEqual(item.listing_title, "Verified Hydraulic Part")
+        self.assertEqual(item.detail_title_sha256, hashlib.sha256(b"Verified Hydraulic Part").hexdigest())
+        self.assertEqual(item.detail_title_page_sha256, "d" * 64)
+        item.write(
+            {
+                "listing_title": False,
+                "detail_title_sha256": False,
+                "detail_title_page_sha256": False,
+                "detail_title_parser_version": False,
+                "detail_title_recovered_at": False,
+                "detail_page_artifact_uri": False,
+                "detail_page_artifact_sha256": False,
+            }
+        )
+        product.write(
+            {
+                "description_ecommerce": (
+                    "Internal catalog record. Not published to the website until pricing, description, "
+                    "and product media are reviewed."
+                ),
+                "website_description": False,
+                "description_sale": False,
+            }
+        )
+        item._refresh_readiness()
+        self.assertTrue(item.has_positive_supplier_cost)
+        self.assertEqual(item.primary_blocker, "missing_customer_description")
+        self.assertEqual(item.cost_recovery_state, "queued")
+        item.write(
+            {
+                "listing_title": applied[0]["detail_title_applied"],
+                "detail_title_sha256": applied[0]["detail_title_sha256_applied"],
+                "detail_title_page_sha256": applied[0]["detail_title_page_sha256_applied"],
+                "detail_title_parser_version": "sparex-exact-priceb-title-v2",
+                "detail_title_recovered_at": fields.Datetime.now(),
+                "detail_page_artifact_uri": applied[0]["detail_page_artifact_uri_applied"],
+                "detail_page_artifact_sha256": applied[0]["detail_page_artifact_sha256_applied"],
+            }
+        )
+        product.description_ecommerce = "Customer-ready dealer-cost description."
+        item._refresh_readiness()
         product.website_published = True
+        item._refresh_readiness()
         self.assertTrue(product.website_published)
         self.assertEqual(item.primary_blocker, "already_published")
         self.assertEqual(item.cost_evidence_sha256, "d" * 64)
@@ -607,4 +670,7 @@ class TestSparexDiscovery(TransactionCase):
         self.assertEqual(product.list_price, 0.0)
         self.assertTrue(product.southern_quote_only)
         self.assertEqual(product.southern_price_basis, "none")
+        self.assertFalse(item.listing_title)
+        self.assertFalse(item.detail_title_sha256)
+        self.assertFalse(item.detail_page_artifact_uri)
         self.assertEqual(item.cost_recovery_state, "manual_review")
