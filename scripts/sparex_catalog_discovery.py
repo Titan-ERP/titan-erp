@@ -527,7 +527,6 @@ def main() -> int:
                 creation_records = client.call(
                     "southern.sparex.discovery.item",
                     "prepare_product_creation_plan",
-                    item_ids=recorded.get("item_ids") or [],
                     limit=MAX_PRODUCT_CREATION_BATCH - creation_operations,
                 )
                 if creation_records:
@@ -535,6 +534,7 @@ def main() -> int:
                         "schema_version": SCHEMA_VERSION,
                         "workflow": WORKFLOW,
                         "operation": "page_driven_draft_product_creation",
+                        "selection_scope": "current_catalog_backlog",
                         "run_id": int(run["id"]),
                         "page_number": page_number,
                         "page_artifact_uri": page_record["artifact_uri"],

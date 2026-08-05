@@ -18,6 +18,8 @@ class SparexDiscoveryReconciliationContractTests(unittest.TestCase):
         self.assertIn("MAX_PORTAL_LIMIT = 5", dispatcher)
         self.assertIn('min(int(request.get("limit") or MAX_PORTAL_LIMIT), MAX_PORTAL_LIMIT)', dispatcher)
         self.assertIn("sparex-full-catalog-inventory-v3", dispatcher)
+        self.assertIn('"selection_scope": "current_catalog_backlog"', source)
+        self.assertNotIn('item_ids=recorded.get("item_ids") or []', source)
 
     def test_odoo_model_has_reconciliation_recovery_and_source_link_contracts(self):
         source = (ROOT / "southern_parts_intelligence" / "models" / "sparex_discovery.py").read_text(
