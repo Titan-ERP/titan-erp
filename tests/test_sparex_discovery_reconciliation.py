@@ -10,7 +10,10 @@ class SparexDiscoveryReconciliationContractTests(unittest.TestCase):
         source = (ROOT / "scripts" / "sparex_catalog_discovery.py").read_text(encoding="utf-8")
         launcher = (ROOT / "scripts" / "run_sparex_catalog_discovery.sh").read_text(encoding="utf-8")
         self.assertIn('parser.add_argument("--max-pages-per-checkpoint", type=int, default=5)', source)
+        self.assertIn("MAX_TOTAL_PAGES = 10_000_000", source)
         self.assertIn("for _index in range(checkpoint_pages):", source)
+        self.assertIn("backfill_legacy_page_urls", source)
+        self.assertIn('"queue_due_discovery_page_repairs"', source)
         self.assertIn('"configure_discovery_checkpoint"', source)
         self.assertIn('"prepare_reconciliation_run"', source)
         self.assertIn("scripts.odoo_product_dispatch_worker", launcher)
@@ -46,6 +49,10 @@ class SparexDiscoveryReconciliationContractTests(unittest.TestCase):
             "rollback_created_products",
             "page_driven_creation_enabled",
             'updates["max_pages_total"] = MAX_DISCOVERY_TOTAL_PAGES',
+            "queue_discovery_page_repairs",
+            "_ensure_normalized_frontier",
+            "southern.sparex.discovery.url",
+            "repair_queued_url_count",
         ):
             self.assertIn(contract, source)
 
@@ -65,6 +72,21 @@ class SparexDiscoveryReconciliationContractTests(unittest.TestCase):
         )
         self.assertIn("_current_discovery_item", source)
         self.assertIn("missing_current_discovery_evidence", source)
+
+    def test_listing_inventory_uses_bounded_bulk_database_matching(self):
+        discovery = (ROOT / "southern_parts_intelligence" / "models" / "sparex_discovery.py").read_text(
+            encoding="utf-8"
+        )
+        catalog = (ROOT / "southern_parts_intelligence" / "models" / "vendor_catalog.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("normalized_observations", discovery)
+        self.assertIn("supplier_by_product_id", discovery)
+        self.assertIn("tracking_disable=True", discovery)
+        self.assertIn("def _match_products", catalog)
+        self.assertIn("product_matches = self._match_products", catalog)
+        self.assertIn("10_000_000", discovery)
+        self.assertNotIn("MAX_DISCOVERY_FRONTIER_URLS", discovery)
 
 
 if __name__ == "__main__":

@@ -23,9 +23,9 @@ from .catalog_agents import (
 SPAREX_DISCOVERY_HOSTS = {"us.sparex.com"}
 MAX_DISCOVERY_PAGE_ITEMS = 100
 MAX_DISCOVERY_CHECKPOINT_PAGES = 10
-MAX_DISCOVERY_FRONTIER_URLS = 10000
 MAX_DISCOVERY_LINKS_PER_PAGE = 5_000
-MAX_DISCOVERY_TOTAL_PAGES = 10000
+MAX_DISCOVERY_TOTAL_PAGES = 10_000_000
+MAX_DISCOVERY_REPAIR_BATCH = 500
 MAX_SOURCE_LINK_BATCH = 50
 MAX_COST_RECOVERY_BATCH = 50
 MAX_COST_RECOVERY_ATTEMPTS = 5
@@ -194,6 +194,13 @@ class SouthernSparexDiscoveryRun(models.Model):
     seed_url_sha256 = fields.Char(required=True, readonly=True, copy=False)
     cursor_url = fields.Char(required=True, readonly=True, copy=False)
     cursor_url_sha256 = fields.Char(required=True, readonly=True, copy=False)
+    cursor_kind = fields.Selection(
+        [("frontier", "Catalog Frontier"), ("repair", "Targeted Repair")],
+        default="frontier",
+        required=True,
+        readonly=True,
+        copy=False,
+    )
     parser_version = fields.Char(required=True, readonly=True)
     schema_version = fields.Char(default="1.0", required=True, readonly=True)
     plan_artifact_uri = fields.Char(required=True, readonly=True, copy=False)
@@ -204,8 +211,11 @@ class SouthernSparexDiscoveryRun(models.Model):
     max_pages_total = fields.Integer(default=MAX_DISCOVERY_TOTAL_PAGES, required=True)
     frontier_urls = fields.Text(readonly=True, copy=False)
     visited_url_sha256s = fields.Text(readonly=True, copy=False)
+    frontier_migrated = fields.Boolean(default=False, readonly=True, copy=False)
     queued_url_count = fields.Integer(default=0, readonly=True)
     visited_url_count = fields.Integer(default=0, readonly=True)
+    repair_queued_url_count = fields.Integer(default=0, readonly=True)
+    repair_visited_url_count = fields.Integer(default=0, readonly=True)
     page_count = fields.Integer(default=0, readonly=True)
     observed_count = fields.Integer(default=0, readonly=True)
     matched_count = fields.Integer(default=0, readonly=True)
@@ -265,6 +275,7 @@ class SouthernSparexDiscoveryRun(models.Model):
     error_message = fields.Text(readonly=True, copy=False)
     completed_at = fields.Datetime(readonly=True, copy=False)
     page_ids = fields.One2many("southern.sparex.discovery.page", "run_id")
+    url_ids = fields.One2many("southern.sparex.discovery.url", "run_id")
     item_ids = fields.One2many("southern.sparex.discovery.item", "last_seen_run_id")
 
     _idempotency_company_unique = models.Constraint(
@@ -373,7 +384,7 @@ class SouthernSparexDiscoveryRun(models.Model):
             if not 1 <= run.max_items_per_page <= MAX_DISCOVERY_PAGE_ITEMS:
                 raise ValidationError(_("A discovery listing page must contain between 1 and 100 observations."))
             if not 1 <= run.max_pages_total <= MAX_DISCOVERY_TOTAL_PAGES:
-                raise ValidationError(_("A discovery run must contain between 1 and 10,000 listing pages."))
+                raise ValidationError(_("A discovery run must contain between 1 and 10,000,000 listing pages."))
 
     @api.model
     def start_discovery_run(self, values):
@@ -415,6 +426,8 @@ class SouthernSparexDiscoveryRun(models.Model):
                 "seed_url_sha256": seed_sha,
                 "cursor_url": seed_url,
                 "cursor_url_sha256": seed_sha,
+                "cursor_kind": "frontier",
+                "frontier_migrated": True,
                 "parser_version": (values.get("parser_version") or "sparex-listing-frontier-v2").strip(),
                 "schema_version": (values.get("schema_version") or "1.1").strip(),
                 "plan_artifact_uri": plan_uri,
@@ -435,6 +448,16 @@ class SouthernSparexDiscoveryRun(models.Model):
                 ),
             }
         )
+        self.env["southern.sparex.discovery.url"].create(
+            {
+                "run_id": run.id,
+                "company_id": run.company_id.id,
+                "url": seed_url,
+                "url_sha256": seed_sha,
+                "state": "active",
+                "priority": 0,
+            }
+        )
         return run.read(self._worker_fields())[0]
 
     @api.model
@@ -447,6 +470,7 @@ class SouthernSparexDiscoveryRun(models.Model):
             "seed_url_sha256",
             "cursor_url",
             "cursor_url_sha256",
+            "cursor_kind",
             "parser_version",
             "schema_version",
             "plan_artifact_uri",
@@ -457,6 +481,8 @@ class SouthernSparexDiscoveryRun(models.Model):
             "max_pages_total",
             "queued_url_count",
             "visited_url_count",
+            "repair_queued_url_count",
+            "repair_visited_url_count",
             "page_count",
             "observed_count",
             "matched_count",
@@ -560,6 +586,288 @@ class SouthernSparexDiscoveryRun(models.Model):
         )
         return len(stale)
 
+    def _ensure_normalized_frontier(self):
+        """Lazily move legacy text checkpoints into indexed queue rows."""
+        self.ensure_one()
+        if self.frontier_migrated:
+            return
+        URL = self.env["southern.sparex.discovery.url"].sudo()
+        values_by_hash = {}
+        for url_hash in (self.visited_url_sha256s or "").splitlines():
+            url_hash = url_hash.strip().casefold()
+            if SHA256_PATTERN.fullmatch(url_hash):
+                values_by_hash[url_hash] = {
+                    "run_id": self.id,
+                    "company_id": self.company_id.id,
+                    "url": False,
+                    "url_sha256": url_hash,
+                    "state": "visited",
+                    "priority": 0,
+                }
+        for url in (self.frontier_urls or "").splitlines():
+            url = url.strip()
+            if not _sparex_listing_url(url):
+                continue
+            url_hash = _sha256_text(url)
+            if url_hash not in values_by_hash:
+                values_by_hash[url_hash] = {
+                    "run_id": self.id,
+                    "company_id": self.company_id.id,
+                    "url": url,
+                    "url_sha256": url_hash,
+                    "state": "queued",
+                    "priority": 0,
+                }
+        cursor_hash = self.cursor_url_sha256
+        if self.state not in {"completed", "failed", "cancelled"} and _sparex_listing_url(self.cursor_url):
+            values_by_hash[cursor_hash] = {
+                "run_id": self.id,
+                "company_id": self.company_id.id,
+                "url": self.cursor_url,
+                "url_sha256": cursor_hash,
+                "state": "active",
+                "priority": 0,
+            }
+        elif cursor_hash in values_by_hash:
+            values_by_hash[cursor_hash]["url"] = self.cursor_url
+        existing_hashes = set(
+            URL.search([("run_id", "=", self.id), ("url_sha256", "in", list(values_by_hash))]).mapped(
+                "url_sha256"
+            )
+        )
+        create_values = [
+            values for url_hash, values in values_by_hash.items() if url_hash not in existing_hashes
+        ]
+        if create_values:
+            URL.create(create_values)
+        self.write(
+            {
+                "frontier_migrated": True,
+                "frontier_urls": False,
+                "visited_url_sha256s": False,
+                "queued_url_count": URL.search_count(
+                    [("run_id", "=", self.id), ("state", "in", ["queued", "active"])]
+                ),
+                "visited_url_count": URL.search_count(
+                    [("run_id", "=", self.id), ("state", "=", "visited")]
+                ),
+            }
+        )
+
+    def _select_next_discovery_url(self, page_limit_reached=False):
+        self.ensure_one()
+        URL = self.env["southern.sparex.discovery.url"].sudo()
+        repair = URL.search(
+            [
+                ("run_id", "=", self.id),
+                ("repair_requested", "=", True),
+                ("url", "!=", False),
+            ],
+            order="repair_priority desc, repair_requested_at, id",
+            limit=1,
+        )
+        selected = repair
+        cursor_kind = "repair" if repair else "frontier"
+        if not selected and not page_limit_reached:
+            selected = URL.search(
+                [("run_id", "=", self.id), ("state", "=", "queued"), ("url", "!=", False)],
+                order="priority, id",
+                limit=1,
+            )
+            if selected:
+                selected.state = "active"
+        return selected, cursor_kind
+
+    def _refresh_url_queue_counts(self):
+        self.ensure_one()
+        URL = self.env["southern.sparex.discovery.url"].sudo()
+        counts = {
+            "queued_url_count": URL.search_count(
+                [("run_id", "=", self.id), ("state", "in", ["queued", "active"])]
+            ),
+            "visited_url_count": URL.search_count(
+                [("run_id", "=", self.id), ("state", "=", "visited")]
+            ),
+            "repair_queued_url_count": URL.search_count(
+                [("run_id", "=", self.id), ("repair_requested", "=", True)]
+            ),
+            "repair_visited_url_count": URL.search_count(
+                [("run_id", "=", self.id), ("repair_visit_count", ">", 0)]
+            ),
+        }
+        self.write(counts)
+        return counts
+
+    @api.model
+    def queue_discovery_page_repairs(self, run_id, page_urls, reason, priority=100):
+        run = self.browse(int(run_id)).exists()
+        if not run or run.company_id != self.env.company:
+            raise UserError(_("The discovery run does not exist in the active company."))
+        urls = list(dict.fromkeys((value or "").strip() for value in (page_urls or []) if value))
+        if not urls or len(urls) > MAX_DISCOVERY_REPAIR_BATCH or not (reason or "").strip():
+            raise UserError(_("Discovery repair batches require 1 to 500 explicit listing URLs and a reason."))
+        if any(not _sparex_listing_url(url) for url in urls):
+            raise UserError(_("Discovery repair requests must contain only HTTPS Sparex listing URLs."))
+        self.env.cr.execute("SELECT id FROM southern_sparex_discovery_run WHERE id = %s FOR UPDATE NOWAIT", [run.id])
+        run.invalidate_recordset()
+        now = fields.Datetime.now()
+        if run.lease_owner and run.lease_expires_at and run.lease_expires_at > now:
+            raise UserError(_("Discovery repairs cannot be queued while a worker owns the run lease."))
+        run._ensure_normalized_frontier()
+        URL = self.env["southern.sparex.discovery.url"].sudo()
+        hashes = {_sha256_text(url): url for url in urls}
+        existing = URL.search([("run_id", "=", run.id), ("url_sha256", "in", list(hashes))])
+        by_hash = {row.url_sha256: row for row in existing}
+        page_hashes = set(
+            self.env["southern.sparex.discovery.page"]
+            .sudo()
+            .search([("run_id", "=", run.id), ("page_url_sha256", "in", list(hashes))])
+            .mapped("page_url_sha256")
+        )
+        create_values = []
+        for url_hash, url in hashes.items():
+            row = by_hash.get(url_hash)
+            values = {
+                "url": url,
+                "repair_requested": True,
+                "repair_priority": max(0, min(int(priority or 0), 10_000)),
+                "repair_reason": (reason or "").strip()[:255],
+                "repair_requested_at": now,
+            }
+            if row:
+                row.write(values)
+            else:
+                create_values.append(
+                    {
+                        **values,
+                        "run_id": run.id,
+                        "company_id": run.company_id.id,
+                        "url_sha256": url_hash,
+                        "state": "visited" if url_hash in page_hashes else "queued",
+                        "priority": 0,
+                    }
+                )
+        if create_values:
+            URL.create(create_values)
+        active_frontier = URL.search(
+            [("run_id", "=", run.id), ("state", "=", "active")], limit=1
+        )
+        if active_frontier:
+            active_frontier.state = "queued"
+        selected, cursor_kind = run._select_next_discovery_url()
+        if selected:
+            run.write(
+                {
+                    "state": "ready",
+                    "cursor_url": selected.url,
+                    "cursor_url_sha256": selected.url_sha256,
+                    "cursor_kind": cursor_kind,
+                    "completed_at": False,
+                    "error_code": False,
+                    "error_message": False,
+                }
+            )
+        counts = run._refresh_url_queue_counts()
+        return {"queued": len(urls), "cursor_kind": run.cursor_kind, **counts}
+
+    @api.model
+    def prepare_legacy_page_url_backfill(self, run_id, limit=50):
+        run = self.browse(int(run_id)).exists()
+        if not run or run.company_id != self.env.company:
+            raise UserError(_("The discovery run does not exist in the active company."))
+        bounded = max(1, min(int(limit or 50), 200))
+        pages = self.env["southern.sparex.discovery.page"].sudo().search(
+            [
+                ("run_id", "=", run.id),
+                ("page_url", "=", False),
+                ("artifact_uri", "like", "s3://"),
+            ],
+            order="page_number, id",
+            limit=bounded,
+        )
+        return [
+            {
+                "page_id": page.id,
+                "page_url_sha256": page.page_url_sha256,
+                "artifact_uri": page.artifact_uri,
+                "artifact_sha256": page.artifact_sha256,
+            }
+            for page in pages
+        ]
+
+    @api.model
+    def apply_legacy_page_url_backfill(self, run_id, records):
+        run = self.browse(int(run_id)).exists()
+        if not run or run.company_id != self.env.company:
+            raise UserError(_("The discovery run does not exist in the active company."))
+        records = list(records or [])
+        if not records or len(records) > 200:
+            raise UserError(_("Legacy page URL backfills must contain between 1 and 200 records."))
+        pages = self.env["southern.sparex.discovery.page"].sudo().browse(
+            [int(record.get("page_id") or 0) for record in records]
+        ).exists()
+        page_by_id = {page.id: page for page in pages}
+        updated = 0
+        for record in records:
+            page = page_by_id.get(int(record.get("page_id") or 0))
+            page_url = (record.get("page_url") or "").strip()
+            if (
+                not page
+                or page.run_id != run
+                or page.artifact_uri != (record.get("artifact_uri") or "").strip()
+                or page.artifact_sha256 != (record.get("artifact_sha256") or "").strip().casefold()
+                or not _sparex_listing_url(page_url)
+                or page.page_url_sha256 != _sha256_text(page_url)
+            ):
+                raise UserError(_("A legacy page URL backfill does not match its archived evidence."))
+            if not page.page_url:
+                page.page_url = page_url
+                updated += 1
+        return {"updated": updated}
+
+    @api.model
+    def queue_due_discovery_page_repairs(self, run_id, limit=5, min_age_hours=24):
+        run = self.browse(int(run_id)).exists()
+        if not run or run.company_id != self.env.company:
+            raise UserError(_("The discovery run does not exist in the active company."))
+        bounded = max(1, min(int(limit or 5), MAX_DISCOVERY_CHECKPOINT_PAGES))
+        now = fields.Datetime.now()
+        if run.lease_owner and run.lease_expires_at and run.lease_expires_at > now:
+            return {"queued": 0, "state": "busy"}
+        cutoff = now - timedelta(hours=max(1, min(int(min_age_hours or 24), 24 * 30)))
+        items = self.env["southern.sparex.discovery.item"].sudo().search(
+            [
+                ("company_id", "=", run.company_id.id),
+                ("last_seen_run_id", "=", run.id),
+                ("state", "=", "review"),
+                ("last_seen_at", "<=", cutoff),
+                ("last_seen_page_id.page_url", "!=", False),
+                "|",
+                ("last_seen_page_id.last_repair_at", "=", False),
+                ("last_seen_page_id.last_repair_at", "<=", cutoff),
+            ],
+            order="last_seen_at, id",
+            limit=bounded * MAX_DISCOVERY_PAGE_ITEMS,
+        )
+        page_urls = []
+        seen_page_ids = set()
+        for item in items:
+            page = item.last_seen_page_id
+            if not page or page.id in seen_page_ids:
+                continue
+            seen_page_ids.add(page.id)
+            page_urls.append(page.page_url)
+            if len(page_urls) >= bounded:
+                break
+        if not page_urls:
+            return {"queued": 0, "state": run.state}
+        return self.queue_discovery_page_repairs(
+            run.id,
+            page_urls,
+            _("Automatically revisit stale or ambiguous listing evidence."),
+            priority=50,
+        )
+
     @api.model
     def claim_discovery_checkpoint(self, run_id, worker_id, lease_seconds=180):
         run = self.browse(int(run_id)).exists()
@@ -567,6 +875,7 @@ class SouthernSparexDiscoveryRun(models.Model):
             raise UserError(_("The requested discovery run does not exist in the active company."))
         self.env.cr.execute("SELECT id FROM southern_sparex_discovery_run WHERE id = %s FOR UPDATE NOWAIT", [run.id])
         run.invalidate_recordset()
+        run._ensure_normalized_frontier()
         now = fields.Datetime.now()
         if run.state in {"completed", "failed", "cancelled"}:
             return {"claimed": False, "state": run.state}
@@ -616,30 +925,31 @@ class SouthernSparexDiscoveryRun(models.Model):
         existing_page = self.env["southern.sparex.discovery.page"].search(
             [("run_id", "=", run.id), ("page_url_sha256", "=", page_url_sha)], limit=1
         )
-        if existing_page:
+        repairing = run.cursor_kind == "repair"
+        if existing_page and not repairing:
             run.write({"lease_owner": False, "lease_expires_at": False})
             return {"idempotent": True, "page_id": existing_page.id, "state": run.state}
 
         now = fields.Datetime.now()
-        page_record = self.env["southern.sparex.discovery.page"].create(
-            {
-                "run_id": run.id,
-                "company_id": run.company_id.id,
-                "page_number": run.page_count + 1,
-                "page_url_sha256": page_url_sha,
-                "page_sha256": page_sha,
-                "artifact_uri": artifact_uri,
-                "artifact_sha256": artifact_sha,
-                "retrieved_at": now,
-            }
-        )
+        page_record = existing_page
+        if not page_record:
+            page_record = self.env["southern.sparex.discovery.page"].create(
+                {
+                    "run_id": run.id,
+                    "company_id": run.company_id.id,
+                    "page_number": run.page_count + 1,
+                    "page_url": page_url,
+                    "page_url_sha256": page_url_sha,
+                    "page_sha256": page_sha,
+                    "artifact_uri": artifact_uri,
+                    "artifact_sha256": artifact_sha,
+                    "retrieved_at": now,
+                }
+            )
         seen_skus = set()
-        page_counts = {"matched": 0, "missing": 0, "duplicate": 0, "review": 0}
-        page_corrected = 0
-        page_item_ids = []
-        vendor_catalog_records = []
-        Item = self.env["southern.sparex.discovery.item"]
+        normalized_observations = []
         for observation in items:
+            observation = dict(observation or {})
             raw_sku = (observation.get("sku") or "").strip()
             normalized = normalized_sparex_sku(raw_sku)
             listing_title = " ".join((observation.get("listing_title") or "").split()).strip()
@@ -657,39 +967,95 @@ class SouthernSparexDiscoveryRun(models.Model):
                 raise UserError(_("A listing observation contains an invalid source state."))
             if len(listing_title) > 255:
                 raise UserError(_("A listing observation title exceeds the bounded product-name length."))
+            normalized_observations.append(
+                {
+                    "raw_sku": raw_sku,
+                    "normalized": normalized,
+                    "listing_title": listing_title,
+                    "source_url": source_url,
+                    "image_url": image_url,
+                    "source_state": source_state,
+                }
+            )
 
-            digits = normalized.split(".", 1)[1]
-            candidates = (
-                self.env["product.template"]
-                .with_context(active_test=False)
-                .search(["|", ("default_code", "ilike", f"S.{digits}"), ("default_code", "ilike", f"S{digits}")])
+        normalized_skus = [row["normalized"] for row in normalized_observations]
+        candidate_codes = sorted(
+            {
+                candidate
+                for normalized in normalized_skus
+                for candidate in (normalized, normalized.replace(".", "", 1))
+            }
+        )
+        product_ids_by_sku = {normalized: [] for normalized in normalized_skus}
+        if candidate_codes:
+            self.env.cr.execute(
+                """
+                SELECT id
+                  FROM product_template
+                 WHERE UPPER(REPLACE(COALESCE(default_code, ''), ' ', '')) = ANY(%s)
+                """,
+                [candidate_codes],
             )
-            exact = candidates.filtered(
-                lambda product, target=normalized: normalized_sparex_sku(product.default_code) == target
+            candidate_products = self.env["product.template"].with_context(active_test=False).browse(
+                [row[0] for row in self.env.cr.fetchall()]
             )
-            if len(exact) > 1:
+            for product in candidate_products:
+                normalized = normalized_sparex_sku(product.default_code)
+                if normalized in product_ids_by_sku:
+                    product_ids_by_sku[normalized].append(product.id)
+
+        matched_product_ids = [
+            product_ids[0]
+            for product_ids in product_ids_by_sku.values()
+            if len(product_ids) == 1
+        ]
+        supplier_by_product_id = {}
+        if matched_product_ids:
+            suppliers = self.env["product.supplierinfo"].sudo().search(
+                [
+                    ("product_tmpl_id", "in", matched_product_ids),
+                    ("partner_id.name", "=ilike", "Sparex"),
+                    ("price", ">", 0),
+                ],
+                order="id",
+            )
+            for supplier in suppliers:
+                supplier_by_product_id.setdefault(supplier.product_tmpl_id.id, supplier)
+
+        Item = self.env["southern.sparex.discovery.item"].with_context(
+            tracking_disable=True,
+            mail_create_nolog=True,
+        )
+        existing_items = Item.search(
+            [("company_id", "=", run.company_id.id), ("normalized_sku", "in", normalized_skus)]
+        )
+        existing_item_by_sku = {item.normalized_sku: item for item in existing_items}
+        page_counts = {"matched": 0, "missing": 0, "duplicate": 0, "review": 0}
+        page_corrected = 0
+        page_item_ids = []
+        vendor_catalog_records = []
+        for observation in normalized_observations:
+            raw_sku = observation["raw_sku"]
+            normalized = observation["normalized"]
+            listing_title = observation["listing_title"]
+            source_url = observation["source_url"]
+            image_url = observation["image_url"]
+            source_state = observation["source_state"]
+            exact_ids = product_ids_by_sku.get(normalized, [])
+            exact = self.env["product.template"].with_context(active_test=False).browse(exact_ids)
+            if len(exact_ids) > 1:
                 match_state = "duplicate"
                 matched_product = self.env["product.template"]
-            elif exact:
-                matched_product = exact[0]
+            elif exact_ids:
+                matched_product = exact[:1]
                 match_state = "matched_active" if matched_product.active else "matched_archived"
             else:
                 matched_product = self.env["product.template"]
                 match_state = "missing"
-            positive_supplier = self.env["product.supplierinfo"]
-            if matched_product:
-                positive_supplier = (
-                    self.env["product.supplierinfo"]
-                    .sudo()
-                    .search(
-                        [
-                            ("product_tmpl_id", "=", matched_product.id),
-                            ("partner_id.name", "=ilike", "Sparex"),
-                            ("price", ">", 0),
-                        ],
-                        limit=1,
-                    )
-                )
+            positive_supplier = supplier_by_product_id.get(
+                matched_product.id if matched_product else 0,
+                self.env["product.supplierinfo"],
+            )
             queue_state = "verified" if source_state == "verified" and image_url else "review"
             has_cost = bool(positive_supplier)
             has_sales_price = bool(matched_product and not sales_price_blocker(matched_product, positive_supplier))
@@ -727,7 +1093,7 @@ class SouthernSparexDiscoveryRun(models.Model):
                 and product_has_category
                 and product_has_description
             )
-            item = Item.search([("company_id", "=", run.company_id.id), ("normalized_sku", "=", normalized)], limit=1)
+            item = existing_item_by_sku.get(normalized, Item)
             review_reason = False
             if source_state == "ambiguous":
                 review_reason = "source_ambiguous"
@@ -843,11 +1209,18 @@ class SouthernSparexDiscoveryRun(models.Model):
 
         page_record.write(
             {
+                "page_url": page_url,
+                "page_sha256": page_sha,
+                "artifact_uri": artifact_uri,
+                "artifact_sha256": artifact_sha,
+                "retrieved_at": now,
                 "item_count": len(items),
                 "matched_count": page_counts["matched"],
                 "missing_count": page_counts["missing"],
                 "duplicate_count": page_counts["duplicate"],
                 "review_count": page_counts["review"],
+                "repair_visit_count": page_record.repair_visit_count + (1 if repairing else 0),
+                "last_repair_at": now if repairing else page_record.last_repair_at,
             }
         )
         staged = {"created": 0, "updated": 0, "unchanged": 0, "ready": 0, "observed": 0}
@@ -862,51 +1235,109 @@ class SouthernSparexDiscoveryRun(models.Model):
         next_url = (page.get("next_url") or "").strip()
         if next_url and not _sparex_listing_url(next_url):
             raise UserError(_("The next listing cursor is not an HTTPS Sparex URL."))
-        frontier = [value.strip() for value in (run.frontier_urls or "").splitlines() if value.strip()]
-        visited = {value.strip().casefold() for value in (run.visited_url_sha256s or "").splitlines() if value.strip()}
-        visited.add(page_url_sha)
-        frontier = [value for value in frontier if _sha256_text(value) not in visited and value != page_url]
-        queued_hashes = {_sha256_text(value) for value in frontier}
+        run._ensure_normalized_frontier()
+        URL = self.env["southern.sparex.discovery.url"].sudo()
+        current_url = URL.search(
+            [("run_id", "=", run.id), ("url_sha256", "=", page_url_sha)], limit=1
+        )
+        if not current_url:
+            current_url = URL.create(
+                {
+                    "run_id": run.id,
+                    "company_id": run.company_id.id,
+                    "url": page_url,
+                    "url_sha256": page_url_sha,
+                    "state": "visited" if repairing else "active",
+                }
+            )
+        if repairing:
+            current_url.write(
+                {
+                    "url": page_url,
+                    "state": "visited",
+                    "repair_requested": False,
+                    "repair_reason": False,
+                    "repair_requested_at": False,
+                    "repair_visit_count": current_url.repair_visit_count + 1,
+                    "last_repair_at": now,
+                }
+            )
+        else:
+            current_url.write({"url": page_url, "state": "visited", "last_visited_at": now})
+        candidate_urls = []
         for candidate in listing_urls:
             candidate = (candidate or "").strip()
             if not candidate:
                 continue
             if not _sparex_listing_url(candidate):
                 raise UserError(_("A discovered frontier URL is not an HTTPS Sparex listing URL."))
-            candidate_sha = _sha256_text(candidate)
-            if candidate_sha in visited or candidate_sha in queued_hashes:
-                continue
-            if len(frontier) >= MAX_DISCOVERY_FRONTIER_URLS:
-                raise UserError(_("The bounded discovery frontier is full."))
-            frontier.append(candidate)
-            queued_hashes.add(candidate_sha)
-        frontier.sort(key=_frontier_priority)
+            candidate_urls.append(candidate)
         if next_url:
-            next_sha = _sha256_text(next_url)
-            frontier = [value for value in frontier if _sha256_text(value) != next_sha]
-            if next_sha not in visited:
-                frontier.insert(0, next_url)
-        page_limit_reached = run.page_count + 1 >= run.max_pages_total
-        cursor_url = frontier.pop(0) if frontier and not page_limit_reached else ""
-        completed = not cursor_url
+            candidate_urls.append(next_url)
+        candidate_by_hash = {_sha256_text(url): url for url in candidate_urls}
+        existing_candidates = URL.search(
+            [("run_id", "=", run.id), ("url_sha256", "in", list(candidate_by_hash))]
+        )
+        existing_hashes = set(existing_candidates.mapped("url_sha256"))
+        if next_url:
+            next_hash = _sha256_text(next_url)
+            existing_next = existing_candidates.filtered(lambda row: row.url_sha256 == next_hash)
+            if existing_next and existing_next.state == "queued":
+                existing_next.priority = -100
+        create_values = []
+        for candidate_sha, candidate in candidate_by_hash.items():
+            if candidate_sha in existing_hashes:
+                continue
+            create_values.append(
+                {
+                    "run_id": run.id,
+                    "company_id": run.company_id.id,
+                    "url": candidate,
+                    "url_sha256": candidate_sha,
+                    "state": "queued",
+                    "priority": (
+                        -100
+                        if candidate == next_url
+                        else (_frontier_priority(candidate)[0] * 1_000 + _frontier_priority(candidate)[1])
+                    ),
+                }
+            )
+        if create_values:
+            URL.create(create_values)
+        next_page_count = run.page_count + (0 if repairing else 1)
+        page_limit_reached = next_page_count >= run.max_pages_total
+        selected, cursor_kind = run._select_next_discovery_url(page_limit_reached=page_limit_reached)
+        completed = not selected
+        queue_counts = {
+            "queued_url_count": URL.search_count(
+                [("run_id", "=", run.id), ("state", "in", ["queued", "active"])]
+            ),
+            "visited_url_count": URL.search_count(
+                [("run_id", "=", run.id), ("state", "=", "visited")]
+            ),
+            "repair_queued_url_count": URL.search_count(
+                [("run_id", "=", run.id), ("repair_requested", "=", True)]
+            ),
+            "repair_visited_url_count": URL.search_count(
+                [("run_id", "=", run.id), ("repair_visit_count", ">", 0)]
+            ),
+        }
         run.write(
             {
                 "state": "completed" if completed else "ready",
-                "cursor_url": cursor_url or page_url,
-                "cursor_url_sha256": _sha256_text(cursor_url or page_url),
-                "frontier_urls": "\n".join(frontier) or False,
-                "visited_url_sha256s": "\n".join(sorted(visited)),
-                "queued_url_count": len(frontier) + (1 if cursor_url else 0),
-                "visited_url_count": len(visited),
-                "page_count": run.page_count + 1,
-                "observed_count": run.observed_count + len(items),
-                "matched_count": run.matched_count + page_counts["matched"],
-                "missing_count": run.missing_count + page_counts["missing"],
-                "duplicate_count": run.duplicate_count + page_counts["duplicate"],
-                "review_count": run.review_count + page_counts["review"],
+                "cursor_url": selected.url if selected else page_url,
+                "cursor_url_sha256": selected.url_sha256 if selected else page_url_sha,
+                "cursor_kind": cursor_kind,
+                **queue_counts,
+                "page_count": next_page_count,
+                "observed_count": run.observed_count + (0 if repairing else len(items)),
+                "matched_count": run.matched_count + (0 if repairing else page_counts["matched"]),
+                "missing_count": run.missing_count + (0 if repairing else page_counts["missing"]),
+                "duplicate_count": run.duplicate_count + (0 if repairing else page_counts["duplicate"]),
+                "review_count": run.review_count + (0 if repairing else page_counts["review"]),
                 "corrected_count": run.corrected_count + page_corrected,
-                "product_page_count": run.product_page_count + (1 if items else 0),
-                "empty_page_count": run.empty_page_count + (0 if items else 1),
+                "product_page_count": run.product_page_count + (0 if repairing or not items else 1),
+                "empty_page_count": run.empty_page_count + (0 if repairing or items else 1),
                 "last_page_item_count": len(items),
                 "last_request_at": now,
                 "last_success_at": now,
@@ -914,7 +1345,12 @@ class SouthernSparexDiscoveryRun(models.Model):
                 "recovery_state": "healthy",
                 "next_request_at": False if completed else now + timedelta(seconds=run.throttle_seconds),
                 "completed_at": now if completed else False,
-                "error_code": "max_pages_total_reached" if page_limit_reached and frontier else False,
+                "error_code": (
+                    "max_pages_total_reached"
+                    if page_limit_reached
+                    and URL.search_count([("run_id", "=", run.id), ("state", "=", "queued")])
+                    else False
+                ),
                 "lease_owner": False,
                 "lease_expires_at": False,
             }
@@ -923,6 +1359,7 @@ class SouthernSparexDiscoveryRun(models.Model):
             run._complete_reconciliation()
         return {
             "idempotent": False,
+            "repair": repairing,
             "page_id": page_record.id,
             "state": run.state,
             "next_cursor_sha256": run.cursor_url_sha256,
@@ -966,6 +1403,7 @@ class SouthernSparexDiscoveryPage(models.Model):
     run_id = fields.Many2one("southern.sparex.discovery.run", required=True, ondelete="restrict", index=True)
     company_id = fields.Many2one("res.company", required=True, index=True)
     page_number = fields.Integer(required=True)
+    page_url = fields.Char(readonly=True, copy=False)
     page_url_sha256 = fields.Char(required=True, readonly=True, copy=False)
     page_sha256 = fields.Char(required=True, readonly=True, copy=False)
     artifact_uri = fields.Char(required=True, readonly=True, copy=False)
@@ -976,6 +1414,8 @@ class SouthernSparexDiscoveryPage(models.Model):
     missing_count = fields.Integer(default=0, readonly=True)
     duplicate_count = fields.Integer(default=0, readonly=True)
     review_count = fields.Integer(default=0, readonly=True)
+    repair_visit_count = fields.Integer(default=0, readonly=True)
+    last_repair_at = fields.Datetime(readonly=True)
 
     _page_run_unique = models.Constraint(
         "unique(run_id, page_url_sha256)", "This listing cursor was already recorded for the discovery run."
@@ -993,6 +1433,44 @@ class SouthernSparexDiscoveryPage(models.Model):
                 )
             ):
                 raise ValidationError(_("Discovery page hashes must be SHA-256 hexadecimal values."))
+
+
+class SouthernSparexDiscoveryUrl(models.Model):
+    _name = "southern.sparex.discovery.url"
+    _description = "Sparex Discovery URL Queue"
+    _order = "repair_requested desc, repair_priority desc, priority, id"
+
+    run_id = fields.Many2one("southern.sparex.discovery.run", required=True, ondelete="cascade", index=True)
+    company_id = fields.Many2one("res.company", required=True, index=True)
+    url = fields.Char(readonly=True, copy=False)
+    url_sha256 = fields.Char(required=True, readonly=True, copy=False, index=True)
+    state = fields.Selection(
+        [("queued", "Queued"), ("active", "Active"), ("visited", "Visited")],
+        default="queued",
+        required=True,
+        readonly=True,
+        index=True,
+    )
+    priority = fields.Integer(default=0, readonly=True, index=True)
+    repair_requested = fields.Boolean(default=False, readonly=True, index=True)
+    repair_priority = fields.Integer(default=0, readonly=True, index=True)
+    repair_reason = fields.Char(readonly=True)
+    repair_requested_at = fields.Datetime(readonly=True, index=True)
+    repair_visit_count = fields.Integer(default=0, readonly=True)
+    last_visited_at = fields.Datetime(readonly=True, index=True)
+    last_repair_at = fields.Datetime(readonly=True, index=True)
+
+    _run_url_unique = models.Constraint(
+        "unique(run_id, url_sha256)", "Each listing URL can appear only once in a discovery run queue."
+    )
+
+    @api.constrains("url", "url_sha256")
+    def _check_url_contract(self):
+        for row in self:
+            if not SHA256_PATTERN.fullmatch((row.url_sha256 or "").casefold()):
+                raise ValidationError(_("Discovery queue URL hashes must be SHA-256 hexadecimal values."))
+            if row.url and (not _sparex_listing_url(row.url) or _sha256_text(row.url) != row.url_sha256):
+                raise ValidationError(_("Discovery queue URLs must be checksum-matched HTTPS Sparex listing URLs."))
 
 
 class SouthernSparexDiscoveryItem(models.Model):
