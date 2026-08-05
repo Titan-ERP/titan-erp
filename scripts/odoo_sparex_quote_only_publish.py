@@ -28,6 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--s3-bucket", default=os.environ.get("SOUTHERN_PRODUCT_ARTIFACT_BUCKET", DEFAULT_BUCKET))
     parser.add_argument("--s3-prefix", default="sparex/quote-only-publication")
     parser.add_argument("--limit", type=int, default=MAX_BATCH)
+    parser.add_argument("--company-id", type=int, required=True)
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--confirm", default="")
     parser.add_argument("--reason", default="")
@@ -47,7 +48,12 @@ def main() -> int:
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     store = ArtifactStore(args.artifact_root / stamp, schema_version="1.0")
     prefix = f"{args.s3_prefix.strip('/')}/{stamp}"
-    plan = client.call("southern.vendor.catalog.item", "prepare_quote_publication_plan", limit=limit)
+    plan = client.call(
+        "southern.vendor.catalog.item",
+        "prepare_quote_publication_plan",
+        limit=limit,
+        company_id=args.company_id,
+    )
     plan_record = archive(store, "plan.json", plan, args.s3_bucket, prefix)
     result = {
         "mode": "apply" if args.apply else "dry-run",
