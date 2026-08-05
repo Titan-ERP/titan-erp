@@ -30,7 +30,7 @@ class ProductionHardeningTests(unittest.TestCase):
         self.assertIn("pg_try_advisory_xact_lock", evidence)
         self.assertIn("internal_cron_enabled", catalog)
         self.assertIn("batch_size = max(min", catalog)
-        self.assertIn("MAX_CONSECUTIVE_RELEASES = 3", catalog)
+        self.assertIn("MAX_CONSECUTIVE_RELEASES = 7", catalog)
         self.assertIn("releases_since_discovery < MAX_CONSECUTIVE_RELEASES", catalog)
 
     def test_partner_pricing_application_is_off_by_default(self):

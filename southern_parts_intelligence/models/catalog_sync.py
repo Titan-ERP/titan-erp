@@ -5,7 +5,7 @@ from datetime import timedelta
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
-MAX_CONSECUTIVE_RELEASES = 3
+MAX_CONSECUTIVE_RELEASES = 7
 
 
 class SouthernPartsCatalogSync(models.Model):
