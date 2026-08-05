@@ -186,13 +186,22 @@ class OdooProductDispatchWorkerTests(unittest.TestCase):
     def test_finish_values_include_cost_recovery_progress(self):
         values = finish_values(
             {
-                "cost_recovery": {"state": "completed", "claimed": 5, "accepted": 4, "applied": 4},
+                "cost_recovery": {
+                    "state": "completed",
+                    "claimed": 5,
+                    "accepted": 4,
+                    "applied": 4,
+                    "http_requests": 7,
+                    "slow_pages": 1,
+                },
                 "result_uri": "s3://bucket/result.json",
                 "result_sha256": "b" * 64,
             }
         )
         self.assertEqual(values["processed_count"], 5)
         self.assertEqual(values["changed_count"], 4)
+        self.assertEqual(values["http_request_count"], 7)
+        self.assertEqual(values["slow_page_count"], 1)
         self.assertEqual(
             json.loads(values["evidence_summary"])["cost_recovery"]["accepted"],
             4,

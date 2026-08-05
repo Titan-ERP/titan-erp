@@ -74,12 +74,31 @@ class PortalCooldownError(RuntimeError):
 class RequestThrottle:
     seconds: float
     last_request: float = 0.0
+    request_count: int = 0
+    slow_request_count: int = 0
+    max_request_seconds: float = 0.0
+    slow_request_seconds: float = 8.0
 
     def wait(self) -> None:
         remaining = self.seconds - (time.monotonic() - self.last_request)
         if remaining > 0:
             time.sleep(remaining)
         self.last_request = time.monotonic()
+
+    def record_request(self, elapsed_seconds: float) -> None:
+        elapsed = max(0.0, float(elapsed_seconds))
+        self.request_count += 1
+        self.max_request_seconds = max(self.max_request_seconds, elapsed)
+        if elapsed >= self.slow_request_seconds:
+            self.slow_request_count += 1
+
+    def telemetry(self) -> dict[str, Any]:
+        return {
+            "http_requests": self.request_count,
+            "slow_pages": self.slow_request_count,
+            "http_backoffs": 0,
+            "max_page_seconds": round(self.max_request_seconds, 3),
+        }
 
 
 def utc_stamp() -> str:
@@ -289,7 +308,11 @@ def find_next_listing_url(document, page_url: str) -> str:
 
 def _checked_request(session: requests.Session, throttle: RequestThrottle, method: str, url: str, **kwargs):
     throttle.wait()
-    response = session.request(method, url, timeout=45, allow_redirects=True, **kwargs)
+    started = time.monotonic()
+    try:
+        response = session.request(method, url, timeout=45, allow_redirects=True, **kwargs)
+    finally:
+        throttle.record_request(time.monotonic() - started)
     if response.status_code in PORTAL_COOLDOWN_STATUSES:
         raise PortalCooldownError(f"portal_http_{response.status_code}")
     response.raise_for_status()
@@ -625,6 +648,7 @@ def main() -> int:
             "product_creation_authorized": bool(args.create_missing_products),
             "created_count": created_count,
             "created_products": created_products,
+            **(throttle.telemetry() if throttle else RequestThrottle(throttle_seconds).telemetry()),
         }
         result_record = _archive(store, "result.json", result, args.s3_bucket, archive_prefix)
         print(
@@ -639,6 +663,10 @@ def main() -> int:
                     "stale": stale,
                     "created_count": created_count,
                     "counts": aggregate_counts,
+                    "http_requests": result["http_requests"],
+                    "slow_pages": result["slow_pages"],
+                    "http_backoffs": result["http_backoffs"],
+                    "max_page_seconds": result["max_page_seconds"],
                     "result_sha256": result_record["sha256"],
                     "result_uri": result_record["artifact_uri"],
                 },
