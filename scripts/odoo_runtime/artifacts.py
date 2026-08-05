@@ -4,10 +4,11 @@ import csv
 import hashlib
 import json
 import shutil
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 MIN_FREE_GB = 2
 MIN_FREE_BYTES = MIN_FREE_GB * 1024**3
@@ -46,7 +47,7 @@ class ArtifactStore:
             "sha256": sha256_file(artifact),
             "bytes": artifact.stat().st_size,
             "record_count": record_count,
-            "created_at_utc": datetime.now(timezone.utc).isoformat(),
+            "created_at_utc": datetime.now(UTC).isoformat(),
         }
         manifest = self.root / "manifest.jsonl"
         with manifest.open("a", encoding="utf-8") as handle:
@@ -70,11 +71,18 @@ class ArtifactStore:
         path = self.root / name
         envelope = {
             "schema_version": self.schema_version,
-            "created_at_utc": datetime.now(timezone.utc).isoformat(),
+            "created_at_utc": datetime.now(UTC).isoformat(),
             "data": value,
         }
         path.write_text(json.dumps(envelope, indent=2, default=str) + "\n", encoding="utf-8")
         return self._record(path, record_count, "json")
+
+    def write_bytes(self, name: str, value: bytes, *, record_count: int = 1, kind: str = "binary") -> dict[str, Any]:
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.ensure_capacity()
+        path = self.root / name
+        path.write_bytes(value)
+        return self._record(path, record_count, kind)
 
     def archive_s3(
         self,
@@ -130,7 +138,7 @@ class ArtifactStore:
         manifest = self.root / "manifest.jsonl"
         if not manifest.exists():
             return {"deleted": 0, "retained": 0}
-        cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=retention_days)
+        cutoff = (now or datetime.now(UTC)) - timedelta(days=retention_days)
         retained: list[dict[str, Any]] = []
         deleted = 0
         for line in manifest.read_text(encoding="utf-8").splitlines():
@@ -141,7 +149,7 @@ class ArtifactStore:
             artifact = Path(row["path"]).resolve()
             if created < cutoff and self.root.resolve() in artifact.parents:
                 artifact.unlink(missing_ok=True)
-                row["local_deleted_at_utc"] = datetime.now(timezone.utc).isoformat()
+                row["local_deleted_at_utc"] = datetime.now(UTC).isoformat()
                 deleted += 1
             retained.append(row)
         manifest.write_text(
