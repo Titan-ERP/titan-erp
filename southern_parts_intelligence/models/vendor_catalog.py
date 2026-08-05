@@ -465,6 +465,21 @@ class SouthernVendorCatalogItem(models.Model):
             raise UserError(_("No writable website publication field is available."))
         return fields_to_write
 
+    @api.model
+    def _quote_publication_source(self, company_id=False):
+        allowed_company_ids = self.env.user.company_ids.ids
+        domain = [
+            ("code", "=", "sparex"),
+            ("active", "=", True),
+            ("company_id", "in", allowed_company_ids),
+        ]
+        if company_id:
+            domain.append(("company_id", "=", int(company_id)))
+        sources = self.env["southern.vendor.catalog.source"].sudo().search(domain, limit=2)
+        if len(sources) != 1:
+            raise UserError(_("Exactly one authorized Sparex catalog source must match the selected company."))
+        return sources
+
     def _quote_publication_snapshot(self):
         self.ensure_one()
         product = self.product_id.sudo()
@@ -486,6 +501,8 @@ class SouthernVendorCatalogItem(models.Model):
             source_url_after = self.source_url
         snapshot = {
             "item_id": self.id,
+            "company_id": self.company_id.id,
+            "source_id": self.source_id.id,
             "product_id": product.id,
             "sku": normalized,
             "item_write_date": str(self.write_date or ""),
@@ -539,12 +556,13 @@ class SouthernVendorCatalogItem(models.Model):
         return not self._quote_publication_blockers()
 
     @api.model
-    def quote_publication_diagnostics(self, limit=5_000):
+    def quote_publication_diagnostics(self, limit=5_000, company_id=False):
         bounded = max(1, min(int(limit or 5_000), 5_000))
+        source = self._quote_publication_source(company_id)
         items = self.sudo().search(
             [
-                ("company_id", "=", self.env.company.id),
-                ("source_id.code", "=", "sparex"),
+                ("company_id", "=", source.company_id.id),
+                ("source_id", "=", source.id),
                 ("match_state", "=", "matched"),
                 ("product_id", "!=", False),
                 ("active", "=", True),
@@ -563,12 +581,13 @@ class SouthernVendorCatalogItem(models.Model):
         return {"scanned": len(items), "eligible": eligible, "blockers": counts}
 
     @api.model
-    def prepare_quote_publication_plan(self, limit=MAX_PROMOTION_BATCH):
+    def prepare_quote_publication_plan(self, limit=MAX_PROMOTION_BATCH, company_id=False):
         bounded = max(1, min(int(limit or MAX_PROMOTION_BATCH), MAX_PROMOTION_BATCH))
+        source = self._quote_publication_source(company_id)
         items = self.sudo().search(
             [
-                ("company_id", "=", self.env.company.id),
-                ("source_id.code", "=", "sparex"),
+                ("company_id", "=", source.company_id.id),
+                ("source_id", "=", source.id),
                 ("match_state", "=", "matched"),
                 ("product_id", "!=", False),
                 ("active", "=", True),
@@ -602,7 +621,13 @@ class SouthernVendorCatalogItem(models.Model):
         publication_fields = self._publication_fields()
         for prepared in records:
             item = self.sudo().browse(int(prepared.get("item_id") or 0)).exists()
-            if not item or item.company_id != self.env.company:
+            allowed_company_ids = self.env.user.company_ids.ids
+            if (
+                not item
+                or item.company_id.id not in allowed_company_ids
+                or item.company_id.id != int(prepared.get("company_id") or 0)
+                or item.source_id.id != int(prepared.get("source_id") or 0)
+            ):
                 raise UserError(_("The prepared Sparex catalog item is unavailable."))
             self.env.cr.execute(
                 "SELECT id FROM southern_vendor_catalog_item WHERE id = %s FOR UPDATE NOWAIT", [item.id]
