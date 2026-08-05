@@ -166,7 +166,7 @@ class TestCatalogAgents(TransactionCase):
 
         self.assertTrue(product.website_published)
 
-    def test_native_publication_gate_allows_evidence_complete_quote_only_product(self):
+    def test_native_publication_gate_blocks_evidence_complete_quote_only_product(self):
         product = self.env["product.template"].create(
             {
                 "name": "Quote-only Sparex part",
@@ -181,21 +181,10 @@ class TestCatalogAgents(TransactionCase):
                 "website_published": False,
             }
         )
-        product.website_published = True
-        self.assertTrue(product.website_published)
-        with self.assertRaises(ValidationError), self.env.cr.savepoint():
-            product.list_price = 10.0
-        product.invalidate_recordset()
-        product.list_price = 4.99
         with self.assertRaises(ValidationError), self.env.cr.savepoint():
             product.website_published = True
         product.invalidate_recordset()
-        product.list_price = 9.99
-        product.description_ecommerce = (
-            "Internal catalog record. Not published to the website until pricing is reviewed."
-        )
-        with self.assertRaises(ValidationError), self.env.cr.savepoint():
-            product.website_published = True
+        self.assertFalse(product.website_published)
 
     def test_missing_sku_is_recorded_without_product_creation(self):
         before = self.env["product.template"].search_count([])
