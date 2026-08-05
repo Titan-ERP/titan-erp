@@ -182,6 +182,12 @@ def finish_values(result: dict[str, Any]) -> dict[str, Any]:
     artifact_uri = result.get("result_uri") or ""
     cost_recovery = dict(result.get("cost_recovery") or {})
     discovery_changed = int(result.get("corrected") or 0) + int(result.get("created_count") or 0)
+    http_requests = int(
+        result.get("http_requests")
+        if result.get("http_requests") is not None
+        else result.get("pages_processed") or cost_recovery.get("http_requests") or 0
+    )
+    slow_pages = int(result.get("slow_pages") or cost_recovery.get("slow_pages") or 0)
     return {
         "processed_count": int(
             result.get("pages_processed") or cost_recovery.get("claimed") or result.get("prepared") or 0
@@ -194,7 +200,8 @@ def finish_values(result: dict[str, Any]) -> dict[str, Any]:
             or 0
         ),
         "error_count": int(bool(result.get("failed"))),
-        "http_request_count": int(result.get("pages_processed") or 0),
+        "http_request_count": http_requests,
+        "slow_page_count": slow_pages,
         "artifact_uri": artifact_uri,
         "artifact_sha256": result.get("result_sha256") or "",
         "artifact_schema_version": "1.1",
@@ -211,6 +218,10 @@ def finish_values(result: dict[str, Any]) -> dict[str, Any]:
                     "created_count",
                     "prepared",
                     "published",
+                    "http_requests",
+                    "slow_pages",
+                    "http_backoffs",
+                    "max_page_seconds",
                     "cost_recovery",
                 )
                 if key in result

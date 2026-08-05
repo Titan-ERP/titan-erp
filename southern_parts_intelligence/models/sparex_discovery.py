@@ -305,6 +305,7 @@ class SouthernSparexDiscoveryRun(models.Model):
         "item_ids.primary_blocker",
         "item_ids.cost_recovery_state",
         "item_ids.readiness_refreshed_at",
+        "item_ids.matched_product_id.website_published",
     )
     def _compute_dashboard_counts(self):
         Item = self.env["southern.sparex.discovery.item"]
@@ -319,11 +320,13 @@ class SouthernSparexDiscoveryRun(models.Model):
             run.source_review_item_count = Item.search_count(current_domain + [("state", "=", "review")])
             blocked_domain = current_domain + [
                 ("odoo_match_state", "=", "matched_active"),
-                ("currently_published", "=", False),
+                ("matched_product_id.website_published", "=", False),
                 ("publication_candidate", "=", False),
             ]
             run.blocked_item_count = Item.search_count(blocked_domain)
-            run.published_product_count = Item.search_count(current_domain + [("currently_published", "=", True)])
+            run.published_product_count = Item.search_count(
+                current_domain + [("matched_product_id.website_published", "=", True)]
+            )
             run.readiness_refreshed_count = Item.search_count(
                 current_domain + [("readiness_refreshed_at", "!=", False)]
             )

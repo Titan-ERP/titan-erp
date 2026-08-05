@@ -1,7 +1,10 @@
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from scripts.sparex_catalog_discovery import (
+    RequestThrottle,
+    _checked_request,
     adaptive_checkpoint_pages,
     exact_sparex_product_url,
     parse_listing_page,
@@ -11,6 +14,24 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class SparexCatalogDiscoveryParserTests(unittest.TestCase):
+    def test_checked_request_records_request_latency_without_retries(self):
+        class Session:
+            @staticmethod
+            def request(*_args, **_kwargs):
+                return type("Response", (), {"status_code": 200, "raise_for_status": lambda self: None})()
+
+        throttle = RequestThrottle(3.0)
+        with patch(
+            "scripts.sparex_catalog_discovery.time.monotonic",
+            side_effect=[100.0, 100.0, 101.0, 110.5],
+        ):
+            _checked_request(Session(), throttle, "GET", "https://us.sparex.com/products")
+
+        self.assertEqual(throttle.request_count, 1)
+        self.assertEqual(throttle.slow_request_count, 1)
+        self.assertEqual(throttle.max_request_seconds, 9.5)
+        self.assertEqual(throttle.telemetry()["http_backoffs"], 0)
+
     def test_extracts_exact_links_images_and_next_listing_cursor(self):
         page = b"""
         <html><body>
