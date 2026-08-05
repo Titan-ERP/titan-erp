@@ -323,16 +323,12 @@ class TestSparexDiscovery(TransactionCase):
                 "name": "Source-link candidate",
                 "default_code": "S.710001",
                 "active": True,
-                "list_price": 30.0,
+                "list_price": 0.0,
                 "image_1920": base64.b64encode(b"product-image"),
                 "public_categ_ids": [(6, 0, self.website_category.ids)],
                 "description_ecommerce": "Customer-ready source-link description.",
                 "website_published": False,
             }
-        )
-        supplier = self.env["res.partner"].create({"name": "Sparex", "supplier_rank": 1})
-        self.env["product.supplierinfo"].create(
-            {"partner_id": supplier.id, "product_tmpl_id": product.id, "price": 12.0, "min_qty": 1.0}
         )
         seed = "https://us.sparex.com/source-link-listing.html"
         run = self.env["southern.sparex.discovery.run"].start_discovery_run(
@@ -378,7 +374,8 @@ class TestSparexDiscovery(TransactionCase):
         )
         self.assertEqual(product.southern_source_url, "https://us.sparex.com/part-710001.html")
         item = Item.browse(applied[0]["item_id"])
-        self.assertTrue(item.publication_candidate)
+        self.assertFalse(item.publication_candidate)
+        self.assertEqual(item.cost_recovery_state, "queued")
 
         placeholder = "Internal catalog record. Not published to the website until pricing is reviewed."
         product.write(
@@ -398,7 +395,7 @@ class TestSparexDiscovery(TransactionCase):
             "Repair verified listing placeholder copy",
         )
         self.assertIn("Source Link Service Part", product.description_sale)
-        self.assertTrue(item.publication_candidate)
+        self.assertFalse(item.publication_candidate)
         Item.rollback_description_repairs(repaired_descriptions, "Synthetic description rollback")
         self.assertEqual(product.description_sale, placeholder)
         Item.rollback_source_links(applied, "Synthetic source-link rollback")
@@ -415,7 +412,7 @@ class TestSparexDiscovery(TransactionCase):
             image_plan, "sparex-discovery-source-link", "Test exact URL and image repair"
         )
         self.assertTrue(product.image_1920)
-        self.assertTrue(item.publication_candidate)
+        self.assertFalse(item.publication_candidate)
         Item.rollback_source_links(repaired, "Synthetic URL and image rollback")
         self.assertFalse(product.southern_source_url)
         self.assertFalse(product.image_1920)
@@ -532,7 +529,7 @@ class TestSparexDiscovery(TransactionCase):
                 "image_1920": base64.b64encode(b"cost-recovery-image"),
                 "public_categ_ids": [(6, 0, self.website_category.ids)],
                 "description_ecommerce": "Customer-ready dealer-cost description.",
-                "website_published": True,
+                "website_published": False,
             }
         )
         supplier = self.env["res.partner"].create({"name": "Sparex", "supplier_rank": 1})
@@ -600,6 +597,7 @@ class TestSparexDiscovery(TransactionCase):
         self.assertFalse(product.southern_quote_only)
         self.assertEqual(product.southern_price_basis, "cost_plus")
         self.assertEqual(product.southern_cost_plus_margin_percent, 35.0)
+        product.website_published = True
         self.assertTrue(product.website_published)
         self.assertEqual(item.primary_blocker, "already_published")
         self.assertEqual(item.cost_evidence_sha256, "d" * 64)

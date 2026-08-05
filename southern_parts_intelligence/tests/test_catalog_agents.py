@@ -76,6 +76,21 @@ class TestCatalogAgents(TransactionCase):
             },
         )
 
+    def _record_current_dealer_evidence(self, product, source_url):
+        self._record_current_discovery(product, source_url)
+        item = self.env["southern.sparex.discovery.item"].search(
+            [("matched_product_id", "=", product.id)], order="id desc", limit=1
+        )
+        source_sha = hashlib.sha256(source_url.encode()).hexdigest()
+        item.write(
+            {
+                "cost_recovery_state": "resolved",
+                "cost_evidence_sha256": hashlib.sha256(f"dealer-cost-{product.id}".encode()).hexdigest(),
+                "cost_evidence_url_sha256": source_sha,
+                "cost_recovered_at": "2026-08-05 12:00:00",
+            }
+        )
+
     def test_ready_snapshot_requires_customer_ready_product_data(self):
         product = self.env["product.template"].create(
             {
@@ -147,7 +162,8 @@ class TestCatalogAgents(TransactionCase):
                 "name": "Low-cost guarded Sparex part",
                 "default_code": "S.880001",
                 "active": True,
-                "list_price": 1.13,
+                "list_price": 1.08,
+                "standard_price": 0.70,
                 "southern_price_basis": "cost_plus",
                 "southern_cost_plus_margin_percent": 35.0,
                 "southern_source_url": "https://us.sparex.com/example-880001.html",
@@ -161,12 +177,65 @@ class TestCatalogAgents(TransactionCase):
         self.env["product.supplierinfo"].create(
             {"partner_id": supplier.id, "product_tmpl_id": product.id, "price": 0.70, "min_qty": 1.0}
         )
+        self._record_current_dealer_evidence(product, "https://us.sparex.com/example-880001.html")
 
         product.website_published = True
 
         self.assertTrue(product.website_published)
 
-    def test_native_publication_gate_allows_evidence_complete_quote_only_product(self):
+    def test_native_publication_gate_requires_exact_dealer_cost_evidence(self):
+        product = self.env["product.template"].create(
+            {
+                "name": "Unverified dealer-cost Sparex part",
+                "default_code": "S.880002",
+                "active": True,
+                "list_price": 15.39,
+                "standard_price": 10.0,
+                "southern_price_basis": "cost_plus",
+                "southern_cost_plus_margin_percent": 35.0,
+                "southern_source_url": "https://us.sparex.com/example-880002.html",
+                "image_1920": base64.b64encode(b"unverified-cost-image"),
+                "public_categ_ids": [(6, 0, self.website_category.ids)],
+                "description_ecommerce": "Customer-ready replacement part description.",
+                "website_published": False,
+            }
+        )
+        supplier = self.env["res.partner"].create({"name": "Sparex", "supplier_rank": 1})
+        self.env["product.supplierinfo"].create(
+            {"partner_id": supplier.id, "product_tmpl_id": product.id, "price": 10.0, "min_qty": 1.0}
+        )
+        self._record_current_discovery(product, "https://us.sparex.com/example-880002.html")
+
+        with self.assertRaisesRegex(ValidationError, "missing_exact_dealer_cost_evidence"):
+            with self.env.cr.savepoint():
+                product.website_published = True
+
+    def test_native_publication_gate_requires_verified_price_basis(self):
+        product = self.env["product.template"].create(
+            {
+                "name": "Unclassified-price Sparex part",
+                "default_code": "S.880003",
+                "active": True,
+                "list_price": 20.0,
+                "standard_price": 10.0,
+                "southern_source_url": "https://us.sparex.com/example-880003.html",
+                "image_1920": base64.b64encode(b"unclassified-price-image"),
+                "public_categ_ids": [(6, 0, self.website_category.ids)],
+                "description_ecommerce": "Customer-ready replacement part description.",
+                "website_published": False,
+            }
+        )
+        supplier = self.env["res.partner"].create({"name": "Sparex", "supplier_rank": 1})
+        self.env["product.supplierinfo"].create(
+            {"partner_id": supplier.id, "product_tmpl_id": product.id, "price": 10.0, "min_qty": 1.0}
+        )
+        self._record_current_dealer_evidence(product, "https://us.sparex.com/example-880003.html")
+
+        with self.assertRaisesRegex(ValidationError, "missing_verified_price_basis"):
+            with self.env.cr.savepoint():
+                product.website_published = True
+
+    def test_native_publication_gate_blocks_evidence_complete_quote_only_product(self):
         product = self.env["product.template"].create(
             {
                 "name": "Quote-only Sparex part",
@@ -181,21 +250,10 @@ class TestCatalogAgents(TransactionCase):
                 "website_published": False,
             }
         )
-        product.website_published = True
-        self.assertTrue(product.website_published)
-        with self.assertRaises(ValidationError), self.env.cr.savepoint():
-            product.list_price = 10.0
-        product.invalidate_recordset()
-        product.list_price = 4.99
         with self.assertRaises(ValidationError), self.env.cr.savepoint():
             product.website_published = True
         product.invalidate_recordset()
-        product.list_price = 9.99
-        product.description_ecommerce = (
-            "Internal catalog record. Not published to the website until pricing is reviewed."
-        )
-        with self.assertRaises(ValidationError), self.env.cr.savepoint():
-            product.website_published = True
+        self.assertFalse(product.website_published)
 
     def test_missing_sku_is_recorded_without_product_creation(self):
         before = self.env["product.template"].search_count([])
@@ -224,7 +282,8 @@ class TestCatalogAgents(TransactionCase):
                 "default_code": "S.880001",
                 "active": True,
                 "list_price": 40.0,
-                "standard_price": 11.0,
+                "standard_price": 15.0,
+                "southern_price_basis": "retail_evidence",
                 "southern_source_url": "https://us.sparex.com/example-880001.html",
                 "image_1920": base64.b64encode(b"release-image"),
                 "public_categ_ids": [(6, 0, self.website_category.ids)],
@@ -236,7 +295,7 @@ class TestCatalogAgents(TransactionCase):
         self.env["product.supplierinfo"].create(
             {"partner_id": supplier.id, "product_tmpl_id": product.id, "price": 15.0, "min_qty": 1.0}
         )
-        self._record_current_discovery(product, "https://us.sparex.com/example-880001.html")
+        self._record_current_dealer_evidence(product, "https://us.sparex.com/example-880001.html")
         agents = self.env["southern.catalog.agent"].search(
             [("company_id", "=", self.env.company.id), ("active", "=", True)]
         )
