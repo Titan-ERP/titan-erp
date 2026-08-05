@@ -430,13 +430,16 @@ class SouthernPartsCatalogSync(models.Model):
                     }
                 )
                 return False
-        requested_count = max(1, min(int(self.batch_size or 5), 5))
+        portal_limit = max(1, min(int(self.batch_size or 5), 5))
+        release_limit = max(1, min(int(self.batch_size or 50), 50))
+        requested_count = release_limit if mode == "apply" else portal_limit
         creates_drafts = bool(mode == "evidence_only" and self.page_driven_creation_enabled)
         run_mode = "apply" if creates_drafts else mode
         request = {
-            "schema_version": "1.0",
+            "schema_version": "1.1",
             "job_type": job_type,
-            "limit": requested_count,
+            "limit": portal_limit,
+            "release_limit": release_limit,
             "throttle_seconds": 3.0,
             "http_retries": 0,
             "publish": mode == "apply",

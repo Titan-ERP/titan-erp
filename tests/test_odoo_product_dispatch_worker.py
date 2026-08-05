@@ -138,6 +138,24 @@ class OdooProductDispatchWorkerTests(unittest.TestCase):
         self.assertIn("scripts.sparex_catalog_agents.orchestrator", command)
         self.assertIn("--publish", command)
 
+    def test_release_separates_portal_access_from_odoo_throughput(self):
+        command = self.command(
+            {
+                "job_type": "catalog_release",
+                "mode": "apply",
+                "request": {
+                    "job_type": "catalog_release",
+                    "publish": True,
+                    "limit": 500,
+                    "release_limit": 500,
+                    "http_retries": 0,
+                },
+            }
+        )
+        self.assertEqual(command[command.index("--cost-recovery-limit") + 1], "5")
+        self.assertEqual(command[command.index("--source-repair-limit") + 1], "5")
+        self.assertEqual(command[command.index("--limit") + 1], "50")
+
     def test_finish_values_preserve_archived_result_evidence(self):
         values = finish_values(
             {
