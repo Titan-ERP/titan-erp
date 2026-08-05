@@ -289,6 +289,12 @@ class TestSparexDiscovery(TransactionCase):
         )
         self.assertEqual(queued["cursor_kind"], "repair")
         self.assertEqual(active_run.cursor_url, seed_url)
+        self.assertEqual(active_run.repair_queued_url_count, 1)
+        queued_again = self.env["southern.sparex.discovery.run"].queue_discovery_page_repairs(
+            run["id"], [seed_url], "Reparse legacy listing evidence"
+        )
+        self.assertEqual(queued_again["repair_queued_url_count"], 1)
+        self.assertEqual(active_run.queued_url_count, 1)
 
         self.env["southern.sparex.discovery.run"].claim_discovery_checkpoint(
             run["id"], "repair-test-worker", 180

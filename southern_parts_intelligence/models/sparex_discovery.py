@@ -678,26 +678,6 @@ class SouthernSparexDiscoveryRun(models.Model):
                 selected.state = "active"
         return selected, cursor_kind
 
-    def _refresh_url_queue_counts(self):
-        self.ensure_one()
-        URL = self.env["southern.sparex.discovery.url"].sudo()
-        counts = {
-            "queued_url_count": URL.search_count(
-                [("run_id", "=", self.id), ("state", "in", ["queued", "active"])]
-            ),
-            "visited_url_count": URL.search_count(
-                [("run_id", "=", self.id), ("state", "=", "visited")]
-            ),
-            "repair_queued_url_count": URL.search_count(
-                [("run_id", "=", self.id), ("repair_requested", "=", True)]
-            ),
-            "repair_visited_url_count": URL.search_count(
-                [("run_id", "=", self.id), ("repair_visit_count", ">", 0)]
-            ),
-        }
-        self.write(counts)
-        return counts
-
     @api.model
     def queue_discovery_page_repairs(self, run_id, page_urls, reason, priority=100):
         run = self.browse(int(run_id)).exists()
@@ -725,6 +705,9 @@ class SouthernSparexDiscoveryRun(models.Model):
             .mapped("page_url_sha256")
         )
         create_values = []
+        repair_count_delta = 0
+        queued_count_delta = 0
+        visited_count_delta = 0
         for url_hash, url in hashes.items():
             row = by_hash.get(url_hash)
             values = {
@@ -735,8 +718,14 @@ class SouthernSparexDiscoveryRun(models.Model):
                 "repair_requested_at": now,
             }
             if row:
+                repair_count_delta += 0 if row.repair_requested else 1
                 row.write(values)
             else:
+                repair_count_delta += 1
+                if url_hash in page_hashes:
+                    visited_count_delta += 1
+                else:
+                    queued_count_delta += 1
                 create_values.append(
                     {
                         **values,
@@ -755,6 +744,12 @@ class SouthernSparexDiscoveryRun(models.Model):
         if active_frontier:
             active_frontier.state = "queued"
         selected, cursor_kind = run._select_next_discovery_url()
+        counts = {
+            "queued_url_count": run.queued_url_count + queued_count_delta,
+            "visited_url_count": run.visited_url_count + visited_count_delta,
+            "repair_queued_url_count": run.repair_queued_url_count + repair_count_delta,
+            "repair_visited_url_count": run.repair_visited_url_count,
+        }
         if selected:
             run.write(
                 {
@@ -765,9 +760,11 @@ class SouthernSparexDiscoveryRun(models.Model):
                     "completed_at": False,
                     "error_code": False,
                     "error_message": False,
+                    **counts,
                 }
             )
-        counts = run._refresh_url_queue_counts()
+        else:
+            run.write(counts)
         return {"queued": len(urls), "cursor_kind": run.cursor_kind, **counts}
 
     @api.model
@@ -1240,6 +1237,7 @@ class SouthernSparexDiscoveryRun(models.Model):
         current_url = URL.search(
             [("run_id", "=", run.id), ("url_sha256", "=", page_url_sha)], limit=1
         )
+        current_created = not current_url
         if not current_url:
             current_url = URL.create(
                 {
@@ -1250,6 +1248,9 @@ class SouthernSparexDiscoveryRun(models.Model):
                     "state": "visited" if repairing else "active",
                 }
             )
+        current_was_queued = current_url.state in {"queued", "active"}
+        repair_was_requested = bool(current_url.repair_requested)
+        first_repair_visit = bool(repairing and not current_url.repair_visit_count)
         if repairing:
             current_url.write(
                 {
@@ -1309,18 +1310,18 @@ class SouthernSparexDiscoveryRun(models.Model):
         selected, cursor_kind = run._select_next_discovery_url(page_limit_reached=page_limit_reached)
         completed = not selected
         queue_counts = {
-            "queued_url_count": URL.search_count(
-                [("run_id", "=", run.id), ("state", "in", ["queued", "active"])]
+            "queued_url_count": max(
+                0,
+                run.queued_url_count - (1 if current_was_queued else 0) + len(create_values),
             ),
-            "visited_url_count": URL.search_count(
-                [("run_id", "=", run.id), ("state", "=", "visited")]
+            "visited_url_count": run.visited_url_count
+            + (1 if current_was_queued or current_created else 0),
+            "repair_queued_url_count": max(
+                0,
+                run.repair_queued_url_count - (1 if repair_was_requested else 0),
             ),
-            "repair_queued_url_count": URL.search_count(
-                [("run_id", "=", run.id), ("repair_requested", "=", True)]
-            ),
-            "repair_visited_url_count": URL.search_count(
-                [("run_id", "=", run.id), ("repair_visit_count", ">", 0)]
-            ),
+            "repair_visited_url_count": run.repair_visited_url_count
+            + (1 if first_repair_visit else 0),
         }
         run.write(
             {
@@ -1347,8 +1348,7 @@ class SouthernSparexDiscoveryRun(models.Model):
                 "completed_at": now if completed else False,
                 "error_code": (
                     "max_pages_total_reached"
-                    if page_limit_reached
-                    and URL.search_count([("run_id", "=", run.id), ("state", "=", "queued")])
+                    if page_limit_reached and queue_counts["queued_url_count"]
                     else False
                 ),
                 "lease_owner": False,
@@ -1463,6 +1463,23 @@ class SouthernSparexDiscoveryUrl(models.Model):
     _run_url_unique = models.Constraint(
         "unique(run_id, url_sha256)", "Each listing URL can appear only once in a discovery run queue."
     )
+
+    def init(self):
+        self.env.cr.execute(
+            """
+            CREATE INDEX IF NOT EXISTS southern_sparex_discovery_url_frontier_idx
+                ON southern_sparex_discovery_url (run_id, priority, id)
+             WHERE state = 'queued' AND url IS NOT NULL
+            """
+        )
+        self.env.cr.execute(
+            """
+            CREATE INDEX IF NOT EXISTS southern_sparex_discovery_url_repair_idx
+                ON southern_sparex_discovery_url
+                    (run_id, repair_priority DESC, repair_requested_at, id)
+             WHERE repair_requested IS TRUE AND url IS NOT NULL
+            """
+        )
 
     @api.constrains("url", "url_sha256")
     def _check_url_contract(self):
