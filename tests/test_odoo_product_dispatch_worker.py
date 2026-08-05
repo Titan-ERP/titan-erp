@@ -137,6 +137,7 @@ class OdooProductDispatchWorkerTests(unittest.TestCase):
         )
         self.assertIn("scripts.sparex_catalog_agents.orchestrator", command)
         self.assertIn("--publish", command)
+        self.assertIn("--skip-quote-publication", command)
 
     def test_release_separates_portal_access_from_odoo_throughput(self):
         command = self.command(

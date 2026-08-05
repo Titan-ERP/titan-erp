@@ -119,6 +119,7 @@ def build_job_command(
             str(portal_limit),
             "--source-repair-limit",
             str(portal_limit),
+            "--skip-quote-publication",
             "--throttle-seconds",
             str(throttle),
             "--apply",
@@ -270,7 +271,7 @@ def main() -> int:
                 state="blocked" if cooldown else "failed",
                 values={
                     "error_count": 1,
-                    "error_message": "Product worker exited with status %s." % completed.returncode,
+                    "error_message": f"Product worker exited with status {completed.returncode}.",
                     "cooldown_minutes": cooldown,
                 },
             )
