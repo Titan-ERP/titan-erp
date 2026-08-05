@@ -20,6 +20,7 @@ exec "${install_root}/venv/bin/python" -m scripts.sparex_catalog_agents.orchestr
   --artifact-root "${artifact_root}" \
   --limit 50 \
   --cost-recovery-limit 5 \
+  --skip-quote-publication \
   --throttle-seconds 3 \
   --apply \
   --publish \

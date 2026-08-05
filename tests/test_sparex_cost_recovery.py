@@ -10,7 +10,7 @@ from scripts.sparex_catalog_agents.cost_recovery import (
     parse_exact_priceb,
     write_cooldown,
 )
-from scripts.sparex_catalog_agents.orchestrator import verify_public_pages
+from scripts.sparex_catalog_agents.orchestrator import build_parser, verify_public_pages
 
 
 def _page(container: str, title: str = "Exact Part") -> str:
@@ -153,3 +153,9 @@ def test_public_verification_accepts_quote_publication_item_identity(monkeypatch
 
     assert result[0]["item_id"] == 9
     assert "task_id" not in result[0]
+
+
+def test_catalog_orchestrator_can_skip_quote_only_publication():
+    args = build_parser().parse_args(["--skip-quote-publication"])
+
+    assert args.skip_quote_publication
