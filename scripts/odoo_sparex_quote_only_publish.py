@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 if __package__:
@@ -45,7 +45,7 @@ def main() -> int:
     args = build_parser().parse_args()
     limit = max(1, min(int(args.limit or MAX_BATCH), MAX_BATCH))
     client = OdooClient(OdooConfig.from_env(args.odoo_env_file)).connect()
-    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     store = ArtifactStore(args.artifact_root / stamp, schema_version="1.0")
     prefix = f"{args.s3_prefix.strip('/')}/{stamp}"
     plan = client.call(
