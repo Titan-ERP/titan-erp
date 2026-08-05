@@ -141,6 +141,31 @@ class TestCatalogAgents(TransactionCase):
         with self.assertRaises(ValidationError), self.env.cr.savepoint():
             product.website_published = True
 
+    def test_native_publication_gate_allows_verified_low_cost_plus_price(self):
+        product = self.env["product.template"].create(
+            {
+                "name": "Low-cost guarded Sparex part",
+                "default_code": "S.880001",
+                "active": True,
+                "list_price": 1.13,
+                "southern_price_basis": "cost_plus",
+                "southern_cost_plus_margin_percent": 38.0,
+                "southern_source_url": "https://us.sparex.com/example-880001.html",
+                "image_1920": base64.b64encode(b"low-cost-image"),
+                "public_categ_ids": [(6, 0, self.website_category.ids)],
+                "description_ecommerce": "Customer-ready low-cost replacement part description.",
+                "website_published": False,
+            }
+        )
+        supplier = self.env["res.partner"].create({"name": "Sparex", "supplier_rank": 1})
+        self.env["product.supplierinfo"].create(
+            {"partner_id": supplier.id, "product_tmpl_id": product.id, "price": 0.70, "min_qty": 1.0}
+        )
+
+        product.website_published = True
+
+        self.assertTrue(product.website_published)
+
     def test_native_publication_gate_allows_evidence_complete_quote_only_product(self):
         product = self.env["product.template"].create(
             {

@@ -82,7 +82,13 @@ def sales_price_blocker(product, supplier):
         supplier_cost = float(supplier)
     else:
         supplier_cost = float(supplier.price or 0.0) if supplier else 0.0
-    if sale_price <= MIN_CUSTOMER_READY_PRICE:
+    verified_low_cost_plus = bool(
+        product.southern_price_basis == "cost_plus"
+        and float(product.southern_cost_plus_margin_percent or 0.0) > 0
+        and supplier_cost > 0
+        and sale_price > supplier_cost
+    )
+    if sale_price <= MIN_CUSTOMER_READY_PRICE and not verified_low_cost_plus:
         return "placeholder_sales_price"
     if supplier_cost > 0 and sale_price <= supplier_cost:
         return "sales_price_not_above_supplier_cost"
