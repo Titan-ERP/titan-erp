@@ -32,7 +32,7 @@ DEFAULT_ODOO_ENV = ROOT / "odoo_connection.env"
 DEFAULT_ARTIFACT_ROOT = ROOT / "outputs" / "sparex-catalog-discovery"
 WORKFLOW = "sparex-discovery-queue"
 CONFIRMATION = "sparex-discovery-queue"
-PARSER_VERSION = "sparex-listing-frontier-v4"
+PARSER_VERSION = "sparex-listing-frontier-v5"
 SCHEMA_VERSION = "1.1"
 SPAREX_HOST = "us.sparex.com"
 MAX_PAGE_ITEMS = 100
@@ -59,6 +59,11 @@ LISTING_PATH_DENY_PREFIXES = (
     "/wishlist",
 )
 MAX_LISTING_LINKS_PER_PAGE = 5_000
+NON_CONTENT_XPATH = ".//script | .//style | .//noscript | .//template"
+PLACEHOLDER_IMAGE_PATTERN = re.compile(
+    r"(?:/placeholder/|/default/(?:placeholder|no[_-]?image)|no[_-]?image|coming[_-]?soon)",
+    re.IGNORECASE,
+)
 
 
 class PortalCooldownError(RuntimeError):
@@ -118,19 +123,23 @@ def _listing_container(anchor):
 
 
 def _image_url(container, page_url: str) -> str:
-    for image in container.xpath(".//img"):
-        for attribute in ("data-src", "data-original", "data-lazy", "src"):
+    candidates: list[str] = []
+    for image in container.xpath(".//source | .//img"):
+        for attribute in ("data-src", "data-original", "data-lazy", "data-srcset", "srcset", "src"):
             value = (image.get(attribute) or "").strip()
             if value and not value.startswith("data:"):
-                candidate = urljoin(page_url, unescape(value))
+                source = value.split(",", 1)[0].strip().split(" ", 1)[0]
+                candidate = urljoin(page_url, unescape(source))
                 if urlsplit(candidate).scheme.casefold() == "https" and urlsplit(candidate).hostname:
-                    return candidate
-        srcset = (image.get("srcset") or "").strip()
-        if srcset:
-            candidate = urljoin(page_url, unescape(srcset.split(",", 1)[0].strip().split(" ", 1)[0]))
-            if urlsplit(candidate).scheme.casefold() == "https" and urlsplit(candidate).hostname:
-                return candidate
-    return ""
+                    candidates.append(candidate)
+    return next((candidate for candidate in candidates if not PLACEHOLDER_IMAGE_PATTERN.search(candidate)), "")
+
+
+def _content_text(node) -> str:
+    clone = lxml_html.fromstring(lxml_html.tostring(node, encoding="unicode"))
+    for excluded in clone.xpath(NON_CONTENT_XPATH):
+        excluded.drop_tree()
+    return " ".join(" ".join(clone.itertext()).split()).strip()
 
 
 def _listing_title(container, page_url: str, source_url: str) -> str:
@@ -139,7 +148,7 @@ def _listing_title(container, page_url: str, source_url: str) -> str:
         candidate_url = urljoin(page_url, unescape((anchor.get("href") or "").strip()))
         if candidate_url != source_url:
             continue
-        value = " ".join(" ".join(anchor.itertext()).split()).strip()
+        value = _content_text(anchor)
         value = SKU_IN_TEXT.sub("", value).strip(" -|:/")
         if value and re.search(r"[A-Za-z]", value):
             candidates.append(value[:255])
@@ -159,8 +168,6 @@ def parse_listing_page(content: bytes | str, page_url: str) -> dict[str, Any]:
         if not exact_sparex_product_url(source_url, sku):
             continue
         container = _listing_container(anchor)
-        visible_text = " ".join(" ".join(container.itertext()).split())
-        text_skus = {normalized_sku(match.group("digits")) for match in SKU_IN_TEXT.finditer(visible_text)}
         attribute_skus = set()
         for node in [container, *container.xpath(".//*[@data-product-sku or @data-sku]")]:
             for attribute in ("data-product-sku", "data-sku"):
@@ -169,7 +176,7 @@ def parse_listing_page(content: bytes | str, page_url: str) -> dict[str, Any]:
                 if match:
                     attribute_skus.add(normalized_sku(match.group("digits")))
         # URL digits are the identity anchor. Conflicting explicit card SKUs are ambiguous.
-        explicit_skus = text_skus | attribute_skus
+        explicit_skus = attribute_skus
         source_state = "ambiguous" if explicit_skus and explicit_skus != {sku} else "verified"
         image_url = _image_url(container, page_url)
         listing_title = _listing_title(container, page_url, source_url)
@@ -312,6 +319,11 @@ def _archive(store: ArtifactStore, name: str, payload: Any, bucket: str, prefix:
     )
     if not bucket:
         raise RuntimeError("SOUTHERN_PRODUCT_ARTIFACT_BUCKET or --s3-bucket is required.")
+    return store.archive_s3(record, bucket=bucket, prefix=prefix)
+
+
+def _archive_raw_page(store: ArtifactStore, name: str, content: bytes, bucket: str, prefix: str) -> dict[str, Any]:
+    record = store.write_bytes(name, content, kind="html")
     return store.archive_s3(record, bucket=bucket, prefix=prefix)
 
 
@@ -486,6 +498,13 @@ def main() -> int:
                 raise PortalCooldownError("dealer_session_lost")
             parsed = parse_listing_page(response.content, cursor_url)
             page_number = int(current_claim.get("page_count") or 0) + 1
+            raw_page_record = _archive_raw_page(
+                store,
+                f"listing-page-{page_number:05d}.html",
+                response.content,
+                args.s3_bucket,
+                archive_prefix,
+            )
             page_payload = {
                 "schema_version": SCHEMA_VERSION,
                 "workflow": WORKFLOW,
@@ -496,6 +515,8 @@ def main() -> int:
                 "page_url_sha256": sha256_text(cursor_url),
                 "effective_url_sha256": sha256_text(response.url),
                 "response_sha256": hashlib.sha256(response.content).hexdigest(),
+                "raw_artifact_uri": raw_page_record["artifact_uri"],
+                "raw_artifact_sha256": raw_page_record["sha256"],
                 "parser_version": PARSER_VERSION,
                 "items": parsed["items"],
                 "next_url": parsed["next_url"],
