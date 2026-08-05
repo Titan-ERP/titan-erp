@@ -20,3 +20,8 @@ access_southern_sparex_discovery_run_admin,southern.sparex.discovery.run admin,m
 access_southern_sparex_discovery_page_admin,southern.sparex.discovery.page admin,model_southern_sparex_discovery_page,base.group_system,1,1,1,0
 access_southern_sparex_discovery_item_user,southern.sparex.discovery.item user,model_southern_sparex_discovery_item,base.group_user,1,0,0,0
 access_southern_sparex_discovery_item_admin,southern.sparex.discovery.item admin,model_southern_sparex_discovery_item,base.group_system,1,1,1,0
+access_southern_vendor_catalog_source_user,southern.vendor.catalog.source user,model_southern_vendor_catalog_source,base.group_user,1,0,0,0
+access_southern_vendor_catalog_source_admin,southern.vendor.catalog.source admin,model_southern_vendor_catalog_source,base.group_system,1,1,1,0
+access_southern_vendor_catalog_item_user,southern.vendor.catalog.item user,model_southern_vendor_catalog_item,base.group_user,1,0,0,0
+access_southern_vendor_catalog_item_manager,southern.vendor.catalog.item manager,model_southern_vendor_catalog_item,stock.group_stock_manager,1,1,0,0
+access_southern_vendor_catalog_item_admin,southern.vendor.catalog.item admin,model_southern_vendor_catalog_item,base.group_system,1,1,1,0

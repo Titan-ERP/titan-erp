@@ -26,7 +26,7 @@ MAX_DISCOVERY_TOTAL_PAGES = 10000
 MAX_SOURCE_LINK_BATCH = 50
 MAX_COST_RECOVERY_BATCH = 50
 MAX_COST_RECOVERY_ATTEMPTS = 5
-MAX_PRODUCT_CREATION_BATCH = 5
+MAX_PRODUCT_CREATION_BATCH = 100
 SOURCE_LINK_CONFIRMATION = "sparex-discovery-source-link"
 DESCRIPTION_REPAIR_CONFIRMATION = "sparex-listing-description-repair"
 COST_RECOVERY_CONFIRMATION = "sparex-dealer-cost-recovery"
@@ -604,6 +604,7 @@ class SouthernSparexDiscoveryRun(models.Model):
         page_counts = {"matched": 0, "missing": 0, "duplicate": 0, "review": 0}
         page_corrected = 0
         page_item_ids = []
+        vendor_catalog_records = []
         Item = self.env["southern.sparex.discovery.item"]
         for observation in items:
             raw_sku = (observation.get("sku") or "").strip()
@@ -781,6 +782,19 @@ class SouthernSparexDiscoveryRun(models.Model):
                 )
                 item = Item.create(values)
             page_item_ids.append(item.id)
+            vendor_catalog_records.append(
+                {
+                    "vendor_sku": raw_sku,
+                    "normalized_sku": normalized,
+                    "title": listing_title,
+                    "customer_description": listing_title,
+                    "source_url": source_url,
+                    "image_url": image_url,
+                    "vendor_cost": positive_supplier.price if positive_supplier else 0.0,
+                    "sales_price": matched_product.list_price if matched_product else 0.0,
+                    "availability": "available",
+                }
+            )
             if queue_state == "review":
                 page_counts["review"] += 1
             if match_state.startswith("matched_"):
@@ -799,6 +813,15 @@ class SouthernSparexDiscoveryRun(models.Model):
                 "review_count": page_counts["review"],
             }
         )
+        staged = {"created": 0, "updated": 0, "unchanged": 0, "ready": 0, "observed": 0}
+        if vendor_catalog_records:
+            staged = self.env["southern.vendor.catalog.item"].sudo().upsert_catalog_items(
+                source_code="sparex",
+                records=vendor_catalog_records,
+                artifact_uri=artifact_uri,
+                artifact_sha256=artifact_sha,
+                schema_version="1.0",
+            )
         next_url = (page.get("next_url") or "").strip()
         if next_url and not _sparex_listing_url(next_url):
             raise UserError(_("The next listing cursor is not an HTTPS Sparex URL."))
@@ -870,6 +893,7 @@ class SouthernSparexDiscoveryRun(models.Model):
             "observed": len(items),
             "corrected": page_corrected,
             "item_ids": page_item_ids,
+            "vendor_catalog": staged,
             "stale": run.stale_count if completed else 0,
         }
 

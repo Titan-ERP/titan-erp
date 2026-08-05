@@ -14,6 +14,7 @@ class CatalogAgentsContractTests(unittest.TestCase):
         self.assertIn("data/catalog_agent_defaults.xml", manifest["data"])
         self.assertIn("views/catalog_agent_views.xml", manifest["data"])
         self.assertIn("views/sparex_discovery_views.xml", manifest["data"])
+        self.assertIn("views/vendor_catalog_views.xml", manifest["data"])
 
     def test_discovery_queue_uses_gated_odoo_draft_creation(self):
         model_source = (ROOT / "southern_parts_intelligence" / "models" / "sparex_discovery.py").read_text(
@@ -22,6 +23,25 @@ class CatalogAgentsContractTests(unittest.TestCase):
         worker_source = (ROOT / "scripts" / "sparex_catalog_discovery.py").read_text(encoding="utf-8")
         self.assertIn('_name = "southern.sparex.discovery.run"', model_source)
         self.assertIn('_name = "southern.sparex.discovery.item"', model_source)
+        vendor_source = (ROOT / "southern_parts_intelligence" / "models" / "vendor_catalog.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('_name = "southern.vendor.catalog.source"', vendor_source)
+        self.assertIn('_name = "southern.vendor.catalog.item"', vendor_source)
+        self.assertIn("MAX_CATALOG_UPSERT_BATCH = 2_000", vendor_source)
+        self.assertIn("MAX_PROMOTION_BATCH = 200", vendor_source)
+        self.assertIn("website_published\": False", vendor_source)
+        self.assertIn("MAX_PRODUCT_CREATION_BATCH = 100", model_source)
+        self.assertIn("vendor_catalog", model_source)
+        migration_source = (
+            ROOT
+            / "southern_parts_intelligence"
+            / "migrations"
+            / "19.0.1.22.0"
+            / "post-migrate.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("southern_sparex_discovery_item", migration_source)
+        self.assertIn("ON CONFLICT (source_id, normalized_sku) DO NOTHING", migration_source)
         self.assertIn('(\"not_authorized\", \"Product Creation Not Authorized\")', model_source)
         self.assertIn("prepare_product_creation_plan", model_source)
         self.assertIn("apply_product_creation_plan", model_source)
