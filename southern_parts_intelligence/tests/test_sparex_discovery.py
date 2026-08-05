@@ -360,6 +360,7 @@ class TestSparexDiscovery(TransactionCase):
                 "items": [
                     {
                         "sku": "S.710001",
+                        "listing_title": "Source Link Service Part",
                         "source_url": "https://us.sparex.com/part-710001.html",
                         "image_url": "https://cdn.example.com/710001.jpg",
                         "source_state": "verified",
@@ -378,6 +379,28 @@ class TestSparexDiscovery(TransactionCase):
         self.assertEqual(product.southern_source_url, "https://us.sparex.com/part-710001.html")
         item = Item.browse(applied[0]["item_id"])
         self.assertTrue(item.publication_candidate)
+
+        placeholder = "Internal catalog record. Not published to the website until pricing is reviewed."
+        product.write(
+            {
+                "description_ecommerce": placeholder,
+                "website_description": placeholder,
+                "description_sale": placeholder,
+            }
+        )
+        item._refresh_readiness()
+        self.assertEqual(item.primary_blocker, "missing_customer_description")
+        description_plan = Item.prepare_description_repair_plan(limit=5)
+        self.assertEqual(len(description_plan), 1)
+        repaired_descriptions = Item.apply_description_repair_plan(
+            description_plan,
+            "sparex-listing-description-repair",
+            "Repair verified listing placeholder copy",
+        )
+        self.assertIn("Source Link Service Part", product.description_sale)
+        self.assertTrue(item.publication_candidate)
+        Item.rollback_description_repairs(repaired_descriptions, "Synthetic description rollback")
+        self.assertEqual(product.description_sale, placeholder)
         Item.rollback_source_links(applied, "Synthetic source-link rollback")
         self.assertFalse(product.southern_source_url)
 

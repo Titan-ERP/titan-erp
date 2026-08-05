@@ -35,6 +35,7 @@ DEFAULT_ARTIFACT_ROOT = ROOT / "outputs" / "catalog-agent-automation"
 WORKFLOW = "catalog-agent-automation"
 PUBLICATION_CONFIRMATION = "catalog-agent-publication"
 SOURCE_LINK_CONFIRMATION = "sparex-discovery-source-link"
+DESCRIPTION_REPAIR_CONFIRMATION = "sparex-listing-description-repair"
 MAX_BATCH = 50
 MAX_AI_CALLS = 5
 MAX_SOURCE_IMAGE_BYTES = 10 * 1024 * 1024
@@ -314,10 +315,16 @@ def main() -> int:
         "prepare_source_link_plan",
         limit=limit,
     )
+    description_prepared = client.call(
+        "southern.sparex.discovery.item",
+        "prepare_description_repair_plan",
+        limit=limit,
+    )
     preview = client.call("southern.catalog.agent.task", "preview_ready_candidates", limit=limit)
     safe_preview = {
         "mode": "apply" if args.apply else "read_only",
         "source_link_candidate_count": len(source_prepared),
+        "description_repair_candidate_count": len(description_prepared),
         "readiness_refresh": readiness_refresh,
         "candidate_count": len(preview),
         "candidates": preview,
@@ -380,10 +387,49 @@ def main() -> int:
             confirmation=SOURCE_LINK_CONFIRMATION,
             reason=args.reason,
         )
+    readiness_refresh = client.call(
+        "southern.sparex.discovery.item",
+        "refresh_readiness_batch",
+        limit=min(2000, max(500, limit * 10)),
+    )
+    description_prepared = client.call(
+        "southern.sparex.discovery.item",
+        "prepare_description_repair_plan",
+        limit=limit,
+    )
+    description_plan = {
+        "schema_version": "1.1",
+        "workflow": WORKFLOW,
+        "run_stamp": run_stamp,
+        "reason": args.reason,
+        "records": description_prepared,
+    }
+    description_plan_record = _archive(
+        store, "description-repair-plan.json", description_plan, args.s3_bucket, archive_prefix
+    )
+    description_rollback_record = _archive(
+        store,
+        "description-repair-rollback.json",
+        {"schema_version": "1.1", "workflow": WORKFLOW, "run_stamp": run_stamp, "records": description_prepared},
+        args.s3_bucket,
+        archive_prefix,
+    )
+    repaired_descriptions = []
+    if description_prepared:
+        repaired_descriptions = client.call(
+            "southern.sparex.discovery.item",
+            "apply_description_repair_plan",
+            records=description_prepared,
+            confirmation=DESCRIPTION_REPAIR_CONFIRMATION,
+            reason=args.reason,
+        )
     preview = client.call("southern.catalog.agent.task", "preview_ready_candidates", limit=limit)
     safe_preview.update(
         {
             "source_linked_count": len(linked_sources),
+            "description_repaired_count": len(repaired_descriptions),
+            "description_repair_candidate_count": len(description_prepared),
+            "readiness_refresh": readiness_refresh,
             "candidate_count": len(preview),
             "candidates": preview,
         }
@@ -403,6 +449,9 @@ def main() -> int:
         "source_link_plan_sha256": source_plan_record["sha256"],
         "source_link_rollback_sha256": source_rollback_record["sha256"],
         "source_linked_count": len(linked_sources),
+        "description_repair_plan_sha256": description_plan_record["sha256"],
+        "description_repair_rollback_sha256": description_rollback_record["sha256"],
+        "description_repaired_count": len(repaired_descriptions),
         "seeded": seeded,
         "idempotency_key": gate.idempotency_key(seeded),
     }
@@ -475,6 +524,13 @@ def main() -> int:
                 task_ids=[row["task_id"] for row in published],
                 reason=error,
             )
+        if repaired_descriptions:
+            client.call(
+                "southern.sparex.discovery.item",
+                "rollback_description_repairs",
+                records=repaired_descriptions,
+                reason=error,
+            )
         if linked_sources:
             client.call(
                 "southern.sparex.discovery.item",
@@ -494,6 +550,11 @@ def main() -> int:
         "source_link_rollback_sha256": source_rollback_record["sha256"],
         "source_link_rollback_uri": source_rollback_record["artifact_uri"],
         "source_linked_count": 0 if error else len(linked_sources),
+        "description_repair_plan_sha256": description_plan_record["sha256"],
+        "description_repair_plan_uri": description_plan_record["artifact_uri"],
+        "description_repair_rollback_sha256": description_rollback_record["sha256"],
+        "description_repair_rollback_uri": description_rollback_record["artifact_uri"],
+        "description_repaired_count": 0 if error else len(repaired_descriptions),
         "rollback_sha256": rollback_record["sha256"],
         "rollback_uri": rollback_record["artifact_uri"],
         "stages": stages,
@@ -515,6 +576,7 @@ def main() -> int:
         **safe_preview,
         "seeded": len(seeded),
         "source_linked": 0 if error else len(linked_sources),
+        "description_repaired": 0 if error else len(repaired_descriptions),
         "prepared": len(prepared),
         "published": len(verification) if not error else 0,
         "failed": bool(error),

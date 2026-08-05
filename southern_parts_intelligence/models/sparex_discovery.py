@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import html
 import json
 import re
 from datetime import timedelta
@@ -27,6 +28,7 @@ MAX_COST_RECOVERY_BATCH = 50
 MAX_COST_RECOVERY_ATTEMPTS = 5
 MAX_PRODUCT_CREATION_BATCH = 5
 SOURCE_LINK_CONFIRMATION = "sparex-discovery-source-link"
+DESCRIPTION_REPAIR_CONFIRMATION = "sparex-listing-description-repair"
 COST_RECOVERY_CONFIRMATION = "sparex-dealer-cost-recovery"
 PRODUCT_CREATION_CONFIRMATION = "sparex-page-driven-draft-creation"
 PRODUCT_DETAIL_PATH = re.compile(r"(?:^|[-/])\d+\.html$", re.IGNORECASE)
@@ -1471,6 +1473,46 @@ class SouthernSparexDiscoveryItem(models.Model):
         values["snapshot_sha256"] = _canonical_sha256(values)
         return values
 
+    def _description_repair_snapshot(self):
+        """Capture a listing-title-only replacement for an internal placeholder."""
+        self.ensure_one()
+        product = self.matched_product_id.sudo()
+        title = " ".join((self.listing_title or "").split())
+        if not title:
+            raise UserError(_("A verified listing title is required to repair customer copy."))
+        safe_title = html.escape(title)
+        safe_sku = html.escape(self.normalized_sku)
+        ecommerce = (
+            f"<p>{safe_title} is available from Southern Equipment under Sparex reference {safe_sku}.</p>"
+            "<p>Southern Equipment confirms availability, fitment, and pickup or shipping details before fulfillment.</p>"
+        )
+        descriptions_before = {
+            field_name: product[field_name] or ""
+            for field_name in ("description_ecommerce", "website_description", "description_sale")
+            if field_name in product._fields
+        }
+        values = {
+            "item_id": self.id,
+            "product_id": product.id,
+            "sku": self.normalized_sku,
+            "listing_title": title,
+            "source_url_sha256": self.source_url_sha256,
+            "source_artifact_sha256": self.source_artifact_sha256,
+            "descriptions_before": descriptions_before,
+            "descriptions_before_sha256": _canonical_sha256(descriptions_before),
+            "descriptions_after": {
+                "description_ecommerce": ecommerce,
+                "website_description": ecommerce,
+                "description_sale": (
+                    f"{html.unescape(safe_title)}. Sparex reference {html.unescape(safe_sku)}. "
+                    "Confirm availability and fitment with Southern Equipment."
+                ),
+            },
+            "product_write_date": str(product.write_date or ""),
+        }
+        values["snapshot_sha256"] = _canonical_sha256(values)
+        return values
+
     def _refresh_readiness(self):
         now = fields.Datetime.now()
         for item in self:
@@ -1958,6 +2000,115 @@ class SouthernSparexDiscoveryItem(models.Model):
             if len(prepared) >= bounded:
                 break
         return prepared
+
+    @api.model
+    def prepare_description_repair_plan(self, limit=MAX_SOURCE_LINK_BATCH):
+        """Plan customer-copy repair only for verified listings with the internal placeholder."""
+        bounded = max(1, min(int(limit or MAX_SOURCE_LINK_BATCH), MAX_SOURCE_LINK_BATCH))
+        candidates = self.search(
+            [
+                ("reconciliation_state", "=", "current"),
+                ("state", "=", "verified"),
+                ("source_state", "=", "verified"),
+                ("odoo_match_state", "=", "matched_active"),
+                ("currently_published", "=", False),
+                ("has_exact_sparex_url", "=", True),
+                ("has_image", "=", True),
+                ("primary_blocker", "=", "missing_customer_description"),
+                ("listing_title", "!=", False),
+            ],
+            order="last_seen_at, id",
+            limit=bounded * 4,
+        )
+        prepared = []
+        for item in candidates:
+            item._refresh_readiness()
+            product = item.matched_product_id.sudo()
+            if (
+                item.primary_blocker != "missing_customer_description"
+                or not product
+                or not product.active
+                or not item._positive_sparex_supplier()
+                or sales_price_blocker(product, item._positive_sparex_supplier())
+                or not product.public_categ_ids
+                or customer_description_ready(product)
+            ):
+                continue
+            prepared.append(item._description_repair_snapshot())
+            if len(prepared) >= bounded:
+                break
+        return prepared
+
+    @api.model
+    def apply_description_repair_plan(self, records, confirmation, reason):
+        if confirmation != DESCRIPTION_REPAIR_CONFIRMATION or not (reason or "").strip():
+            raise UserError(_("Description repair requires the exact confirmation and business reason."))
+        if not records or len(records) > MAX_SOURCE_LINK_BATCH:
+            raise UserError(_("Description-repair batches must contain between 1 and 50 records."))
+        applied = []
+        for prepared in records:
+            item = self.browse(int(prepared.get("item_id") or 0)).exists()
+            if not item:
+                raise UserError(_("A prepared discovery item no longer exists."))
+            self.env.cr.execute(
+                "SELECT id FROM southern_sparex_discovery_item WHERE id = %s FOR UPDATE NOWAIT", [item.id]
+            )
+            item.invalidate_recordset()
+            item._refresh_readiness()
+            product = item.matched_product_id.sudo()
+            self.env.cr.execute("SELECT id FROM product_template WHERE id = %s FOR UPDATE NOWAIT", [product.id])
+            product.invalidate_recordset()
+            if (
+                item.primary_blocker != "missing_customer_description"
+                or product.id != int(prepared.get("product_id") or 0)
+                or item.normalized_sku != normalized_sparex_sku(prepared.get("sku"))
+                or item.source_url_sha256 != prepared.get("source_url_sha256")
+                or item._description_repair_snapshot().get("snapshot_sha256") != prepared.get("snapshot_sha256")
+            ):
+                raise UserError(_("Description evidence changed; create a fresh plan."))
+            product.write(prepared.get("descriptions_after") or {})
+            product.invalidate_recordset(["description_ecommerce", "website_description", "description_sale"])
+            if not customer_description_ready(product):
+                product.write(prepared.get("descriptions_before") or {})
+                raise UserError(_("The customer description was not retained; the prior values were restored."))
+            item._refresh_readiness()
+            applied.append(
+                {
+                    **prepared,
+                    "descriptions_after_sha256": _canonical_sha256(
+                        {
+                            field_name: product[field_name] or ""
+                            for field_name in ("description_ecommerce", "website_description", "description_sale")
+                            if field_name in product._fields
+                        }
+                    ),
+                }
+            )
+        return applied
+
+    @api.model
+    def rollback_description_repairs(self, records, reason):
+        if not (reason or "").strip():
+            raise UserError(_("Description-repair rollback requires a reason."))
+        for prepared in records or []:
+            item = self.browse(int(prepared.get("item_id") or 0)).exists()
+            if not item or item.normalized_sku != normalized_sparex_sku(prepared.get("sku")):
+                continue
+            product = item.matched_product_id.sudo()
+            if product.id != int(prepared.get("product_id") or 0):
+                continue
+            self.env.cr.execute("SELECT id FROM product_template WHERE id = %s FOR UPDATE NOWAIT", [product.id])
+            product.invalidate_recordset()
+            descriptions_after = {
+                field_name: product[field_name] or ""
+                for field_name in ("description_ecommerce", "website_description", "description_sale")
+                if field_name in product._fields
+            }
+            if _canonical_sha256(descriptions_after) != (prepared.get("descriptions_after_sha256") or ""):
+                raise UserError(_("Description rollback stopped because the product copy changed after this run."))
+            product.write(prepared.get("descriptions_before") or {})
+            item._refresh_readiness()
+        return True
 
     @api.model
     def apply_source_link_plan(self, records, confirmation, reason):
