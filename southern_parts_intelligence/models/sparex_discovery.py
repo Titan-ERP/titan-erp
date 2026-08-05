@@ -32,7 +32,7 @@ SOURCE_LINK_CONFIRMATION = "sparex-discovery-source-link"
 DESCRIPTION_REPAIR_CONFIRMATION = "sparex-listing-description-repair"
 COST_RECOVERY_CONFIRMATION = "sparex-dealer-cost-recovery"
 PRODUCT_CREATION_CONFIRMATION = "sparex-page-driven-draft-creation"
-DEFAULT_COST_PLUS_MARGIN_PERCENT = 38.0
+DEFAULT_COST_PLUS_MARGIN_PERCENT = 35.0
 PRODUCT_DETAIL_PATH = re.compile(r"(?:^|[-/])\d+\.html$", re.IGNORECASE)
 LISTING_PATH_DENY_PREFIXES = (
     "/about",

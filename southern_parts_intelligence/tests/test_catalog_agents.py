@@ -149,7 +149,7 @@ class TestCatalogAgents(TransactionCase):
                 "active": True,
                 "list_price": 1.13,
                 "southern_price_basis": "cost_plus",
-                "southern_cost_plus_margin_percent": 38.0,
+                "southern_cost_plus_margin_percent": 35.0,
                 "southern_source_url": "https://us.sparex.com/example-880001.html",
                 "image_1920": base64.b64encode(b"low-cost-image"),
                 "public_categ_ids": [(6, 0, self.website_category.ids)],

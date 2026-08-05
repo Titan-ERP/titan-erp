@@ -83,7 +83,7 @@ class SouthernSparexSourcingQueue(models.Model):
     next_attempt_at = fields.Datetime(index=True)
     failure_code = fields.Char(index=True, readonly=True)
     failure_reason = fields.Char(readonly=True)
-    required_margin_percent = fields.Float(default=38.0)
+    required_margin_percent = fields.Float(default=35.0)
     proposed_retail_price = fields.Monetary(currency_field="currency_id")
     approved_retail_price = fields.Monetary(currency_field="currency_id", tracking=True)
     approved_cost_by_id = fields.Many2one("res.users", readonly=True)
