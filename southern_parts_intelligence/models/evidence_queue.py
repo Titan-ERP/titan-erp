@@ -309,7 +309,15 @@ class SouthernPartsEvidenceQueue(models.Model):
             queue._check_price_apply_ready()
             product = queue.product_tmpl_id.sudo()
             before_price = product.list_price
-            product.write({"list_price": queue.approved_sale_price})
+            product.write(
+                {
+                    "list_price": queue.approved_sale_price,
+                    "southern_quote_only": False,
+                    "southern_price_basis": "retail_evidence",
+                    "southern_cost_plus_margin_percent": 0.0,
+                    "southern_price_basis_updated_at": fields.Datetime.now(),
+                }
+            )
             queue.write(
                 {
                     "status": "applied",

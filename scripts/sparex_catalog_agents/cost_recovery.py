@@ -2,19 +2,21 @@
 
 The worker never asks a model to select or interpret a price.  It accepts only
 one positive USD value inside the exact ``priceb_<sku digits>`` container on an
-authenticated exact-SKU page, then asks Odoo to update one pre-existing Sparex
-supplier line under a hash-verified rollback snapshot.
+authenticated exact-SKU page, then asks Odoo to synchronize supplier cost,
+standard cost, and provisional cost-plus pricing under a hash-verified rollback
+snapshot.
 """
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import requests
 from lxml import html as lxml_html
@@ -31,6 +33,7 @@ COST_RECOVERY_CONFIRMATION = "sparex-dealer-cost-recovery"
 PARSER_VERSION = "sparex-exact-priceb-v1"
 PORTAL_COOLDOWN_MINUTES = 60
 MAX_COST_RECOVERY_BATCH = 50
+MAX_SOURCE_IMAGE_BYTES = 10 * 1024 * 1024
 MONEY_PATTERN = re.compile(r"(?<![0-9])\$\s*(?P<price>[0-9][0-9,]*(?:\.\d{1,2})?)(?![0-9])")
 
 
@@ -86,6 +89,26 @@ def parse_exact_priceb(content: bytes | str, sku: str) -> dict[str, Any]:
     if len(values) != 1:
         return {"status": "price_ambiguous"}
     return {"status": "accepted", "price": next(iter(values)), "currency": "USD"}
+
+
+def parse_detail_image_url(content: bytes | str, page_url: str) -> str:
+    """Return one canonical HTTPS product image exposed by an exact detail page."""
+    document = lxml_html.fromstring(content)
+    raw_candidates = document.xpath(
+        "//meta[translate(@property, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz')='og:image']/@content"
+        " | //main//*[@itemprop='image']/@content"
+        " | //main//img[@itemprop='image']/@data-zoom-image"
+        " | //main//img[@itemprop='image']/@data-src"
+        " | //main//img[@itemprop='image']/@src"
+    )
+    candidates = []
+    for raw in raw_candidates:
+        candidate = urljoin(page_url, str(raw or "").strip())
+        parsed = urlsplit(candidate)
+        if parsed.scheme.casefold() == "https" and parsed.hostname and not candidate.startswith("data:"):
+            candidates.append(candidate)
+    unique = list(dict.fromkeys(candidates))
+    return unique[0] if len(unique) == 1 else ""
 
 
 def _archive(store: ArtifactStore, name: str, payload: Any, bucket: str, prefix: str) -> dict[str, Any]:
@@ -244,6 +267,41 @@ def recover_dealer_costs(
                 )
                 outcomes.append({"item_id": claim["item_id"], "sku": claim["sku"], "status": parsed["status"]})
                 continue
+            image_evidence: dict[str, Any] = {}
+            if not claim.get("has_image"):
+                image_url = parse_detail_image_url(response.content, url)
+                if image_url:
+                    try:
+                        image_response = _checked_request(session, throttle, "GET", image_url)
+                    except requests.HTTPError as exc:
+                        status = int(exc.response.status_code) if exc.response is not None else 0
+                        if status == 404:
+                            image_response = None
+                        else:
+                            raise PortalCooldownError(f"dealer_image_http_{status or 'error'}") from exc
+                    except requests.RequestException as exc:
+                        raise PortalCooldownError(f"dealer_image_{type(exc).__name__}") from exc
+                    if image_response is None:
+                        outcomes.append(
+                            {"item_id": claim["item_id"], "sku": claim["sku"], "status": "image_not_found"}
+                        )
+                        image_url = ""
+                if image_url:
+                    content_type = str(image_response.headers.get("Content-Type") or "").split(";", 1)[0].casefold()
+                    image_content = image_response.content
+                    if (
+                        urlsplit(image_response.url).scheme.casefold() != "https"
+                        or not content_type.startswith("image/")
+                        or not image_content
+                        or len(image_content) > MAX_SOURCE_IMAGE_BYTES
+                    ):
+                        raise PortalCooldownError("dealer_image_content_invalid")
+                    image_evidence = {
+                        "detail_image_url": image_url,
+                        "detail_image_url_sha256": hashlib.sha256(image_url.encode()).hexdigest(),
+                        "detail_image_base64": base64.b64encode(image_content).decode("ascii"),
+                        "detail_image_sha256": hashlib.sha256(image_content).hexdigest(),
+                    }
             evidence = {
                 **claim,
                 "dealer_price": parsed["price"],
@@ -253,6 +311,7 @@ def recover_dealer_costs(
                 "evidence_sha256": hashlib.sha256(response.content).hexdigest(),
                 "parser_version": PARSER_VERSION,
                 "retrieved_at_utc": datetime.now(UTC).isoformat(),
+                **image_evidence,
             }
             accepted.append(evidence)
             outcomes.append({"item_id": claim["item_id"], "sku": claim["sku"], "status": "accepted"})
@@ -297,6 +356,12 @@ def recover_dealer_costs(
                     "sku": row["sku"],
                     "supplierinfo_id": row["supplierinfo_id"],
                     "supplier_price_before": row["supplier_price_before"],
+                    "standard_price_before": row["standard_price_before"],
+                    "list_price_before": row["list_price_before"],
+                    "quote_only_before": row["quote_only_before"],
+                    "price_basis_before": row["price_basis_before"],
+                    "cost_plus_margin_before": row["cost_plus_margin_before"],
+                    "price_basis_updated_at_before": row["price_basis_updated_at_before"],
                     "snapshot_sha256": row["snapshot_sha256"],
                 }
                 for row in accepted
@@ -329,6 +394,24 @@ def recover_dealer_costs(
                     or abs(float(supplier["price"]) - float(row["supplier_price_applied"])) > 1e-9
                 ):
                     raise RuntimeError("dealer_cost_post_write_verification_failed")
+                product = client.call(
+                    "product.template",
+                    "read",
+                    ids=[row["product_id"]],
+                    fields=[
+                        "standard_price",
+                        "list_price",
+                        "southern_quote_only",
+                        "southern_price_basis",
+                    ],
+                )[0]
+                if (
+                    abs(float(product["standard_price"]) - float(row["standard_price_applied"])) > 1e-9
+                    or abs(float(product["list_price"]) - float(row["list_price_applied"])) > 1e-9
+                    or bool(product["southern_quote_only"]) != bool(row["quote_only_applied"])
+                    or product["southern_price_basis"] != row["price_basis_applied"]
+                ):
+                    raise RuntimeError("cost_plus_post_write_verification_failed")
     except Exception as exc:  # noqa: BLE001 - every partial verified write must be rolled back
         error = f"{type(exc).__name__}:dealer_cost_apply_failed"
         if applied:

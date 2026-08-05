@@ -34,6 +34,7 @@ DEFAULT_OPENAI_ENV = ROOT / ".env.local"
 DEFAULT_ARTIFACT_ROOT = ROOT / "outputs" / "catalog-agent-automation"
 WORKFLOW = "catalog-agent-automation"
 PUBLICATION_CONFIRMATION = "catalog-agent-publication"
+QUOTE_PUBLICATION_CONFIRMATION = "sparex-quote-only-publication"
 SOURCE_LINK_CONFIRMATION = "sparex-discovery-source-link"
 DESCRIPTION_REPAIR_CONFIRMATION = "sparex-listing-description-repair"
 MAX_BATCH = 50
@@ -328,11 +329,18 @@ def main() -> int:
         "prepare_description_repair_plan",
         limit=limit,
     )
+    quote_preview = client.call(
+        "southern.vendor.catalog.item",
+        "prepare_quote_publication_plan",
+        limit=limit,
+        company_id=config.company_id or False,
+    )
     preview = client.call("southern.catalog.agent.task", "preview_ready_candidates", limit=limit)
     safe_preview = {
         "mode": "apply" if args.apply else "read_only",
         "source_link_candidate_count": len(source_prepared),
         "description_repair_candidate_count": len(description_prepared),
+        "quote_publication_candidate_count": len(quote_preview),
         "readiness_refresh": readiness_refresh,
         "candidate_count": len(preview),
         "candidates": preview,
@@ -345,7 +353,7 @@ def main() -> int:
         return 0
 
     gate = ApplyGate(WORKFLOW, True, args.confirm, args.reason, MAX_BATCH)
-    gate.authorize(max(len(preview), len(source_prepared), len(description_prepared)))
+    gate.authorize(max(len(preview), len(source_prepared), len(description_prepared), len(quote_preview)))
     if args.run_ai and ai_max_calls:
         if args.openai_env_file.exists():
             load_env_file(args.openai_env_file)
@@ -494,6 +502,12 @@ def main() -> int:
         worker_id=args.worker_id,
         limit=limit,
     )
+    quote_prepared = client.call(
+        "southern.vendor.catalog.item",
+        "prepare_quote_publication_plan",
+        limit=limit,
+        company_id=config.company_id or False,
+    )
     rollback_payload = {
         "schema_version": "1.1",
         "workflow": WORKFLOW,
@@ -501,8 +515,22 @@ def main() -> int:
         "records": prepared,
     }
     rollback_record = _archive(store, "rollback.json", rollback_payload, args.s3_bucket, archive_prefix)
+    quote_plan_record = _archive(
+        store,
+        "quote-only-plan.json",
+        {
+            "schema_version": "1.1",
+            "workflow": WORKFLOW,
+            "run_stamp": run_stamp,
+            "records": quote_prepared,
+        },
+        args.s3_bucket,
+        archive_prefix,
+    )
     published: list[dict[str, Any]] = []
     verification: list[dict[str, Any]] = []
+    quote_published: list[dict[str, Any]] = []
+    quote_verification: list[dict[str, Any]] = []
     error = ""
     try:
         if args.publish and prepared:
@@ -524,8 +552,26 @@ def main() -> int:
                 task_ids=[row["task_id"] for row in published],
                 verification_sha256=verification_sha,
             )
+        if args.publish and quote_prepared:
+            quote_published = client.call(
+                "southern.vendor.catalog.item",
+                "apply_quote_publication_plan",
+                records=quote_prepared,
+                artifact_uri=quote_plan_record["artifact_uri"],
+                artifact_sha256=quote_plan_record["sha256"],
+                confirmation=QUOTE_PUBLICATION_CONFIRMATION,
+                reason=args.reason,
+            )
+            quote_verification = verify_public_pages(config.url, quote_published)
     except Exception as exc:  # noqa: BLE001 - rollback must run for every verification failure
         error = f"{type(exc).__name__}: publication_or_verification_failed"
+        if quote_published:
+            client.call(
+                "southern.vendor.catalog.item",
+                "rollback_quote_publications",
+                records=quote_published,
+                reason=error,
+            )
         if published:
             client.call(
                 "southern.catalog.agent.task",
@@ -566,6 +612,8 @@ def main() -> int:
         "description_repaired_count": 0 if error else len(repaired_descriptions),
         "rollback_sha256": rollback_record["sha256"],
         "rollback_uri": rollback_record["artifact_uri"],
+        "quote_plan_sha256": quote_plan_record["sha256"],
+        "quote_plan_uri": quote_plan_record["artifact_uri"],
         "stages": stages,
         "ai": {
             "enabled": bool(args.run_ai),
@@ -575,8 +623,12 @@ def main() -> int:
             "disabled_after_failure": ai_state["disabled"],
         },
         "prepared_count": len(prepared),
-        "published_count": len(verification) if not error else 0,
+        "quote_prepared_count": len(quote_prepared),
+        "published_count": (len(verification) + len(quote_verification)) if not error else 0,
+        "standard_published_count": len(verification) if not error else 0,
+        "quote_published_count": len(quote_verification) if not error else 0,
         "published": verification if not error else [],
+        "quote_published": quote_verification if not error else [],
         "error": error or None,
         "terminal_state": "failed" if error else "succeeded",
     }
@@ -587,7 +639,10 @@ def main() -> int:
         "source_linked": 0 if error else len(linked_sources),
         "description_repaired": 0 if error else len(repaired_descriptions),
         "prepared": len(prepared),
-        "published": len(verification) if not error else 0,
+        "quote_prepared": len(quote_prepared),
+        "published": (len(verification) + len(quote_verification)) if not error else 0,
+        "standard_published": len(verification) if not error else 0,
+        "quote_published": len(quote_verification) if not error else 0,
         "failed": bool(error),
         "ai_calls": ai_state["calls"],
         "ai_failures": ai_state["failures"],

@@ -526,12 +526,13 @@ class TestSparexDiscovery(TransactionCase):
                 "name": "Recoverable dealer cost",
                 "default_code": "S.720002",
                 "active": True,
-                "list_price": 45.0,
+                "list_price": 0.0,
+                "southern_quote_only": True,
                 "southern_source_url": "https://us.sparex.com/part-720002.html",
                 "image_1920": base64.b64encode(b"cost-recovery-image"),
                 "public_categ_ids": [(6, 0, self.website_category.ids)],
                 "description_ecommerce": "Customer-ready dealer-cost description.",
-                "website_published": False,
+                "website_published": True,
             }
         )
         supplier = self.env["res.partner"].create({"name": "Sparex", "supplier_rank": 1})
@@ -594,8 +595,18 @@ class TestSparexDiscovery(TransactionCase):
             "Test exact dealer cost recovery",
         )
         self.assertEqual(supplierinfo.price, 14.99)
-        self.assertTrue(item.publication_candidate)
+        self.assertEqual(product.standard_price, 14.99)
+        self.assertEqual(product.list_price, 24.18)
+        self.assertFalse(product.southern_quote_only)
+        self.assertEqual(product.southern_price_basis, "cost_plus")
+        self.assertEqual(product.southern_cost_plus_margin_percent, 38.0)
+        self.assertTrue(product.website_published)
+        self.assertEqual(item.primary_blocker, "already_published")
         self.assertEqual(item.cost_evidence_sha256, "d" * 64)
         Item.rollback_cost_recovery(applied, "Test scoped rollback")
         self.assertEqual(supplierinfo.price, 0.0)
+        self.assertEqual(product.standard_price, 0.0)
+        self.assertEqual(product.list_price, 0.0)
+        self.assertTrue(product.southern_quote_only)
+        self.assertEqual(product.southern_price_basis, "none")
         self.assertEqual(item.cost_recovery_state, "manual_review")

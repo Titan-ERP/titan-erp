@@ -44,6 +44,30 @@ class ProductTemplate(models.Model):
         index=True,
         help="Publishes this evidence-complete product without a sales price and replaces purchasing controls with an Ask for Pricing action.",
     )
+    southern_price_basis = fields.Selection(
+        [
+            ("none", "Not Set"),
+            ("cost_plus", "Provisional Cost Plus"),
+            ("retail_evidence", "Verified Retail Evidence"),
+        ],
+        default="none",
+        required=True,
+        index=True,
+        copy=False,
+        string="Sales Price Basis",
+        help="Identifies whether the sales price is provisional cost-plus pricing or supported by reviewed retail evidence.",
+    )
+    southern_cost_plus_margin_percent = fields.Float(
+        string="Cost Plus Gross Margin %",
+        digits=(16, 2),
+        readonly=True,
+        copy=False,
+    )
+    southern_price_basis_updated_at = fields.Datetime(
+        string="Sales Price Basis Updated At",
+        readonly=True,
+        copy=False,
+    )
     southern_partner_price = fields.Float(
         string="Partner Price",
         digits="Product Price",
