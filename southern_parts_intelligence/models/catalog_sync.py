@@ -5,6 +5,8 @@ from datetime import timedelta
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
+MAX_CONSECUTIVE_RELEASES = 7
+
 
 class SouthernPartsCatalogSync(models.Model):
     _name = "southern.parts.catalog.sync"
@@ -242,16 +244,24 @@ class SouthernPartsCatalogSync(models.Model):
                         [value for value in (self.cooldown_until, self.next_allowed_run_at) if value],
                         default=False,
                     )
-                    last_run = self.env["southern.parts.automation.run"].sudo().search(
+                    recent_runs = self.env["southern.parts.automation.run"].sudo().search(
                         [
                             ("sync_id", "=", self.id),
                             ("job_type", "in", ["sparex_discovery", "catalog_release"]),
                             ("state", "=", "succeeded"),
                         ],
                         order="finished_at desc, id desc",
-                        limit=1,
+                        limit=MAX_CONSECUTIVE_RELEASES + 1,
                     )
-                    if (not gate or gate <= now) and last_run.job_type == "sparex_discovery":
+                    releases_since_discovery = 0
+                    for recent_run in recent_runs:
+                        if recent_run.job_type == "sparex_discovery":
+                            break
+                        releases_since_discovery += 1
+                    if (
+                        (not gate or gate <= now)
+                        and releases_since_discovery < MAX_CONSECUTIVE_RELEASES
+                    ):
                         backlog = self.env[
                             "southern.sparex.discovery.item"
                         ].continuous_release_status()
