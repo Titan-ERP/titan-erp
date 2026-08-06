@@ -98,10 +98,22 @@ class SparexDiscoveryReconciliationContractTests(unittest.TestCase):
         repair_queue = discovery.split("def queue_discovery_page_repairs", 1)[1].split(
             "def prepare_legacy_page_url_backfill", 1
         )[0]
+        reconciliation = discovery.split("def prepare_reconciliation_run", 1)[1].split(
+            "def _ensure_normalized_frontier", 1
+        )[0]
+        release_status = discovery.split("def continuous_release_status", 1)[1].split(
+            "def claim_cost_recovery_batch", 1
+        )[0]
         self.assertNotIn("search_count(", checkpoint)
         self.assertNotIn("search_count(", repair_queue)
+        self.assertNotIn("Item.search(", reconciliation)
+        self.assertIn("last_seen_run_id IS DISTINCT FROM", reconciliation)
+        self.assertIn("limit=500", release_status)
+        self.assertNotIn("tracked_product_ids", release_status)
+        self.assertIn("NOT EXISTS", release_status)
         self.assertIn("southern_sparex_discovery_url_frontier_idx", discovery)
         self.assertIn("southern_sparex_discovery_url_repair_idx", discovery)
+        self.assertIn("southern_sparex_discovery_item_release_idx", discovery)
 
 
 if __name__ == "__main__":
