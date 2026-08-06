@@ -2368,7 +2368,7 @@ class SouthernSparexDiscoveryItem(models.Model):
                 "cost_recovery_next_at",
             ]
         )
-        self.env["product.template"].flush_model(["website_published"])
+        self.env["product.template"].flush_model(["is_published"])
         self.env.cr.execute(
             """
             WITH classified AS (
@@ -2392,7 +2392,7 @@ class SouthernSparexDiscoveryItem(models.Model):
                   FROM southern_sparex_discovery_item item
                   JOIN product_template product
                     ON product.id = item.matched_product_id
-                   AND product.website_published IS FALSE
+                   AND product.is_published IS FALSE
                  WHERE item.company_id = %s
                    AND item.reconciliation_state = 'current'
                    AND item.odoo_match_state = 'matched_active'
