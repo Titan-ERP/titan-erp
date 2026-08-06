@@ -161,12 +161,23 @@ class SouthernSparexCatalogIngestion(models.Model):
                     artifact_sha256,
                     schema_version=parser_version,
                 )
-            return {**result, "rejected": 0}
+            return {**result, "rejected": 0, "transient_rejected": 0, "permanent_rejected": 0}
         except Exception as error:
             if len(indexed_records) == 1 or depth >= MAX_BISECTION_DEPTH:
+                failure_class = self._failure_class(error)
                 for index, record in indexed_records:
                     self._persist_rejection(ingestion, record, index, error)
-                return {"created": 0, "updated": 0, "unchanged": 0, "ready": 0, "observed": 0, "rejected": len(indexed_records)}
+                rejected = len(indexed_records)
+                return {
+                    "created": 0,
+                    "updated": 0,
+                    "unchanged": 0,
+                    "ready": 0,
+                    "observed": 0,
+                    "rejected": rejected,
+                    "transient_rejected": rejected if failure_class == "transient" else 0,
+                    "permanent_rejected": rejected if failure_class in PERMANENT_FAILURES else 0,
+                }
             midpoint = len(indexed_records) // 2
             left = self._ingest_slice(
                 ingestion, indexed_records[:midpoint], artifact_uri, artifact_sha256, parser_version, depth + 1
@@ -208,7 +219,16 @@ class SouthernSparexCatalogIngestion(models.Model):
                 }
             )
         primary_artifact = manifest["source_artifacts"][0]
-        totals = {"created": 0, "updated": 0, "unchanged": 0, "ready": 0, "observed": 0, "rejected": 0}
+        totals = {
+            "created": 0,
+            "updated": 0,
+            "unchanged": 0,
+            "ready": 0,
+            "observed": 0,
+            "rejected": 0,
+            "transient_rejected": 0,
+            "permanent_rejected": 0,
+        }
         indexed = list(enumerate(payload))
         for start in range(0, len(indexed), SAVEPOINT_CHUNK_SIZE):
             result = self.with_context(sparex_sweep_key=str(manifest["sweep_id"])[:128])._ingest_slice(
@@ -220,23 +240,32 @@ class SouthernSparexCatalogIngestion(models.Model):
             )
             for key in totals:
                 totals[key] += int(result.get(key) or 0)
+        retry_required = bool(totals["transient_rejected"])
         response = {
             "manifest_sha256": manifest_sha256,
             "payload_sha256": payload_sha256,
             "ingestion_id": ingestion.id,
             **totals,
-            "state": "complete",
+            "state": "retry_required" if retry_required else "complete",
         }
         ingestion.write(
             {
-                "state": "complete",
+                # Returning a retry state commits accepted savepoint chunks while
+                # leaving the SQS message available for at-least-once redelivery.
+                "state": "failed" if retry_required else "complete",
                 "created_count": totals["created"],
                 "updated_count": totals["updated"],
                 "unchanged_count": totals["unchanged"],
                 "ready_count": totals["ready"],
                 "rejected_count": totals["rejected"],
                 "result_json": canonical_json(response),
-                "completed_at": fields.Datetime.now(),
+                "failure_class": "transient" if retry_required else False,
+                "failure_summary": (
+                    _("%s transient record(s) require redelivery.") % totals["transient_rejected"]
+                    if retry_required
+                    else False
+                ),
+                "completed_at": False if retry_required else fields.Datetime.now(),
             }
         )
         return response
@@ -407,7 +436,13 @@ class SouthernSparexCatalogSweep(models.Model):
             absent = 0
             if source and consecutive >= 2:
                 absent = self.env["southern.vendor.catalog.item"].sudo().search_count(
-                    [("source_id", "=", source.id), ("last_seen_sweep_key", "!=", sweep.sweep_key), ("catalog_state", "!=", "archived")]
+                    [
+                        ("source_id", "=", source.id),
+                        ("catalog_state", "!=", "archived"),
+                        "|",
+                        ("last_seen_sweep_key", "=", False),
+                        ("last_seen_sweep_key", "not in", [previous.sweep_key, sweep.sweep_key]),
+                    ]
                 )
             sweep.write(
                 {
