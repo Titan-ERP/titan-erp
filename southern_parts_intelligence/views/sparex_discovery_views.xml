@@ -330,7 +330,7 @@
                 <filter name="creation_review" string="Creation Review" domain="[('creation_state','=','review_required')]"/>
                 <filter name="enrichment_candidates" string="Ready to Link Source" domain="[('source_enrichment_candidate','=',True)]"/>
                 <filter name="publication_candidates" string="Publication Candidates" domain="[('publication_candidate','=',True)]"/>
-                <filter name="publication_blockers" string="Publication Blockers" domain="[('reconciliation_state','=','current'),('odoo_match_state','=','matched_active'),('currently_published','=',False),('publication_candidate','=',False)]"/>
+                <filter name="publication_blockers" string="Publication Blockers" domain="[('reconciliation_state','=','current'),('odoo_match_state','=','matched_active'),('matched_product_id.website_published','=',False),('publication_candidate','=',False)]"/>
                 <filter name="missing_cost" string="Missing Cost" domain="[('primary_blocker','=','missing_cost')]"/>
                 <filter name="cost_recovery_queued" string="Cost Recovery Queued" domain="[('cost_recovery_state','=','queued')]"/>
                 <filter name="cost_recovery_retry" string="Cost Retry Scheduled" domain="[('cost_recovery_state','=','retry_wait')]"/>
@@ -375,7 +375,7 @@
         <field name="name">Sparex Publication Blockers</field>
         <field name="res_model">southern.sparex.discovery.item</field>
         <field name="view_mode">list,form</field>
-        <field name="domain">[('reconciliation_state','=','current'),('odoo_match_state','=','matched_active'),('currently_published','=',False),('publication_candidate','=',False)]</field>
+        <field name="domain">[('reconciliation_state','=','current'),('odoo_match_state','=','matched_active'),('matched_product_id.website_published','=',False),('publication_candidate','=',False)]</field>
         <field name="context">{'search_default_group_blocker': 1}</field>
         <field name="search_view_id" ref="southern_sparex_discovery_item_search"/>
     </record>

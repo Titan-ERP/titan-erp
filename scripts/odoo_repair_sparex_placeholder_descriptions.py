@@ -1,4 +1,4 @@
-"""Repair the exact internal-placeholder copy on otherwise-ready Sparex products.
+"""Repair exact placeholder or contaminated copy on otherwise-ready Sparex products.
 
 Dry-run is the default. Apply mode records a complete rollback snapshot and
 requires the shared supervised ApplyGate confirmation.
@@ -27,7 +27,10 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ENV = ROOT / "odoo_connection.env"
 REPORT_DIR = ROOT / "outputs" / "sparex_description_repair"
 WORKFLOW = "sparex-placeholder-description-repair"
-EXACT_BLOCKERS = ["placeholder_customer_description"]
+REPAIRABLE_BLOCKER_SETS = {
+    ("contaminated_customer_description",),
+    ("placeholder_customer_description",),
+}
 DESCRIPTION_FIELDS = ("description_ecommerce", "website_description", "description_sale")
 
 
@@ -53,17 +56,29 @@ def _client(env_file: Path) -> OdooClient:
     return OdooClient(OdooConfig.from_env(env_file.resolve())).connect()
 
 
-def collect_candidates(env_file: Path) -> tuple[OdooClient, list[dict[str, Any]]]:
+def company_context(company_id: int | None) -> dict[str, Any]:
+    return (
+        {"allowed_company_ids": [company_id], "company_id": company_id}
+        if company_id
+        else {}
+    )
+
+
+def collect_candidates(env_file: Path, company_id: int | None = None) -> tuple[OdooClient, list[dict[str, Any]]]:
     db, uid, key, models = connect(env_file.resolve())
     target, _fields = collect_target(models, db, uid, key, scope="strict")
-    ids = [row["product_id"] for row in target if row["blockers"] == EXACT_BLOCKERS]
+    ids = [
+        row["product_id"]
+        for row in target
+        if tuple(row["blockers"]) in REPAIRABLE_BLOCKER_SETS
+    ]
     client = _client(env_file)
     products = client.call(
         "product.template",
         "read",
         ids=ids,
         fields=["id", "default_code", "name", "website_published", *DESCRIPTION_FIELDS, "write_date"],
-        context={"active_test": False},
+        context={"active_test": False, **company_context(company_id)},
     )
     by_id = {int(row["product_id"]): row for row in target}
     records = []
@@ -118,6 +133,7 @@ def restore(args: argparse.Namespace) -> int:
                 "write",
                 ids=[int(record["product_id"])],
                 vals=record["descriptions_before"],
+                context=company_context(args.company_id),
             )
     print(json.dumps({"mode": "restore_apply" if args.apply else "restore_dry_run", "records": len(records)}))
     return 0
@@ -131,11 +147,12 @@ def main() -> int:
     parser.add_argument("--confirm", default="")
     parser.add_argument("--reason", default="")
     parser.add_argument("--max-records", type=int, default=1000)
+    parser.add_argument("--company-id", type=int)
     args = parser.parse_args()
     if args.restore_from:
         return restore(args)
 
-    client, records = collect_candidates(args.env_file)
+    client, records = collect_candidates(args.env_file, args.company_id)
     stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     snapshot = REPORT_DIR / f"sparex_description_repair_{stamp}.json"
     write_snapshot(snapshot, records)
@@ -149,9 +166,10 @@ def main() -> int:
                 "write",
                 ids=[int(record["product_id"])],
                 vals=record["descriptions_after"],
+                context=company_context(args.company_id),
             )
 
-    _client_after, remaining = collect_candidates(args.env_file)
+    _client_after, remaining = collect_candidates(args.env_file, args.company_id)
     summary = {
         "mode": "apply" if args.apply else "dry_run",
         "matched": len(records),

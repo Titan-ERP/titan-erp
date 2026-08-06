@@ -3,6 +3,7 @@ import hashlib
 from unittest.mock import patch
 
 from odoo import fields
+from odoo.addons.southern_parts_intelligence.models.sparex_discovery import _verified_detail_title
 from odoo.exceptions import UserError
 from odoo.tests import tagged
 from odoo.tests.common import TransactionCase
@@ -24,6 +25,13 @@ class TestSparexDiscovery(TransactionCase):
                         "instructions": "Use exact deterministic catalog facts.",
                     }
                 )
+
+    def test_verified_detail_title_rejects_scraped_browser_code(self):
+        contaminated = (
+            ".product-image-container-9730 { width: 295px; } "
+            'document.querySelectorAll(".product-image-container-9730")'
+        )
+        self.assertFalse(_verified_detail_title(contaminated))
 
     def test_page_inventory_classifies_existing_and_missing_without_product_creation(self):
         existing = self.env["product.template"].create(
@@ -289,6 +297,12 @@ class TestSparexDiscovery(TransactionCase):
         )
         self.assertEqual(queued["cursor_kind"], "repair")
         self.assertEqual(active_run.cursor_url, seed_url)
+        self.assertEqual(active_run.repair_queued_url_count, 1)
+        queued_again = self.env["southern.sparex.discovery.run"].queue_discovery_page_repairs(
+            run["id"], [seed_url], "Reparse legacy listing evidence"
+        )
+        self.assertEqual(queued_again["repair_queued_url_count"], 1)
+        self.assertEqual(active_run.queued_url_count, 1)
 
         self.env["southern.sparex.discovery.run"].claim_discovery_checkpoint(
             run["id"], "repair-test-worker", 180
@@ -586,8 +600,11 @@ class TestSparexDiscovery(TransactionCase):
 
         with patch.object(type(Item), "search", capture_search):
             description_plan = Item.prepare_description_repair_plan(limit=5)
-        self.assertIn(("primary_blocker", "=", "missing_customer_description"), search_calls[0][0])
-        self.assertEqual(search_calls[0][1]["limit"], 5)
+        self.assertIn(
+            ("primary_blocker", "in", ("missing_customer_description", "already_published")),
+            search_calls[0][0],
+        )
+        self.assertEqual(search_calls[0][1]["limit"], 20)
         self.assertEqual(len(description_plan), 1)
         repaired_descriptions = Item.apply_description_repair_plan(
             description_plan,

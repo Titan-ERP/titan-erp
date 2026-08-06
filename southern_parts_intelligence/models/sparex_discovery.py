@@ -11,6 +11,7 @@ from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
 from .catalog_agents import (
+    CUSTOMER_COPY_CONTAMINATION_MARKERS,
     SHA256_PATTERN,
     customer_description_ready,
     exact_dealer_cost_evidence_ready,
@@ -105,6 +106,7 @@ def _verified_detail_title(value):
         or bool(re.fullmatch(r"S[.\s-]*\d+", title, flags=re.IGNORECASE))
         or "<" in title
         or ">" in title
+        or any(marker in title.casefold() for marker in CUSTOMER_COPY_CONTAMINATION_MARKERS)
         or folded in DETAIL_TITLE_PLACEHOLDERS
     ):
         return ""
@@ -535,20 +537,40 @@ class SouthernSparexDiscoveryRun(models.Model):
         if run.reconciliation_state != "pending":
             return run.read(self._worker_fields())[0]
         Item = self.env["southern.sparex.discovery.item"]
-        Item.search([("company_id", "=", run.company_id.id)]).write(
-            {
-                "reconciliation_state": "pending",
-                "source_enrichment_candidate": False,
-                "publication_candidate": False,
-            }
+        now = fields.Datetime.now()
+        Item.flush_model(
+            ["reconciliation_state", "source_enrichment_candidate", "publication_candidate"]
         )
-        Item.search([("company_id", "=", run.company_id.id), ("last_seen_run_id", "=", run.id)]).write(
-            {"reconciliation_state": "current"}
+        self.env.cr.execute(
+            """
+            UPDATE southern_sparex_discovery_item
+               SET reconciliation_state = 'pending',
+                   source_enrichment_candidate = FALSE,
+                   publication_candidate = FALSE,
+                   write_uid = %s,
+                   write_date = %s
+             WHERE company_id = %s
+            """,
+            [self.env.uid, now, run.company_id.id],
+        )
+        self.env.cr.execute(
+            """
+            UPDATE southern_sparex_discovery_item
+               SET reconciliation_state = 'current',
+                   write_uid = %s,
+                   write_date = %s
+             WHERE company_id = %s
+               AND last_seen_run_id = %s
+            """,
+            [self.env.uid, now, run.company_id.id, run.id],
+        )
+        Item.invalidate_model(
+            ["reconciliation_state", "source_enrichment_candidate", "publication_candidate"]
         )
         run.write(
             {
                 "reconciliation_state": "in_progress",
-                "reconciliation_started_at": fields.Datetime.now(),
+                "reconciliation_started_at": now,
                 "reconciliation_completed_at": False,
                 "stale_count": 0,
             }
@@ -560,31 +582,60 @@ class SouthernSparexDiscoveryRun(models.Model):
         if self.reconciliation_state == "completed":
             return self.stale_count
         Item = self.env["southern.sparex.discovery.item"]
-        stale = Item.search(
+        now = fields.Datetime.now()
+        Item.flush_model(
             [
-                ("company_id", "=", self.company_id.id),
-                ("last_seen_run_id", "!=", self.id),
+                "reconciliation_state",
+                "state",
+                "review_reason",
+                "source_enrichment_candidate",
+                "publication_candidate",
             ]
         )
-        stale.write(
-            {
-                "reconciliation_state": "stale",
-                "state": "review",
-                "review_reason": "stale_not_seen",
-                "source_enrichment_candidate": False,
-                "publication_candidate": False,
-            }
+        self.env.cr.execute(
+            """
+            UPDATE southern_sparex_discovery_item
+               SET reconciliation_state = 'stale',
+                   state = 'review',
+                   review_reason = 'stale_not_seen',
+                   source_enrichment_candidate = FALSE,
+                   publication_candidate = FALSE,
+                   write_uid = %s,
+                   write_date = %s
+             WHERE company_id = %s
+               AND last_seen_run_id IS DISTINCT FROM %s
+            """,
+            [self.env.uid, now, self.company_id.id, self.id],
         )
-        current = Item.search([("company_id", "=", self.company_id.id), ("last_seen_run_id", "=", self.id)])
-        current.write({"reconciliation_state": "current"})
+        stale_count = self.env.cr.rowcount
+        self.env.cr.execute(
+            """
+            UPDATE southern_sparex_discovery_item
+               SET reconciliation_state = 'current',
+                   write_uid = %s,
+                   write_date = %s
+             WHERE company_id = %s
+               AND last_seen_run_id = %s
+            """,
+            [self.env.uid, now, self.company_id.id, self.id],
+        )
+        Item.invalidate_model(
+            [
+                "reconciliation_state",
+                "state",
+                "review_reason",
+                "source_enrichment_candidate",
+                "publication_candidate",
+            ]
+        )
         self.write(
             {
                 "reconciliation_state": "completed",
-                "reconciliation_completed_at": fields.Datetime.now(),
-                "stale_count": len(stale),
+                "reconciliation_completed_at": now,
+                "stale_count": stale_count,
             }
         )
-        return len(stale)
+        return stale_count
 
     def _ensure_normalized_frontier(self):
         """Lazily move legacy text checkpoints into indexed queue rows."""
@@ -678,26 +729,6 @@ class SouthernSparexDiscoveryRun(models.Model):
                 selected.state = "active"
         return selected, cursor_kind
 
-    def _refresh_url_queue_counts(self):
-        self.ensure_one()
-        URL = self.env["southern.sparex.discovery.url"].sudo()
-        counts = {
-            "queued_url_count": URL.search_count(
-                [("run_id", "=", self.id), ("state", "in", ["queued", "active"])]
-            ),
-            "visited_url_count": URL.search_count(
-                [("run_id", "=", self.id), ("state", "=", "visited")]
-            ),
-            "repair_queued_url_count": URL.search_count(
-                [("run_id", "=", self.id), ("repair_requested", "=", True)]
-            ),
-            "repair_visited_url_count": URL.search_count(
-                [("run_id", "=", self.id), ("repair_visit_count", ">", 0)]
-            ),
-        }
-        self.write(counts)
-        return counts
-
     @api.model
     def queue_discovery_page_repairs(self, run_id, page_urls, reason, priority=100):
         run = self.browse(int(run_id)).exists()
@@ -725,6 +756,9 @@ class SouthernSparexDiscoveryRun(models.Model):
             .mapped("page_url_sha256")
         )
         create_values = []
+        repair_count_delta = 0
+        queued_count_delta = 0
+        visited_count_delta = 0
         for url_hash, url in hashes.items():
             row = by_hash.get(url_hash)
             values = {
@@ -735,8 +769,14 @@ class SouthernSparexDiscoveryRun(models.Model):
                 "repair_requested_at": now,
             }
             if row:
+                repair_count_delta += 0 if row.repair_requested else 1
                 row.write(values)
             else:
+                repair_count_delta += 1
+                if url_hash in page_hashes:
+                    visited_count_delta += 1
+                else:
+                    queued_count_delta += 1
                 create_values.append(
                     {
                         **values,
@@ -755,6 +795,12 @@ class SouthernSparexDiscoveryRun(models.Model):
         if active_frontier:
             active_frontier.state = "queued"
         selected, cursor_kind = run._select_next_discovery_url()
+        counts = {
+            "queued_url_count": run.queued_url_count + queued_count_delta,
+            "visited_url_count": run.visited_url_count + visited_count_delta,
+            "repair_queued_url_count": run.repair_queued_url_count + repair_count_delta,
+            "repair_visited_url_count": run.repair_visited_url_count,
+        }
         if selected:
             run.write(
                 {
@@ -765,9 +811,11 @@ class SouthernSparexDiscoveryRun(models.Model):
                     "completed_at": False,
                     "error_code": False,
                     "error_message": False,
+                    **counts,
                 }
             )
-        counts = run._refresh_url_queue_counts()
+        else:
+            run.write(counts)
         return {"queued": len(urls), "cursor_kind": run.cursor_kind, **counts}
 
     @api.model
@@ -1240,6 +1288,7 @@ class SouthernSparexDiscoveryRun(models.Model):
         current_url = URL.search(
             [("run_id", "=", run.id), ("url_sha256", "=", page_url_sha)], limit=1
         )
+        current_created = not current_url
         if not current_url:
             current_url = URL.create(
                 {
@@ -1250,6 +1299,9 @@ class SouthernSparexDiscoveryRun(models.Model):
                     "state": "visited" if repairing else "active",
                 }
             )
+        current_was_queued = current_url.state in {"queued", "active"}
+        repair_was_requested = bool(current_url.repair_requested)
+        first_repair_visit = bool(repairing and not current_url.repair_visit_count)
         if repairing:
             current_url.write(
                 {
@@ -1309,18 +1361,18 @@ class SouthernSparexDiscoveryRun(models.Model):
         selected, cursor_kind = run._select_next_discovery_url(page_limit_reached=page_limit_reached)
         completed = not selected
         queue_counts = {
-            "queued_url_count": URL.search_count(
-                [("run_id", "=", run.id), ("state", "in", ["queued", "active"])]
+            "queued_url_count": max(
+                0,
+                run.queued_url_count - (1 if current_was_queued else 0) + len(create_values),
             ),
-            "visited_url_count": URL.search_count(
-                [("run_id", "=", run.id), ("state", "=", "visited")]
+            "visited_url_count": run.visited_url_count
+            + (1 if current_was_queued or current_created else 0),
+            "repair_queued_url_count": max(
+                0,
+                run.repair_queued_url_count - (1 if repair_was_requested else 0),
             ),
-            "repair_queued_url_count": URL.search_count(
-                [("run_id", "=", run.id), ("repair_requested", "=", True)]
-            ),
-            "repair_visited_url_count": URL.search_count(
-                [("run_id", "=", run.id), ("repair_visit_count", ">", 0)]
-            ),
+            "repair_visited_url_count": run.repair_visited_url_count
+            + (1 if first_repair_visit else 0),
         }
         run.write(
             {
@@ -1347,8 +1399,7 @@ class SouthernSparexDiscoveryRun(models.Model):
                 "completed_at": now if completed else False,
                 "error_code": (
                     "max_pages_total_reached"
-                    if page_limit_reached
-                    and URL.search_count([("run_id", "=", run.id), ("state", "=", "queued")])
+                    if page_limit_reached and queue_counts["queued_url_count"]
                     else False
                 ),
                 "lease_owner": False,
@@ -1463,6 +1514,23 @@ class SouthernSparexDiscoveryUrl(models.Model):
     _run_url_unique = models.Constraint(
         "unique(run_id, url_sha256)", "Each listing URL can appear only once in a discovery run queue."
     )
+
+    def init(self):
+        self.env.cr.execute(
+            """
+            CREATE INDEX IF NOT EXISTS southern_sparex_discovery_url_frontier_idx
+                ON southern_sparex_discovery_url (run_id, priority, id)
+             WHERE state = 'queued' AND url IS NOT NULL
+            """
+        )
+        self.env.cr.execute(
+            """
+            CREATE INDEX IF NOT EXISTS southern_sparex_discovery_url_repair_idx
+                ON southern_sparex_discovery_url
+                    (run_id, repair_priority DESC, repair_requested_at, id)
+             WHERE repair_requested IS TRUE AND url IS NOT NULL
+            """
+        )
 
     @api.constrains("url", "url_sha256")
     def _check_url_contract(self):
@@ -1626,6 +1694,27 @@ class SouthernSparexDiscoveryItem(models.Model):
     _sku_company_unique = models.Constraint(
         "unique(normalized_sku, company_id)", "Each Sparex SKU can appear only once in the company discovery queue."
     )
+
+    def init(self):
+        self.env.cr.execute(
+            """
+            CREATE INDEX IF NOT EXISTS southern_sparex_discovery_item_release_idx
+                ON southern_sparex_discovery_item
+                    (company_id, cost_recovery_priority DESC, readiness_refreshed_at, id)
+             WHERE reconciliation_state = 'current'
+               AND odoo_match_state = 'matched_active'
+               AND currently_published IS FALSE
+            """
+        )
+        self.env.cr.execute(
+            """
+            CREATE INDEX IF NOT EXISTS southern_sparex_discovery_item_refresh_idx
+                ON southern_sparex_discovery_item
+                    (company_id, readiness_refreshed_at, id)
+             WHERE reconciliation_state = 'current'
+               AND odoo_match_state = 'matched_active'
+            """
+        )
 
     @api.depends(
         "reconciliation_state",
@@ -2057,10 +2146,10 @@ class SouthernSparexDiscoveryItem(models.Model):
         return values
 
     def _description_repair_snapshot(self):
-        """Capture a listing-title-only replacement for an internal placeholder."""
+        """Capture a verified-title replacement for unsafe customer copy."""
         self.ensure_one()
         product = self.matched_product_id.sudo()
-        title = " ".join((self.listing_title or "").split())
+        title = _verified_detail_title(self.listing_title)
         if not title:
             raise UserError(_("A verified listing title is required to repair customer copy."))
         safe_title = html.escape(title)
@@ -2261,77 +2350,114 @@ class SouthernSparexDiscoveryItem(models.Model):
     def continuous_release_status(self):
         """Return an Odoo-only gate for the next bounded release dispatch."""
         now = fields.Datetime.now()
-        items = self.search(
+        refresh_items = self.search(
             [
                 ("company_id", "=", self.env.company.id),
                 ("reconciliation_state", "=", "current"),
                 ("odoo_match_state", "=", "matched_active"),
-                ("currently_published", "=", False),
             ],
-            order="cost_recovery_priority desc, readiness_refreshed_at, id",
+            order="readiness_refreshed_at, id",
+            limit=500,
         )
-        items._refresh_readiness()
-        actionable = self.browse()
-        waiting = self.browse()
-        manual = self.browse()
-        blocked = self.browse()
-        for item in items:
-            if item.publication_candidate or item.source_enrichment_candidate or item.cost_recovery_state == "queued":
-                actionable |= item
-            elif item.cost_recovery_state == "retry_wait":
-                if not item.cost_recovery_next_at or item.cost_recovery_next_at <= now:
-                    actionable |= item
-                else:
-                    waiting |= item
-            elif item.cost_recovery_state == "claimed":
-                waiting |= item
-            elif item.cost_recovery_state == "manual_review":
-                manual |= item
-            else:
-                blocked |= item
-        unlinked_count = self.search_count(
+        refresh_items._refresh_readiness()
+        self.flush_model(
             [
-                ("company_id", "=", self.env.company.id),
-                ("reconciliation_state", "=", "current"),
-                ("odoo_match_state", "!=", "matched_active"),
+                "publication_candidate",
+                "source_enrichment_candidate",
+                "cost_recovery_state",
+                "cost_recovery_next_at",
             ]
         )
-        tracked_product_ids = self.search(
-            [
-                ("company_id", "=", self.env.company.id),
-                ("reconciliation_state", "=", "current"),
-                ("matched_product_id", "!=", False),
-            ]
-        ).mapped("matched_product_id").ids
-        untracked_product_count = (
-            self.env["product.template"]
-            .with_context(active_test=False)
-            .search_count(
+        self.env.cr.execute(
+            """
+            WITH classified AS (
+                SELECT CASE
+                         WHEN publication_candidate IS TRUE
+                           OR source_enrichment_candidate IS TRUE
+                           OR cost_recovery_state = 'queued'
+                           OR (
+                                cost_recovery_state = 'retry_wait'
+                                AND (cost_recovery_next_at IS NULL OR cost_recovery_next_at <= %s)
+                              )
+                           THEN 'actionable'
+                         WHEN cost_recovery_state = 'claimed'
+                           OR (cost_recovery_state = 'retry_wait' AND cost_recovery_next_at > %s)
+                           THEN 'waiting'
+                         WHEN cost_recovery_state = 'manual_review'
+                           THEN 'manual'
+                         ELSE 'blocked'
+                       END AS bucket,
+                       cost_recovery_next_at
+                  FROM southern_sparex_discovery_item
+                 WHERE company_id = %s
+                   AND reconciliation_state = 'current'
+                   AND odoo_match_state = 'matched_active'
+                   AND currently_published IS FALSE
+            )
+            SELECT COUNT(*) FILTER (WHERE bucket = 'actionable'),
+                   COUNT(*) FILTER (WHERE bucket = 'waiting'),
+                   COUNT(*) FILTER (WHERE bucket = 'manual'),
+                   COUNT(*) FILTER (WHERE bucket = 'blocked'),
+                   MIN(cost_recovery_next_at) FILTER (WHERE bucket = 'waiting')
+              FROM classified
+            """,
+            [now, now, self.env.company.id],
+        )
+        actionable_count, waiting_count, manual_count, blocked_count, next_attempt_at = self.env.cr.fetchone()
+        if actionable_count:
+            state = "actionable"
+        elif waiting_count:
+            state = "waiting"
+        else:
+            unlinked_count = self.search_count(
                 [
-                    ("active", "=", True),
-                    ("default_code", "=like", "S.%"),
-                    ("id", "not in", tracked_product_ids),
+                    ("company_id", "=", self.env.company.id),
+                    ("reconciliation_state", "=", "current"),
+                    ("odoo_match_state", "!=", "matched_active"),
                 ]
             )
-        )
-        waiting_dates = [value for value in waiting.mapped("cost_recovery_next_at") if value]
-        if actionable:
-            state = "actionable"
-        elif waiting:
-            state = "waiting"
-        elif manual or blocked or unlinked_count or untracked_product_count:
-            state = "needs_review"
-        else:
-            state = "complete"
+            self.env["product.template"].flush_model(["active", "default_code"])
+            self.env.cr.execute(
+                """
+                SELECT COUNT(*)
+                  FROM product_template product
+                 WHERE product.active IS TRUE
+                   AND product.default_code LIKE 'S.%'
+                   AND NOT EXISTS (
+                        SELECT 1
+                          FROM southern_sparex_discovery_item item
+                         WHERE item.company_id = %s
+                           AND item.reconciliation_state = 'current'
+                           AND item.matched_product_id = product.id
+                   )
+                """,
+                [self.env.company.id],
+            )
+            untracked_product_count = self.env.cr.fetchone()[0]
+            state = (
+                "needs_review"
+                if manual_count or blocked_count or unlinked_count or untracked_product_count
+                else "complete"
+            )
+            return {
+                "state": state,
+                "actionable_count": 0,
+                "waiting_count": 0,
+                "manual_review_count": manual_count,
+                "blocked_count": blocked_count,
+                "unlinked_count": unlinked_count,
+                "untracked_product_count": untracked_product_count,
+                "next_attempt_at": False,
+            }
         return {
             "state": state,
-            "actionable_count": len(actionable),
-            "waiting_count": len(waiting),
-            "manual_review_count": len(manual),
-            "blocked_count": len(blocked),
-            "unlinked_count": unlinked_count,
-            "untracked_product_count": untracked_product_count,
-            "next_attempt_at": min(waiting_dates) if waiting_dates else False,
+            "actionable_count": actionable_count,
+            "waiting_count": waiting_count,
+            "manual_review_count": manual_count,
+            "blocked_count": blocked_count,
+            "unlinked_count": 0,
+            "untracked_product_count": 0,
+            "next_attempt_at": next_attempt_at or False,
         }
 
     @api.model
@@ -2762,7 +2888,7 @@ class SouthernSparexDiscoveryItem(models.Model):
                 ("state", "=", "verified"),
                 ("source_state", "=", "verified"),
                 ("odoo_match_state", "=", "matched_active"),
-                ("currently_published", "=", False),
+                ("matched_product_id.website_published", "=", False),
                 ("has_exact_sparex_url", "=", True),
                 ("has_image", "=", True),
                 ("source_enrichment_candidate", "=", True),
@@ -2787,7 +2913,7 @@ class SouthernSparexDiscoveryItem(models.Model):
 
     @api.model
     def prepare_description_repair_plan(self, limit=MAX_SOURCE_LINK_BATCH):
-        """Plan customer-copy repair only for verified listings with the internal placeholder."""
+        """Plan bounded repair of placeholder or contaminated customer copy."""
         bounded = max(1, min(int(limit or MAX_SOURCE_LINK_BATCH), MAX_SOURCE_LINK_BATCH))
         candidates = self.search(
             [
@@ -2795,14 +2921,13 @@ class SouthernSparexDiscoveryItem(models.Model):
                 ("state", "=", "verified"),
                 ("source_state", "=", "verified"),
                 ("odoo_match_state", "=", "matched_active"),
-                ("currently_published", "=", False),
                 ("has_exact_sparex_url", "=", True),
                 ("has_image", "=", True),
                 ("listing_title", "!=", False),
-                ("primary_blocker", "=", "missing_customer_description"),
+                ("primary_blocker", "in", ("missing_customer_description", "already_published")),
             ],
             order="readiness_refreshed_at, id",
-            limit=bounded,
+            limit=bounded * 4,
         )
         prepared = []
         for item in candidates:
@@ -2812,6 +2937,7 @@ class SouthernSparexDiscoveryItem(models.Model):
                 not product
                 or not product.active
                 or not product.public_categ_ids
+                or not _verified_detail_title(item.listing_title)
                 or customer_description_ready(product)
             ):
                 continue

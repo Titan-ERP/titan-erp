@@ -40,6 +40,14 @@ PLACEHOLDER_DESCRIPTION_MARKERS = (
     "internal catalog record",
     "not published to the website until",
 )
+CUSTOMER_COPY_CONTAMINATION_MARKERS = (
+    "product-image-container",
+    "prodimagecontainers",
+    "document.queryselector",
+    "queryselectorall(",
+    "padding-bottom:",
+    "for (var ",
+)
 REQUIRED_COST_PLUS_MARGIN_PERCENT = 35.0
 
 
@@ -80,7 +88,8 @@ def customer_description_ready(product):
     )
     plain_text = re.sub(r"<[^>]+>", " ", descriptions)
     normalized = " ".join(plain_text.casefold().split())
-    return bool(normalized) and not any(marker in normalized for marker in PLACEHOLDER_DESCRIPTION_MARKERS)
+    blocked_markers = PLACEHOLDER_DESCRIPTION_MARKERS + CUSTOMER_COPY_CONTAMINATION_MARKERS
+    return bool(normalized) and not any(marker in normalized for marker in blocked_markers)
 
 
 def sales_price_blocker(product, supplier):

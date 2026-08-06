@@ -40,6 +40,14 @@ class SparexPublicationSafeguardTests(unittest.TestCase):
         )
         self.assertIn("placeholder_customer_description", publication_blockers(product, [10.0]))
 
+    def test_scraped_browser_code_is_blocked(self):
+        product = self.base_product()
+        product["description_ecommerce"] = (
+            ".product-image-container-9730 { width: 295px; } "
+            'document.querySelectorAll(".product-image-container-9730")'
+        )
+        self.assertIn("contaminated_customer_description", publication_blockers(product, [10.0]))
+
 
 if __name__ == "__main__":
     unittest.main()
