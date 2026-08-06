@@ -121,6 +121,8 @@ class SparexDiscoveryReconciliationContractTests(unittest.TestCase):
         self.assertIn('flush_model(["is_published"])', release_status)
         self.assertIn("product.is_published IS FALSE", release_status)
         self.assertNotIn("product.website_published", release_status)
+        self.assertIn("product.default_code LIKE 'S.%%'", release_status)
+        self.assertNotIn("product.default_code LIKE 'S.%'\n", release_status)
         self.assertNotIn("tracked_product_ids", release_status)
         self.assertIn("NOT EXISTS", release_status)
         self.assertIn("southern_sparex_discovery_url_frontier_idx", discovery)
