@@ -41,7 +41,9 @@ The configured Odoo journal and incoming payment method control payment accounti
 
 ## Transaction processing fee
 
-The invoice has a manual **Payment Type** selection. Choosing **Stripe Terminal** on a draft invoice automatically adds one itemized processing-fee line. Choosing Cash, ACH, Online Payment Link, or leaving the field blank removes that draft fee line. The default formula is 3.5% of the complete invoice total before the fee, including sales tax, plus $0.30.
+The invoice has one authoritative **Payment Type** selection. New customer invoices default to **Stripe Terminal** when the company has an active default reader, and automatically receive one itemized processing-fee line. Choosing Cash, ACH, or Online Payment Link removes that draft fee line. The default formula is 3.5% of the complete invoice total before the fee, including sales tax, plus $0.30.
+
+The upgrade disables the obsolete Studio card-fee automation and hides its duplicate payment-type field. Existing draft invoices are translated to the authoritative selection; posted invoices and their accounting history are not rewritten.
 
 The line is recalculated whenever draft invoice lines change and finalized before posting. Once posted, Payment Type and accounting lines remain immutable. The Terminal button reuses the embedded fee and does not charge it twice. For a legacy posted invoice that did not receive a fee line before posting, the terminal workflow retains the linked supplemental-fee fallback so the posted journal entry is never silently rewritten.
 

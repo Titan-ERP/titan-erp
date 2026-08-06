@@ -124,6 +124,34 @@ def test_manual_payment_type_controls_the_draft_fee_line():
     assert "@api.model_create_multi" in source
 
 
+def test_new_customer_invoices_default_to_an_active_company_terminal():
+    source = (MODULE / "models" / "account_move.py").read_text(encoding="utf-8")
+    assert "def _default_southern_payment_type(self):" in source
+    assert 'self.env.context.get("default_move_type") != "out_invoice"' in source
+    assert '("active", "=", True)' in source
+    assert '("is_default", "=", True)' in source
+    assert 'return "stripe_terminal" if has_default_terminal else False' in source
+    assert 'vals["southern_payment_type"] = "stripe_terminal"' in source
+
+
+def test_upgrade_retires_only_the_legacy_studio_fee_path_and_migrates_drafts():
+    migration = (
+        MODULE / "migrations" / "19.0.1.5.0" / "post-migrate.py"
+    ).read_text(encoding="utf-8")
+    assert "studio_customization.credit_card_processi_" in migration
+    assert "automation.active = False" in migration
+    assert 'LEGACY_PAYMENT_FIELD = "x_studio_customer_payment_method"' in migration
+    assert 'node.set("invisible", "True")' in migration
+    assert '("state", "=", "draft")' in migration
+    assert '("move_type", "=", "out_invoice")' in migration
+    assert 'line.product_id.default_code == "CARD-FEE"' in migration
+    assert '"Credit Card": "stripe_terminal"' in migration
+    assert '"ACH": "ach"' in migration
+    assert '"Check / Cash": "cash"' in migration
+    assert "button_draft" not in migration
+    assert "action_post" not in migration
+
+
 def test_payment_buttons_honor_the_manual_payment_type():
     source = (MODULE / "models" / "account_move.py").read_text(encoding="utf-8")
     assert "def _southern_validate_selected_payment_type(self, payment_type):" in source
@@ -151,6 +179,14 @@ def test_terminal_payment_snapshots_fee_and_prevents_double_charge():
     assert "UNIQUE(southern_terminal_fee_payment_id)" in (
         MODULE / "models" / "account_move.py"
     ).read_text(encoding="utf-8")
+
+
+def test_global_currency_is_not_subject_to_odoo_company_domain_checks():
+    source = (MODULE / "models" / "stripe_terminal_payment.py").read_text(encoding="utf-8")
+    assert 'currency_id = fields.Many2one("res.currency", required=True)' in source
+    assert 'currency_id = fields.Many2one("res.currency", required=True, check_company=True)' not in source
+    assert "payment.currency_id != payment.invoice_id.currency_id" in source
+    assert "payment.currency_id != payment.config_id.currency_id" in source
 
 
 def test_upgrade_removes_only_draft_universal_fee_lines():
