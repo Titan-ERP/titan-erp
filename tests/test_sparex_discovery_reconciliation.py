@@ -104,6 +104,7 @@ class SparexDiscoveryReconciliationContractTests(unittest.TestCase):
         release_status = discovery.split("def continuous_release_status", 1)[1].split(
             "def claim_cost_recovery_batch", 1
         )[0]
+        item_init = discovery.split("def init(self):", 1)[1].split("def _compute_blocker_summary", 1)[0]
         refresh_selection = release_status.split("refresh_items = self.search", 1)[1].split(
             "refresh_items._refresh_readiness", 1
         )[0]
@@ -114,6 +115,10 @@ class SparexDiscoveryReconciliationContractTests(unittest.TestCase):
         self.assertIn("limit=500", release_status)
         self.assertIn('order="readiness_refreshed_at, id"', release_status)
         self.assertNotIn('(\"currently_published\", \"=\", False)', refresh_selection)
+        self.assertNotIn("currently_published IS FALSE", release_status)
+        self.assertNotIn("currently_published IS FALSE", item_init)
+        self.assertIn("JOIN product_template product", release_status)
+        self.assertIn("product.website_published IS FALSE", release_status)
         self.assertNotIn("tracked_product_ids", release_status)
         self.assertIn("NOT EXISTS", release_status)
         self.assertIn("southern_sparex_discovery_url_frontier_idx", discovery)
