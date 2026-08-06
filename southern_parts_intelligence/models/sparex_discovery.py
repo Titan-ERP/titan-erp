@@ -1696,6 +1696,7 @@ class SouthernSparexDiscoveryItem(models.Model):
     )
 
     def init(self):
+        self.env.cr.execute("DROP INDEX IF EXISTS southern_sparex_discovery_item_release_idx")
         self.env.cr.execute(
             """
             CREATE INDEX IF NOT EXISTS southern_sparex_discovery_item_release_idx
@@ -1703,7 +1704,6 @@ class SouthernSparexDiscoveryItem(models.Model):
                     (company_id, cost_recovery_priority DESC, readiness_refreshed_at, id)
              WHERE reconciliation_state = 'current'
                AND odoo_match_state = 'matched_active'
-               AND currently_published IS FALSE
             """
         )
         self.env.cr.execute(
@@ -2368,31 +2368,34 @@ class SouthernSparexDiscoveryItem(models.Model):
                 "cost_recovery_next_at",
             ]
         )
+        self.env["product.template"].flush_model(["website_published"])
         self.env.cr.execute(
             """
             WITH classified AS (
                 SELECT CASE
-                         WHEN publication_candidate IS TRUE
-                           OR source_enrichment_candidate IS TRUE
-                           OR cost_recovery_state = 'queued'
+                         WHEN item.publication_candidate IS TRUE
+                           OR item.source_enrichment_candidate IS TRUE
+                           OR item.cost_recovery_state = 'queued'
                            OR (
-                                cost_recovery_state = 'retry_wait'
-                                AND (cost_recovery_next_at IS NULL OR cost_recovery_next_at <= %s)
+                                item.cost_recovery_state = 'retry_wait'
+                                AND (item.cost_recovery_next_at IS NULL OR item.cost_recovery_next_at <= %s)
                               )
                            THEN 'actionable'
-                         WHEN cost_recovery_state = 'claimed'
-                           OR (cost_recovery_state = 'retry_wait' AND cost_recovery_next_at > %s)
+                         WHEN item.cost_recovery_state = 'claimed'
+                           OR (item.cost_recovery_state = 'retry_wait' AND item.cost_recovery_next_at > %s)
                            THEN 'waiting'
-                         WHEN cost_recovery_state = 'manual_review'
+                         WHEN item.cost_recovery_state = 'manual_review'
                            THEN 'manual'
                          ELSE 'blocked'
                        END AS bucket,
-                       cost_recovery_next_at
-                  FROM southern_sparex_discovery_item
-                 WHERE company_id = %s
-                   AND reconciliation_state = 'current'
-                   AND odoo_match_state = 'matched_active'
-                   AND currently_published IS FALSE
+                       item.cost_recovery_next_at
+                  FROM southern_sparex_discovery_item item
+                  JOIN product_template product
+                    ON product.id = item.matched_product_id
+                   AND product.website_published IS FALSE
+                 WHERE item.company_id = %s
+                   AND item.reconciliation_state = 'current'
+                   AND item.odoo_match_state = 'matched_active'
             )
             SELECT COUNT(*) FILTER (WHERE bucket = 'actionable'),
                    COUNT(*) FILTER (WHERE bucket = 'waiting'),
