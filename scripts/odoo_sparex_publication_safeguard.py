@@ -26,6 +26,14 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ENV = ROOT / "odoo_connection.env"
 REPORT_DIR = ROOT / "outputs" / "sparex_publication_safeguard"
 WORKFLOW = "sparex-publication-safeguard"
+DESCRIPTION_CONTAMINATION_MARKERS = (
+    "product-image-container",
+    "prodimagecontainers",
+    "document.queryselector",
+    "queryselectorall(",
+    "padding-bottom:",
+    "for (var ",
+)
 
 
 def money(value: Any) -> float:
@@ -69,6 +77,8 @@ def publication_blockers(product: dict[str, Any], supplier_prices: list[float]) 
         blockers.append("missing_customer_description")
     elif "internal catalog record" in normalized_descriptions or "not published to the website until" in normalized_descriptions:
         blockers.append("placeholder_customer_description")
+    elif any(marker in normalized_descriptions for marker in DESCRIPTION_CONTAMINATION_MARKERS):
+        blockers.append("contaminated_customer_description")
     return blockers
 
 

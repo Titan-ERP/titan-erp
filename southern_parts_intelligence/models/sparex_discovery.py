@@ -11,6 +11,7 @@ from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
 from .catalog_agents import (
+    CUSTOMER_COPY_CONTAMINATION_MARKERS,
     SHA256_PATTERN,
     customer_description_ready,
     exact_dealer_cost_evidence_ready,
@@ -105,6 +106,7 @@ def _verified_detail_title(value):
         or bool(re.fullmatch(r"S[.\s-]*\d+", title, flags=re.IGNORECASE))
         or "<" in title
         or ">" in title
+        or any(marker in title.casefold() for marker in CUSTOMER_COPY_CONTAMINATION_MARKERS)
         or folded in DETAIL_TITLE_PLACEHOLDERS
     ):
         return ""
@@ -1704,6 +1706,15 @@ class SouthernSparexDiscoveryItem(models.Model):
                AND currently_published IS FALSE
             """
         )
+        self.env.cr.execute(
+            """
+            CREATE INDEX IF NOT EXISTS southern_sparex_discovery_item_refresh_idx
+                ON southern_sparex_discovery_item
+                    (company_id, readiness_refreshed_at, id)
+             WHERE reconciliation_state = 'current'
+               AND odoo_match_state = 'matched_active'
+            """
+        )
 
     @api.depends(
         "reconciliation_state",
@@ -2135,10 +2146,10 @@ class SouthernSparexDiscoveryItem(models.Model):
         return values
 
     def _description_repair_snapshot(self):
-        """Capture a listing-title-only replacement for an internal placeholder."""
+        """Capture a verified-title replacement for unsafe customer copy."""
         self.ensure_one()
         product = self.matched_product_id.sudo()
-        title = " ".join((self.listing_title or "").split())
+        title = _verified_detail_title(self.listing_title)
         if not title:
             raise UserError(_("A verified listing title is required to repair customer copy."))
         safe_title = html.escape(title)
@@ -2344,9 +2355,8 @@ class SouthernSparexDiscoveryItem(models.Model):
                 ("company_id", "=", self.env.company.id),
                 ("reconciliation_state", "=", "current"),
                 ("odoo_match_state", "=", "matched_active"),
-                ("currently_published", "=", False),
             ],
-            order="cost_recovery_priority desc, readiness_refreshed_at, id",
+            order="readiness_refreshed_at, id",
             limit=500,
         )
         refresh_items._refresh_readiness()
@@ -2878,7 +2888,7 @@ class SouthernSparexDiscoveryItem(models.Model):
                 ("state", "=", "verified"),
                 ("source_state", "=", "verified"),
                 ("odoo_match_state", "=", "matched_active"),
-                ("currently_published", "=", False),
+                ("matched_product_id.website_published", "=", False),
                 ("has_exact_sparex_url", "=", True),
                 ("has_image", "=", True),
                 ("source_enrichment_candidate", "=", True),
@@ -2903,7 +2913,7 @@ class SouthernSparexDiscoveryItem(models.Model):
 
     @api.model
     def prepare_description_repair_plan(self, limit=MAX_SOURCE_LINK_BATCH):
-        """Plan customer-copy repair only for verified listings with the internal placeholder."""
+        """Plan bounded repair of placeholder or contaminated customer copy."""
         bounded = max(1, min(int(limit or MAX_SOURCE_LINK_BATCH), MAX_SOURCE_LINK_BATCH))
         candidates = self.search(
             [
@@ -2911,14 +2921,13 @@ class SouthernSparexDiscoveryItem(models.Model):
                 ("state", "=", "verified"),
                 ("source_state", "=", "verified"),
                 ("odoo_match_state", "=", "matched_active"),
-                ("currently_published", "=", False),
                 ("has_exact_sparex_url", "=", True),
                 ("has_image", "=", True),
                 ("listing_title", "!=", False),
-                ("primary_blocker", "=", "missing_customer_description"),
+                ("primary_blocker", "in", ("missing_customer_description", "already_published")),
             ],
             order="readiness_refreshed_at, id",
-            limit=bounded,
+            limit=bounded * 4,
         )
         prepared = []
         for item in candidates:
@@ -2928,6 +2937,7 @@ class SouthernSparexDiscoveryItem(models.Model):
                 not product
                 or not product.active
                 or not product.public_categ_ids
+                or not _verified_detail_title(item.listing_title)
                 or customer_description_ready(product)
             ):
                 continue

@@ -104,16 +104,22 @@ class SparexDiscoveryReconciliationContractTests(unittest.TestCase):
         release_status = discovery.split("def continuous_release_status", 1)[1].split(
             "def claim_cost_recovery_batch", 1
         )[0]
+        refresh_selection = release_status.split("refresh_items = self.search", 1)[1].split(
+            "refresh_items._refresh_readiness", 1
+        )[0]
         self.assertNotIn("search_count(", checkpoint)
         self.assertNotIn("search_count(", repair_queue)
         self.assertNotIn("Item.search(", reconciliation)
         self.assertIn("last_seen_run_id IS DISTINCT FROM", reconciliation)
         self.assertIn("limit=500", release_status)
+        self.assertIn('order="readiness_refreshed_at, id"', release_status)
+        self.assertNotIn('(\"currently_published\", \"=\", False)', refresh_selection)
         self.assertNotIn("tracked_product_ids", release_status)
         self.assertIn("NOT EXISTS", release_status)
         self.assertIn("southern_sparex_discovery_url_frontier_idx", discovery)
         self.assertIn("southern_sparex_discovery_url_repair_idx", discovery)
         self.assertIn("southern_sparex_discovery_item_release_idx", discovery)
+        self.assertIn("southern_sparex_discovery_item_refresh_idx", discovery)
 
 
 if __name__ == "__main__":

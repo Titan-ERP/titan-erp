@@ -2,6 +2,7 @@ import base64
 import hashlib
 import json
 
+from odoo.addons.southern_parts_intelligence.models.catalog_agents import customer_description_ready
 from odoo.exceptions import ValidationError
 from odoo.tests import tagged
 from odoo.tests.common import TransactionCase
@@ -134,6 +135,19 @@ class TestCatalogAgents(TransactionCase):
         self.assertFalse(task.has_exact_sparex_url)
         self.assertFalse(task.ready_to_publish)
         self.assertIn("missing_exact_sparex_url", task.readiness_blockers)
+
+    def test_customer_description_rejects_scraped_browser_code(self):
+        product = self.env["product.template"].create(
+            {
+                "name": "Contaminated Sparex part",
+                "default_code": "S.19454",
+                "description_ecommerce": (
+                    '<p>.product-image-container-9730 { width: 295px; } '
+                    'document.querySelectorAll(".product-image-container-9730")</p>'
+                ),
+            }
+        )
+        self.assertFalse(customer_description_ready(product))
 
     def test_native_publication_gate_blocks_placeholder_and_below_cost_prices(self):
         product = self.env["product.template"].create(
