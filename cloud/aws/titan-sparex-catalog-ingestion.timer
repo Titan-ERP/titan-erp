@@ -1,0 +1,13 @@
+[Unit]
+Description=Poll the durable Sparex catalog FIFO queue
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=1min
+RandomizedDelaySec=10s
+AccuracySec=1s
+Persistent=false
+Unit=titan-sparex-catalog-ingestion.service
+
+[Install]
+WantedBy=timers.target

@@ -1,8 +1,8 @@
 """Throttled, resumable reconciliation of authenticated Sparex listing pages.
 
 The worker never opens a product-detail page or uses Sparex search. It captures
-exact SKU links, listing titles, and images, archives each page, and can invoke
-Odoo's separately gated draft-product creation contract for exact missing SKUs.
+exact SKU links, listing titles, and images, archives each page, and can publish
+immutable checkpoint manifests for decoupled Odoo ingestion.
 """
 
 from __future__ import annotations
@@ -26,6 +26,8 @@ from lxml import html as lxml_html
 
 from scripts.odoo_runtime import ApplyGate, ArtifactStore, OdooClient, OdooConfig
 from scripts.odoo_runtime.client import load_env_file
+from scripts.sparex_catalog_manifest import MAX_RECORDS as MAX_MANIFEST_RECORDS
+from scripts.sparex_catalog_manifest import publish_manifest
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ODOO_ENV = ROOT / "odoo_connection.env"
@@ -36,7 +38,7 @@ PARSER_VERSION = "sparex-listing-frontier-v6"
 SCHEMA_VERSION = "1.1"
 SPAREX_HOST = "us.sparex.com"
 MAX_PAGE_ITEMS = 100
-MAX_CHECKPOINT_PAGES = 10
+MAX_CHECKPOINT_PAGES = 50
 MAX_TOTAL_PAGES = 10_000_000
 MAX_PRODUCT_CREATION_BATCH = 100
 PORTAL_COOLDOWN_STATUSES = {429, 500, 502, 503, 504}
@@ -424,6 +426,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-pages-per-checkpoint", type=int, default=5)
     parser.add_argument("--worker-id", default=socket.gethostname())
     parser.add_argument("--create-missing-products", action="store_true")
+    parser.add_argument("--manifest-queue-url", default=os.environ.get("SPAREX_CATALOG_QUEUE_URL", ""))
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--confirm", default="")
     parser.add_argument("--reason", default="")
@@ -469,6 +472,8 @@ def adaptive_checkpoint_pages(requested: int, existing: dict[str, Any] | None) -
 
 def main() -> int:
     args = build_parser().parse_args()
+    if args.create_missing_products and args.manifest_queue_url:
+        raise RuntimeError("Direct product creation and durable manifest delivery cannot run together.")
     throttle_seconds = max(3.0, float(args.throttle_seconds))
     client = OdooClient(OdooConfig.from_env(args.odoo_env_file)).connect()
     if not client.count("ir.model", [("model", "=", "southern.sparex.discovery.run")]):
@@ -567,6 +572,8 @@ def main() -> int:
     try:
         session = throttle = None
         pages = []
+        manifest_items: list[dict[str, Any]] = []
+        manifest_source_artifacts: list[dict[str, str]] = []
         aggregate_counts = {"matched": 0, "missing": 0, "duplicate": 0, "review": 0}
         observed = corrected = stale = created_count = creation_operations = 0
         created_products: list[dict[str, Any]] = []
@@ -627,6 +634,24 @@ def main() -> int:
                 args.s3_bucket,
                 archive_prefix,
             )
+            manifest_source_artifacts.append(
+                {"uri": page_record["artifact_uri"], "sha256": page_record["sha256"], "role": "listing_page"}
+            )
+            for item in parsed["items"]:
+                card_payload = {
+                    "vendor_sku": item["sku"],
+                    "listing_title": item.get("listing_title") or "",
+                    "source_url": item["source_url"],
+                    "image_url": item.get("image_url") or "",
+                    "availability": "unknown",
+                    "currency_code": "USD",
+                    "page_sha256": page_payload["response_sha256"],
+                    "image_source_sha256": sha256_text(item.get("image_url") or "") if item.get("image_url") else "",
+                }
+                card_payload["card_sha256"] = sha256_text(
+                    json.dumps(card_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+                )
+                manifest_items.append(card_payload)
             recorded = client.call(
                 "southern.sparex.discovery.run",
                 "record_discovery_page",
@@ -700,6 +725,32 @@ def main() -> int:
         if not pages:
             print(json.dumps({"mode": "apply", "claimed": False, "state": terminal_state}, sort_keys=True))
             return 0
+        queued_manifests = []
+        if args.manifest_queue_url:
+            import boto3
+
+            s3 = boto3.client("s3")
+            sqs = boto3.client("sqs")
+            page_range = f"{min(page['page_number'] for page in pages)}-{max(page['page_number'] for page in pages)}"
+            for offset in range(0, len(manifest_items), MAX_MANIFEST_RECORDS):
+                batch = manifest_items[offset : offset + MAX_MANIFEST_RECORDS]
+                batch_number = offset // MAX_MANIFEST_RECORDS + 1
+                key_base = f"{archive_prefix}/manifests/{page_range}-{batch_number:03d}"
+                queued_manifests.append(
+                    publish_manifest(
+                        s3=s3,
+                        sqs=sqs,
+                        queue_url=args.manifest_queue_url,
+                        payload_uri=f"s3://{args.s3_bucket}/{key_base}-payload.json",
+                        manifest_uri=f"s3://{args.s3_bucket}/{key_base}-manifest.json",
+                        payload=batch,
+                        parser_version=PARSER_VERSION,
+                        run_id=str(run["id"]),
+                        sweep_id=f"sparex-discovery-{run['id']}",
+                        page_range=page_range,
+                        source_artifacts=manifest_source_artifacts,
+                    )
+                )
         result = {
             "schema_version": SCHEMA_VERSION,
             "workflow": WORKFLOW,
@@ -717,6 +768,7 @@ def main() -> int:
             "repair_queue": repair_queue,
             "created_count": created_count,
             "created_products": created_products,
+            "queued_manifests": queued_manifests,
             **(throttle.telemetry() if throttle else RequestThrottle(throttle_seconds).telemetry()),
         }
         result_record = _archive(store, "result.json", result, args.s3_bucket, archive_prefix)
