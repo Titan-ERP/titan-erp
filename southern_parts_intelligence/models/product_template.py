@@ -39,6 +39,23 @@ class ProductTemplate(models.Model):
     )
     southern_source_url = fields.Char(string="Source URL", index=True)
     southern_source_name = fields.Char(string="Source Name", index=True)
+    southern_sparex_name_override = fields.Boolean(
+        string="Keep Manual Name", copy=False, help="Prevents the Sparex catalog pipeline from replacing the product name."
+    )
+    southern_sparex_image_override = fields.Boolean(
+        string="Keep Manual Image", copy=False, help="Prevents the Sparex catalog pipeline from replacing the product image."
+    )
+    southern_sparex_category_override = fields.Boolean(
+        string="Keep Manual Category", copy=False, help="Prevents the Sparex catalog pipeline from replacing the product category."
+    )
+    southern_sparex_description_override = fields.Boolean(
+        string="Keep Manual Description", copy=False, help="Prevents the Sparex catalog pipeline from replacing customer-facing descriptions."
+    )
+    southern_sparex_price_override = fields.Boolean(
+        string="Keep Manual Sales Price", copy=False, help="Prevents the Sparex catalog pipeline from replacing the sales price."
+    )
+    southern_sparex_image_sha256 = fields.Char(string="Sparex Image SHA-256", copy=False, readonly=True, index=True)
+    southern_sparex_evidence_sha256 = fields.Char(string="Sparex Evidence SHA-256", copy=False, readonly=True, index=True)
     southern_quote_only = fields.Boolean(
         string="Ask for Pricing",
         index=True,

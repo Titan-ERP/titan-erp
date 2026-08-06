@@ -26,6 +26,15 @@
                             <field name="southern_parts_snapshot_refreshed_at" readonly="1"/>
                         </group>
                     </group>
+                    <group string="Sparex Field Ownership">
+                        <field name="southern_sparex_name_override"/>
+                        <field name="southern_sparex_image_override"/>
+                        <field name="southern_sparex_category_override"/>
+                        <field name="southern_sparex_description_override"/>
+                        <field name="southern_sparex_price_override"/>
+                        <field name="southern_sparex_image_sha256" readonly="1"/>
+                        <field name="southern_sparex_evidence_sha256" readonly="1"/>
+                    </group>
                     <group string="Website Snapshot">
                         <field name="southern_specification_count" readonly="1"/>
                         <field name="southern_fitment_count" readonly="1"/>

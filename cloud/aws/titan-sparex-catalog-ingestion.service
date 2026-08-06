@@ -1,0 +1,21 @@
+[Unit]
+Description=Consume one durable Sparex catalog manifest into Odoo
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/opt/southern-parts/catalog-agent/current
+EnvironmentFile=/opt/southern-parts/catalog-agent/catalog-pipeline.env
+Environment=PYTHONPATH=/opt/southern-parts/catalog-agent/current
+ExecStart=/opt/southern-parts/catalog-agent/venv/bin/python -m scripts.sparex_catalog_queue_worker --queue-url ${SPAREX_CATALOG_QUEUE_URL} --odoo-env-file /opt/southern-parts/Odoo/odoo_connection.env
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=12min
+
