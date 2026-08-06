@@ -1,3 +1,5 @@
+import hashlib
+import json
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -5,6 +7,7 @@ from unittest.mock import patch
 from scripts.sparex_catalog_discovery import (
     RequestThrottle,
     _checked_request,
+    _read_archived_json,
     adaptive_checkpoint_pages,
     exact_sparex_product_url,
     parse_listing_page,
@@ -14,6 +17,29 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class SparexCatalogDiscoveryParserTests(unittest.TestCase):
+    def test_reads_checksum_verified_legacy_page_evidence_from_s3(self):
+        content = json.dumps(
+            {"schema_version": "1.1", "data": {"page_url": "https://us.sparex.com/products?p=2"}}
+        ).encode()
+
+        class Body:
+            @staticmethod
+            def read():
+                return content
+
+        class S3:
+            @staticmethod
+            def get_object(**kwargs):
+                self.assertEqual(kwargs, {"Bucket": "catalog", "Key": "pages/2.json"})
+                return {"Body": Body()}
+
+        payload = _read_archived_json(
+            "s3://catalog/pages/2.json", hashlib.sha256(content).hexdigest(), S3()
+        )
+        self.assertEqual(payload["page_url"], "https://us.sparex.com/products?p=2")
+        with self.assertRaises(RuntimeError):
+            _read_archived_json("s3://catalog/pages/2.json", "0" * 64, S3())
+
     def test_checked_request_records_request_latency_without_retries(self):
         class Session:
             @staticmethod

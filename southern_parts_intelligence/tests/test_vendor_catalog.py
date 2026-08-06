@@ -52,6 +52,29 @@ class VendorCatalogTests(TransactionCase):
         self.assertFalse(item.blocker_code)
         self.assertEqual(item.observation_count, 2)
 
+    def test_batch_match_is_case_insensitive_and_detects_duplicates(self):
+        self.env["product.template"].create(
+            {"name": "First staged duplicate", "default_code": "ctv:dup-1", "active": True}
+        )
+        self.env["product.template"].create(
+            {"name": "Second staged duplicate", "default_code": "CTV:DUP-1", "active": False}
+        )
+        payloads = [
+            {**self.payload, "vendor_sku": "DUP-1", "source_url": "https://vendor.example/products/dup-1"},
+            {**self.payload, "vendor_sku": "NEW-1", "source_url": "https://vendor.example/products/new-1"},
+        ]
+        result = self.env["southern.vendor.catalog.item"].upsert_catalog_items(
+            "catalog-test-vendor", payloads, "s3://catalog/batch-match.jsonl", HASH
+        )
+        items = self.env["southern.vendor.catalog.item"].search(
+            [("source_id", "=", self.source.id), ("normalized_sku", "in", ["DUP-1", "NEW-1"])]
+        )
+        by_sku = {item.normalized_sku: item for item in items}
+        self.assertEqual(result["observed"], 2)
+        self.assertEqual(by_sku["DUP-1"].match_state, "duplicate")
+        self.assertEqual(by_sku["DUP-1"].promotion_state, "blocked")
+        self.assertEqual(by_sku["NEW-1"].match_state, "missing")
+
     def test_promotion_requires_source_opt_in_and_creates_unpublished_product(self):
         Item = self.env["southern.vendor.catalog.item"]
         Item.upsert_catalog_items("catalog-test-vendor", [self.payload], "s3://catalog/test.jsonl", HASH)

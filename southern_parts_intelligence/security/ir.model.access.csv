@@ -18,6 +18,7 @@ access_southern_catalog_agent_admin,southern.catalog.agent admin,model_southern_
 access_southern_catalog_agent_task_admin,southern.catalog.agent.task admin,model_southern_catalog_agent_task,base.group_system,1,1,1,0
 access_southern_sparex_discovery_run_admin,southern.sparex.discovery.run admin,model_southern_sparex_discovery_run,base.group_system,1,1,1,0
 access_southern_sparex_discovery_page_admin,southern.sparex.discovery.page admin,model_southern_sparex_discovery_page,base.group_system,1,1,1,0
+access_southern_sparex_discovery_url_admin,southern.sparex.discovery.url admin,model_southern_sparex_discovery_url,base.group_system,1,1,1,0
 access_southern_sparex_discovery_item_user,southern.sparex.discovery.item user,model_southern_sparex_discovery_item,base.group_user,1,0,0,0
 access_southern_sparex_discovery_item_admin,southern.sparex.discovery.item admin,model_southern_sparex_discovery_item,base.group_system,1,1,1,0
 access_southern_vendor_catalog_source_user,southern.vendor.catalog.source user,model_southern_vendor_catalog_source,base.group_user,1,0,0,0

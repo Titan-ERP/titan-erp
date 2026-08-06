@@ -3,6 +3,7 @@ import hashlib
 from unittest.mock import patch
 
 from odoo import fields
+from odoo.addons.southern_parts_intelligence.models.sparex_discovery import _verified_detail_title
 from odoo.exceptions import UserError
 from odoo.tests import tagged
 from odoo.tests.common import TransactionCase
@@ -24,6 +25,13 @@ class TestSparexDiscovery(TransactionCase):
                         "instructions": "Use exact deterministic catalog facts.",
                     }
                 )
+
+    def test_verified_detail_title_rejects_scraped_browser_code(self):
+        contaminated = (
+            ".product-image-container-9730 { width: 295px; } "
+            'document.querySelectorAll(".product-image-container-9730")'
+        )
+        self.assertFalse(_verified_detail_title(contaminated))
 
     def test_page_inventory_classifies_existing_and_missing_without_product_creation(self):
         existing = self.env["product.template"].create(
@@ -79,6 +87,59 @@ class TestSparexDiscovery(TransactionCase):
         self.assertEqual(by_sku["S.999999"].odoo_match_state, "missing")
         self.assertEqual(by_sku["S.999999"].creation_state, "review_required")
         self.assertEqual(self.env["product.template"].with_context(active_test=False).search_count([]), product_count)
+
+    def test_page_inventory_bulk_match_preserves_case_insensitive_duplicates(self):
+        self.env["product.template"].create(
+            {"name": "First duplicate", "default_code": "s.765430", "active": True}
+        )
+        self.env["product.template"].create(
+            {"name": "Second duplicate", "default_code": "S765430", "active": False}
+        )
+        seed_url = "https://us.sparex.com/products?p=bulk"
+        run = self.env["southern.sparex.discovery.run"].start_discovery_run(
+            {
+                "idempotency_key": "test-bulk-product-match",
+                "seed_url": seed_url,
+                "seed_url_sha256": hashlib.sha256(seed_url.encode()).hexdigest(),
+                "plan_artifact_uri": "s3://test-bucket/discovery/bulk-plan.json",
+                "plan_sha256": "1" * 64,
+                "parser_version": "test-listing-v1",
+                "throttle_seconds": 3,
+            }
+        )
+        self.env["southern.sparex.discovery.run"].claim_discovery_checkpoint(
+            run["id"], "bulk-test-worker", 180
+        )
+        result = self.env["southern.sparex.discovery.run"].record_discovery_page(
+            run["id"],
+            "bulk-test-worker",
+            {
+                "page_url": seed_url,
+                "page_sha256": "2" * 64,
+                "artifact_uri": "s3://test-bucket/discovery/bulk-page.json",
+                "artifact_sha256": "3" * 64,
+                "next_url": "",
+                "items": [
+                    {
+                        "sku": "S.765430",
+                        "source_url": "https://us.sparex.com/duplicate-765430.html",
+                        "image_url": "https://cdn.example.com/765430.jpg",
+                        "source_state": "verified",
+                    },
+                    {
+                        "sku": "S.765431",
+                        "source_url": "https://us.sparex.com/missing-765431.html",
+                        "image_url": "https://cdn.example.com/765431.jpg",
+                        "source_state": "verified",
+                    },
+                ],
+            },
+        )
+        items = self.env["southern.sparex.discovery.item"].browse(result["item_ids"])
+        by_sku = {item.normalized_sku: item for item in items}
+        self.assertEqual(by_sku["S.765430"].odoo_match_state, "duplicate")
+        self.assertEqual(len(by_sku["S.765430"].duplicate_product_ids), 2)
+        self.assertEqual(by_sku["S.765431"].odoo_match_state, "missing")
 
     def test_dashboard_uses_live_product_publication_instead_of_stale_item_flag(self):
         product = self.env["product.template"].create(
@@ -191,6 +252,94 @@ class TestSparexDiscovery(TransactionCase):
         self.assertEqual(active_run.page_count, 2)
         self.assertEqual(active_run.visited_url_count, 2)
         self.assertEqual(active_run.queued_url_count, 0)
+
+    def test_targeted_repair_preempts_frontier_without_recounting_catalog_page(self):
+        seed_url = "https://us.sparex.com/"
+        category_url = "https://us.sparex.com/engine-filters.html"
+        run = self.env["southern.sparex.discovery.run"].start_discovery_run(
+            {
+                "idempotency_key": "test-targeted-repair-frontier",
+                "seed_url": seed_url,
+                "seed_url_sha256": hashlib.sha256(seed_url.encode()).hexdigest(),
+                "plan_artifact_uri": "s3://test-bucket/discovery/repair-plan.json",
+                "plan_sha256": "4" * 64,
+                "parser_version": "test-listing-v6",
+                "throttle_seconds": 3,
+            }
+        )
+        self.env["southern.sparex.discovery.run"].claim_discovery_checkpoint(
+            run["id"], "repair-test-worker", 180
+        )
+        self.env["southern.sparex.discovery.run"].record_discovery_page(
+            run["id"],
+            "repair-test-worker",
+            {
+                "page_url": seed_url,
+                "page_sha256": "5" * 64,
+                "artifact_uri": "s3://test-bucket/discovery/repair-page-old.json",
+                "artifact_sha256": "6" * 64,
+                "items": [
+                    {
+                        "sku": "S.765432",
+                        "listing_title": "Malformed legacy title",
+                        "source_url": "https://us.sparex.com/part-765432.html",
+                        "image_url": "",
+                        "source_state": "ambiguous",
+                    }
+                ],
+                "listing_urls": [category_url],
+            },
+        )
+        active_run = self.env["southern.sparex.discovery.run"].browse(run["id"])
+        self.assertEqual(active_run.cursor_url, category_url)
+        queued = self.env["southern.sparex.discovery.run"].queue_discovery_page_repairs(
+            run["id"], [seed_url], "Reparse legacy listing evidence"
+        )
+        self.assertEqual(queued["cursor_kind"], "repair")
+        self.assertEqual(active_run.cursor_url, seed_url)
+        self.assertEqual(active_run.repair_queued_url_count, 1)
+        queued_again = self.env["southern.sparex.discovery.run"].queue_discovery_page_repairs(
+            run["id"], [seed_url], "Reparse legacy listing evidence"
+        )
+        self.assertEqual(queued_again["repair_queued_url_count"], 1)
+        self.assertEqual(active_run.queued_url_count, 1)
+
+        self.env["southern.sparex.discovery.run"].claim_discovery_checkpoint(
+            run["id"], "repair-test-worker", 180
+        )
+        repaired = self.env["southern.sparex.discovery.run"].record_discovery_page(
+            run["id"],
+            "repair-test-worker",
+            {
+                "page_url": seed_url,
+                "page_sha256": "7" * 64,
+                "artifact_uri": "s3://test-bucket/discovery/repair-page-new.json",
+                "artifact_sha256": "8" * 64,
+                "items": [
+                    {
+                        "sku": "S.765432",
+                        "listing_title": "Verified Repair Part",
+                        "source_url": "https://us.sparex.com/part-765432.html",
+                        "image_url": "https://cdn.example.com/765432.jpg",
+                        "source_state": "verified",
+                    }
+                ],
+                "listing_urls": [category_url],
+            },
+        )
+        item = self.env["southern.sparex.discovery.item"].browse(repaired["item_ids"])
+        page = self.env["southern.sparex.discovery.page"].search(
+            [("run_id", "=", active_run.id), ("page_url_sha256", "=", hashlib.sha256(seed_url.encode()).hexdigest())]
+        )
+        self.assertTrue(repaired["repair"])
+        self.assertEqual(active_run.page_count, 1)
+        self.assertEqual(active_run.cursor_url, category_url)
+        self.assertEqual(active_run.cursor_kind, "frontier")
+        self.assertEqual(active_run.repair_queued_url_count, 0)
+        self.assertEqual(active_run.repair_visited_url_count, 1)
+        self.assertEqual(page.repair_visit_count, 1)
+        self.assertEqual(item.state, "verified")
+        self.assertEqual(item.listing_title, "Verified Repair Part")
 
     def test_page_driven_creation_makes_one_categorized_unpublished_draft(self):
         supplier = self.env["res.partner"].search([("name", "=ilike", "Sparex")])
@@ -451,8 +600,11 @@ class TestSparexDiscovery(TransactionCase):
 
         with patch.object(type(Item), "search", capture_search):
             description_plan = Item.prepare_description_repair_plan(limit=5)
-        self.assertIn(("primary_blocker", "=", "missing_customer_description"), search_calls[0][0])
-        self.assertEqual(search_calls[0][1]["limit"], 5)
+        self.assertIn(
+            ("primary_blocker", "in", ("missing_customer_description", "already_published")),
+            search_calls[0][0],
+        )
+        self.assertEqual(search_calls[0][1]["limit"], 20)
         self.assertEqual(len(description_plan), 1)
         repaired_descriptions = Item.apply_description_repair_plan(
             description_plan,
