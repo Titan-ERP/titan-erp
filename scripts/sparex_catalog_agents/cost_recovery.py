@@ -12,6 +12,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
 import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -24,10 +25,12 @@ from lxml import html as lxml_html
 from scripts.odoo_runtime import ArtifactStore, OdooClient
 from scripts.sparex_catalog_discovery import (
     PortalCooldownError,
+    RequestThrottle,
     _checked_request,
     authenticated_session,
     exact_sparex_product_url,
 )
+from scripts.sparex_catalog_media_worker import MAX_IMAGE_PIXELS, MIN_DIMENSION, image_metadata
 
 COST_RECOVERY_CONFIRMATION = "sparex-dealer-cost-recovery"
 PARSER_VERSION = "sparex-exact-priceb-title-v2"
@@ -355,11 +358,23 @@ def recover_dealer_costs(
                         or len(image_content) > MAX_SOURCE_IMAGE_BYTES
                     ):
                         raise PortalCooldownError("dealer_image_content_invalid")
+                    try:
+                        _mime_type, width, height = image_metadata(image_content)
+                    except ValueError as exc:
+                        raise PortalCooldownError("dealer_image_decode_invalid") from exc
+                    if min(width, height) < MIN_DIMENSION or width * height > MAX_IMAGE_PIXELS:
+                        raise PortalCooldownError("dealer_image_dimensions_invalid")
+                    image_record = store.write_bytes(
+                        f"dealer-image-{claim['sku'].replace('.', '-')}", image_content, kind="image"
+                    )
+                    image_archive = store.archive_s3(image_record, bucket=s3_bucket, prefix=s3_prefix)
                     image_evidence = {
                         "detail_image_url": image_url,
                         "detail_image_url_sha256": hashlib.sha256(image_url.encode()).hexdigest(),
                         "detail_image_base64": base64.b64encode(image_content).decode("ascii"),
                         "detail_image_sha256": hashlib.sha256(image_content).hexdigest(),
+                        "detail_image_artifact_uri": image_archive["artifact_uri"],
+                        "detail_image_artifact_sha256": image_archive["sha256"],
                     }
             evidence = {
                 **claim,
@@ -441,6 +456,80 @@ def recover_dealer_costs(
         s3_bucket,
         s3_prefix,
     )
+    if os.environ.get("SPAREX_DURABLE_CATALOG_PIPELINE", "").strip().casefold() in {"1", "true", "yes"}:
+        staged = {"item_ids": []}
+        error = ""
+        try:
+            if accepted:
+                durable_records = [
+                    {
+                        **row,
+                        "dealer_price": format(float(row["dealer_price"]), ".2f"),
+                    }
+                    for row in accepted
+                ]
+                staged = client.call(
+                    "southern.vendor.catalog.item",
+                    "apply_dealer_cost_evidence_batch",
+                    records=durable_records,
+                    artifact_uri=evidence_record["artifact_uri"],
+                    artifact_sha256=evidence_record["sha256"],
+                    parser_version=PARSER_VERSION,
+                )
+                staged_items = client.call(
+                    "southern.vendor.catalog.item",
+                    "search_read",
+                    domain=[("id", "in", staged.get("item_ids") or [])],
+                    fields=["id", "normalized_sku"],
+                )
+                staged_by_sku = {row["normalized_sku"]: row["id"] for row in staged_items}
+                for row in accepted:
+                    client.call(
+                        "southern.sparex.discovery.item",
+                        "record_durable_cost_staged",
+                        item_id=row["item_id"],
+                        worker_id=worker_id,
+                        catalog_item_id=staged_by_sku[row["sku"]],
+                    )
+        except Exception as exc:  # noqa: BLE001 - preserve claims for bounded recovery handling
+            error = f"{type(exc).__name__}:durable_dealer_cost_stage_failed"
+            for row in accepted:
+                try:
+                    client.call(
+                        "southern.sparex.discovery.item",
+                        "record_cost_recovery_result",
+                        item_id=row["item_id"],
+                        worker_id=worker_id,
+                        outcome="manual_review",
+                        error_code=error,
+                    )
+                except Exception as release_error:  # noqa: BLE001
+                    outcomes.append(
+                        {"item_id": row["item_id"], "sku": row["sku"], "status": f"claim_release_{type(release_error).__name__}"}
+                    )
+        result = {
+            "schema_version": "1.1",
+            "workflow": COST_RECOVERY_CONFIRMATION,
+            "mode": "durable_catalog_staging",
+            "plan_sha256": plan_record["sha256"],
+            "evidence_sha256": evidence_record["sha256"],
+            "claimed": len(claims),
+            "accepted": len(accepted),
+            "applied": 0 if error else len(staged.get("item_ids") or []),
+            "outcomes": outcomes,
+            "terminal_state": "failed" if error else "succeeded",
+            "error": error or None,
+            **(throttle.telemetry() if throttle else RequestThrottle(throttle_seconds).telemetry()),
+        }
+        result_record = _archive(store, "dealer-cost-result.json", result, s3_bucket, s3_prefix)
+        return {
+            **result,
+            "plan_uri": plan_record["artifact_uri"],
+            "evidence_uri": evidence_record["artifact_uri"],
+            "result_sha256": result_record["sha256"],
+            "result_uri": result_record["artifact_uri"],
+            "write_blocked": bool(error),
+        }
     applied: list[dict[str, Any]] = []
     error = ""
     try:

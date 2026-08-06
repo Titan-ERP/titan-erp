@@ -1,10 +1,14 @@
 import base64
+import hashlib
 
 from odoo.exceptions import UserError
 from odoo.tests.common import TransactionCase
 
 HASH = "a" * 64
 PLAN_HASH = "b" * 64
+IMAGE_BYTES = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z0vQAAAAASUVORK5CYII="
+)
 
 
 class VendorCatalogTests(TransactionCase):
@@ -35,6 +39,23 @@ class VendorCatalogTests(TransactionCase):
             "availability": "available",
         }
 
+    def _verify_media(self, item):
+        return item.apply_media_batch(
+            [
+                {
+                    "item_id": item.id,
+                    "source_image_sha256": hashlib.sha256(item.image_url.encode()).hexdigest(),
+                    "image_sha256": hashlib.sha256(IMAGE_BYTES).hexdigest(),
+                    "image_artifact_sha256": hashlib.sha256(IMAGE_BYTES).hexdigest(),
+                    "image_base64": base64.b64encode(IMAGE_BYTES).decode(),
+                    "image_artifact_uri": "s3://catalog/images/a-100.png",
+                }
+            ],
+            "s3://catalog/media-plan.json",
+            PLAN_HASH,
+            "sparex-media-batch-write",
+        )
+
     def test_upsert_is_idempotent_and_builds_ready_queue(self):
         Item = self.env["southern.vendor.catalog.item"]
         first = Item.upsert_catalog_items(
@@ -44,6 +65,8 @@ class VendorCatalogTests(TransactionCase):
             "catalog-test-vendor", [self.payload], "s3://catalog/test.jsonl", HASH
         )
         item = Item.search([("source_id", "=", self.source.id), ("normalized_sku", "=", "A-100")])
+        self._verify_media(item)
+        item.invalidate_recordset()
         self.assertEqual(first["created"], 1)
         self.assertEqual(second["unchanged"], 1)
         self.assertEqual(len(item), 1)
@@ -79,6 +102,8 @@ class VendorCatalogTests(TransactionCase):
         Item = self.env["southern.vendor.catalog.item"]
         Item.upsert_catalog_items("catalog-test-vendor", [self.payload], "s3://catalog/test.jsonl", HASH)
         item = Item.search([("source_id", "=", self.source.id), ("normalized_sku", "=", "A-100")])
+        self._verify_media(item)
+        item.invalidate_recordset()
         item.action_request_promotion()
         plan = Item.prepare_promotion_plan(item_ids=item.ids, limit=200)
         self.assertEqual(len(plan), 1)

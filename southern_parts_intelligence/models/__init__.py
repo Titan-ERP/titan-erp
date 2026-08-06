@@ -8,3 +8,4 @@ from . import sparex_sourcing
 from . import catalog_agents
 from . import sparex_discovery
 from . import vendor_catalog
+from . import sparex_manifest

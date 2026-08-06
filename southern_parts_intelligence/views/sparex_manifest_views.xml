@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+  <record id="southern_sparex_catalog_ingestion_list" model="ir.ui.view">
+    <field name="name">southern.sparex.catalog.ingestion.list</field>
+    <field name="model">southern.sparex.catalog.ingestion</field>
+    <field name="arch" type="xml">
+      <list decoration-success="state == 'complete'" decoration-danger="state == 'failed'">
+        <field name="create_date"/>
+        <field name="run_key"/>
+        <field name="sweep_key"/>
+        <field name="page_range"/>
+        <field name="state"/>
+        <field name="record_count"/>
+        <field name="created_count"/>
+        <field name="updated_count"/>
+        <field name="unchanged_count"/>
+        <field name="ready_count"/>
+        <field name="rejected_count"/>
+        <field name="completed_at"/>
+      </list>
+    </field>
+  </record>
+
+  <record id="southern_sparex_catalog_ingestion_form" model="ir.ui.view">
+    <field name="name">southern.sparex.catalog.ingestion.form</field>
+    <field name="model">southern.sparex.catalog.ingestion</field>
+    <field name="arch" type="xml">
+      <form create="0" edit="0" delete="0">
+        <sheet>
+          <group>
+            <group>
+              <field name="state"/>
+              <field name="run_key"/>
+              <field name="sweep_key"/>
+              <field name="page_range"/>
+              <field name="parser_version"/>
+              <field name="schema_version"/>
+            </group>
+            <group>
+              <field name="record_count"/>
+              <field name="created_count"/>
+              <field name="updated_count"/>
+              <field name="unchanged_count"/>
+              <field name="ready_count"/>
+              <field name="rejected_count"/>
+              <field name="completed_at"/>
+            </group>
+          </group>
+          <group string="Integrity">
+            <field name="manifest_sha256"/>
+            <field name="payload_sha256"/>
+            <field name="source_artifacts_json"/>
+            <field name="result_json"/>
+            <field name="failure_class"/>
+            <field name="failure_summary"/>
+          </group>
+        </sheet>
+      </form>
+    </field>
+  </record>
+
+  <record id="southern_sparex_catalog_rejection_list" model="ir.ui.view">
+    <field name="name">southern.sparex.catalog.rejection.list</field>
+    <field name="model">southern.sparex.catalog.rejection</field>
+    <field name="arch" type="xml">
+      <list decoration-danger="permanent">
+        <field name="last_failure_at"/>
+        <field name="original_sku"/>
+        <field name="normalized_sku"/>
+        <field name="failure_class"/>
+        <field name="exception_summary"/>
+        <field name="retry_count"/>
+        <field name="permanent"/>
+        <field name="ingestion_id"/>
+      </list>
+    </field>
+  </record>
+
+  <record id="action_southern_sparex_catalog_ingestions" model="ir.actions.act_window">
+    <field name="name">Sparex Manifest Ingestions</field>
+    <field name="res_model">southern.sparex.catalog.ingestion</field>
+    <field name="view_mode">list,form</field>
+  </record>
+  <record id="action_southern_sparex_catalog_rejections" model="ir.actions.act_window">
+    <field name="name">Sparex Record Rejections</field>
+    <field name="res_model">southern.sparex.catalog.rejection</field>
+    <field name="view_mode">list</field>
+  </record>
+  <record id="southern_sparex_catalog_sweep_list" model="ir.ui.view">
+    <field name="name">southern.sparex.catalog.sweep.list</field>
+    <field name="model">southern.sparex.catalog.sweep</field>
+    <field name="arch" type="xml">
+      <list decoration-success="state == 'complete'" decoration-danger="state == 'invalid'">
+        <field name="sweep_key"/>
+        <field name="state"/>
+        <field name="parser_version"/>
+        <field name="rules_version"/>
+        <field name="frontier_page_count"/>
+        <field name="processed_page_count"/>
+        <field name="resolved_page_count"/>
+        <field name="failed_page_count"/>
+        <field name="skipped_page_count"/>
+        <field name="cooldown_page_count"/>
+        <field name="observed_item_count"/>
+        <field name="consecutive_complete_count"/>
+        <field name="absence_candidate_count"/>
+        <field name="completed_at"/>
+      </list>
+    </field>
+  </record>
+  <record id="action_southern_sparex_catalog_sweeps" model="ir.actions.act_window">
+    <field name="name">Sparex Reconciliation Sweeps</field>
+    <field name="res_model">southern.sparex.catalog.sweep</field>
+    <field name="view_mode">list</field>
+  </record>
+  <menuitem id="menu_southern_sparex_catalog_ingestions" name="Manifest Ingestions" parent="menu_southern_parts_intelligence_root" action="action_southern_sparex_catalog_ingestions" sequence="91" groups="base.group_system"/>
+  <menuitem id="menu_southern_sparex_catalog_rejections" name="Catalog Rejections" parent="menu_southern_parts_intelligence_root" action="action_southern_sparex_catalog_rejections" sequence="92" groups="base.group_system"/>
+  <menuitem id="menu_southern_sparex_catalog_sweeps" name="Reconciliation Sweeps" parent="menu_southern_parts_intelligence_root" action="action_southern_sparex_catalog_sweeps" sequence="93" groups="base.group_system"/>
+</odoo>
