@@ -189,6 +189,18 @@ def test_global_currency_is_not_subject_to_odoo_company_domain_checks():
     assert "payment.currency_id != payment.config_id.currency_id" in source
 
 
+def test_invoice_users_can_read_only_their_company_terminal_configuration():
+    access = (MODULE / "security" / "ir.model.access.csv").read_text(encoding="utf-8")
+    rules = (MODULE / "security" / "record_rules.xml").read_text(encoding="utf-8")
+    assert (
+        "access_stripe_terminal_config_invoice,stripe.terminal.config invoice,"
+        "model_southern_stripe_terminal_config,account.group_account_invoice,1,0,0,0"
+    ) in access
+    assert "<record id=\"stripe_terminal_config_company_rule\"" in rules
+    assert "ref('account.group_account_invoice')" in rules
+    assert "[('company_id', 'in', company_ids)]" in rules
+
+
 def test_upgrade_removes_only_draft_universal_fee_lines():
     migration = (
         MODULE / "migrations" / "19.0.1.3.0" / "post-migrate.py"
