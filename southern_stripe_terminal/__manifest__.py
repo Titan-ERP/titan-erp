@@ -2,7 +2,7 @@
 
 {
     "name": "Southern Stripe Terminal",
-    "version": "19.0.1.5.0",
+    "version": "19.0.1.5.1",
     "category": "Accounting/Payment",
     "summary": "Collect invoice balances on Stripe Terminal and register native Odoo payments.",
     "author": "Southern Equipment Company",
