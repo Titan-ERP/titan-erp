@@ -2425,7 +2425,7 @@ class SouthernSparexDiscoveryItem(models.Model):
                 SELECT COUNT(*)
                   FROM product_template product
                  WHERE product.active IS TRUE
-                   AND product.default_code LIKE 'S.%'
+                   AND product.default_code LIKE 'S.%%'
                    AND NOT EXISTS (
                         SELECT 1
                           FROM southern_sparex_discovery_item item
