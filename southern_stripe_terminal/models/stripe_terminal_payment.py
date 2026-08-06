@@ -81,7 +81,9 @@ class SouthernStripeTerminalPayment(models.Model):
         tracking=True,
     )
     amount = fields.Monetary(required=True, tracking=True)
-    currency_id = fields.Many2one("res.currency", required=True, check_company=True)
+    # res.currency is global in Odoo 19 and has no company_id. Currency/company
+    # consistency is enforced explicitly by _check_payment_identity below.
+    currency_id = fields.Many2one("res.currency", required=True)
     state = fields.Selection(
         [
             ("draft", "Draft"),

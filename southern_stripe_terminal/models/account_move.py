@@ -5,6 +5,20 @@ from odoo.exceptions import UserError
 class AccountMove(models.Model):
     _inherit = "account.move"
 
+    @api.model
+    def _default_southern_payment_type(self):
+        if self.env.context.get("default_move_type") != "out_invoice":
+            return False
+        has_default_terminal = self.env["southern.stripe.terminal.config"].search_count(
+            [
+                ("company_id", "=", self.env.company.id),
+                ("active", "=", True),
+                ("is_default", "=", True),
+            ],
+            limit=1,
+        )
+        return "stripe_terminal" if has_default_terminal else False
+
     southern_payment_type = fields.Selection(
         [
             ("stripe_terminal", "Stripe Terminal"),
@@ -13,6 +27,7 @@ class AccountMove(models.Model):
             ("online_link", "Online Payment Link"),
         ],
         string="Payment Type",
+        default=_default_southern_payment_type,
         copy=False,
         tracking=True,
         help="Select Stripe Terminal to add the configured processing fee to this draft invoice.",
@@ -157,6 +172,36 @@ class AccountMove(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        vals_list = [dict(vals) for vals in vals_list]
+        terminal_company_ids = set()
+        candidate_company_ids = {
+            vals.get("company_id", self.env.company.id)
+            for vals in vals_list
+            if vals.get("move_type", self.env.context.get("default_move_type")) == "out_invoice"
+            and "southern_payment_type" not in vals
+        }
+        if candidate_company_ids:
+            terminal_company_ids = set(
+                self.env["southern.stripe.terminal.config"]
+                .search(
+                    [
+                        ("company_id", "in", list(candidate_company_ids)),
+                        ("active", "=", True),
+                        ("is_default", "=", True),
+                    ]
+                )
+                .mapped("company_id")
+                .ids
+            )
+        for vals in vals_list:
+            move_type = vals.get("move_type", self.env.context.get("default_move_type"))
+            company_id = vals.get("company_id", self.env.company.id)
+            if (
+                move_type == "out_invoice"
+                and "southern_payment_type" not in vals
+                and company_id in terminal_company_ids
+            ):
+                vals["southern_payment_type"] = "stripe_terminal"
         moves = super().create(vals_list)
         moves._southern_sync_terminal_fee_line()
         return moves
