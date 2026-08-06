@@ -25,6 +25,13 @@ WORKFLOW = "catalog-agent-results"
 MAX_BATCH = 50
 
 
+def require_company_context(config: OdooConfig) -> int:
+    company_id = config.company_id
+    if company_id is None or company_id <= 0:
+        raise RuntimeError("ODOO_COMPANY_ID must be a positive integer for Sparex catalog automation.")
+    return company_id
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--openai-env-file", type=Path, default=DEFAULT_OPENAI_ENV)
@@ -57,7 +64,9 @@ def canonical_result(decision) -> str:
 def main() -> int:
     args = build_parser().parse_args()
     limit = max(1, min(int(args.limit), MAX_BATCH))
-    client = OdooClient(OdooConfig.from_env(args.odoo_env_file)).connect()
+    config = OdooConfig.from_env(args.odoo_env_file)
+    require_company_context(config)
+    client = OdooClient(config).connect()
     if not client.count("ir.model", [("model", "=", "southern.catalog.agent.task")]):
         raise RuntimeError("Upgrade Southern Parts Intelligence before running catalog agents.")
 

@@ -1,5 +1,8 @@
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock
+
+import pytest
 
 from scripts.sparex_catalog_agents import orchestrator
 from scripts.sparex_catalog_agents.agent import build_agent, deterministic_agent_decision, requires_ai_review
@@ -14,6 +17,7 @@ from scripts.sparex_catalog_agents.orchestrator import (
     hydrate_source_repair_images,
     run_s3_prefix,
 )
+from scripts.sparex_catalog_agents.worker import require_company_context
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -30,6 +34,13 @@ def test_fixed_chain_and_batch_limit():
         "product_verification",
         "website_release",
     )
+
+
+def test_sparex_agents_require_an_explicit_positive_company_context():
+    assert require_company_context(SimpleNamespace(company_id=1)) == 1
+    for company_id in (None, 0, -1):
+        with pytest.raises(RuntimeError, match="ODOO_COMPANY_ID must be a positive integer"):
+            require_company_context(SimpleNamespace(company_id=company_id))
 
 
 def test_public_url_is_scoped_to_odoo_base():

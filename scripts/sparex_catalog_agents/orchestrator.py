@@ -26,7 +26,7 @@ from scripts.odoo_runtime.client import load_env_file
 
 from .agent import AGENT_NAMES, AgentCode, deterministic_agent_decision, requires_ai_review, run_agent
 from .cost_recovery import PortalCooldownError, recover_dealer_costs
-from .worker import canonical_result
+from .worker import canonical_result, require_company_context
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ODOO_ENV = ROOT / "odoo_connection.env"
@@ -295,6 +295,7 @@ def main() -> int:
         raise RuntimeError("--publish requires --apply.")
     ai_max_calls = max(0, min(int(args.ai_max_calls), MAX_AI_CALLS))
     config = OdooConfig.from_env(args.odoo_env_file)
+    company_id = require_company_context(config)
     client = OdooClient(config).connect()
     run_stamp = utc_stamp()
     store = ArtifactStore(args.artifact_root / run_stamp, schema_version="1.1")
@@ -353,7 +354,7 @@ def main() -> int:
             "southern.vendor.catalog.item",
             "prepare_quote_publication_plan",
             limit=limit,
-            company_id=config.company_id or False,
+            company_id=company_id,
         )
     )
     preview = client.call("southern.catalog.agent.task", "preview_ready_candidates", limit=limit)
@@ -530,7 +531,7 @@ def main() -> int:
             "southern.vendor.catalog.item",
             "prepare_quote_publication_plan",
             limit=limit,
-            company_id=config.company_id or False,
+            company_id=company_id,
         )
     )
     rollback_payload = {
