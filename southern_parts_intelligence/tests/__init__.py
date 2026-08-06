@@ -1,5 +1,8 @@
-from . import test_automation_control
-from . import test_sparex_sourcing
-from . import test_vendor_catalog
-from . import test_catalog_agents
-from . import test_sparex_discovery
+from . import (  # noqa: F401
+    test_automation_control,
+    test_catalog_agents,
+    test_sparex_discovery,
+    test_sparex_manifest,
+    test_sparex_sourcing,
+    test_vendor_catalog,
+)
