@@ -18,4 +18,3 @@ ProtectSystem=strict
 StandardOutput=journal
 StandardError=journal
 TimeoutStartSec=12min
-
