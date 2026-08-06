@@ -77,8 +77,15 @@ class CatalogAgentsContractTests(unittest.TestCase):
         self.assertIn("ApplyGate", source)
         self.assertIn('WORKFLOW = "catalog-agent-results"', source)
         self.assertIn("MAX_BATCH = 50", source)
+        self.assertIn("require_company_context(config)", source)
         self.assertIn("deterministic_agent_decision", source)
         self.assertIn("requires_ai_review", source)
+
+        orchestrator_source = (
+            ROOT / "scripts" / "sparex_catalog_agents" / "orchestrator.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("company_id = require_company_context(config)", orchestrator_source)
+        self.assertNotIn("config.company_id or False", orchestrator_source)
 
     def test_failed_ready_root_tasks_can_be_requeued_without_product_writes(self):
         source = (ROOT / "southern_parts_intelligence" / "models" / "catalog_agents.py").read_text(
