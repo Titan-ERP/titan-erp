@@ -5,7 +5,20 @@ install_root="${CATALOG_AGENT_INSTALL_ROOT:-/opt/southern-parts/catalog-agent}"
 runtime="${install_root}/current"
 odoo_env="${ODOO_ENV_FILE:-/opt/southern-parts/Odoo/odoo_connection.env}"
 artifact_root="${install_root}/artifacts/discovery"
-lock_file="${SPAREX_DISCOVERY_LOCK_FILE:-/run/lock/titan-sparex-durable-discovery.lock}"
+lock_file="${SPAREX_DISCOVERY_LOCK_FILE:-/run/titan-sparex-catalog/durable-discovery.lock}"
+
+fail_closed() {
+  status=$?
+  line=$1
+  command=$2
+  trap - ERR
+  set +e
+  echo "Durable Sparex discovery failed at line ${line}: ${command}" >&2
+  echo "Disabling its timer for supervised review." >&2
+  systemctl disable --now titan-sparex-durable-discovery.timer 2>/dev/null
+  exit "${status}"
+}
+trap 'fail_closed "${LINENO}" "${BASH_COMMAND}"' ERR
 
 exec 9>"${lock_file}"
 if ! flock -n 9; then
@@ -25,7 +38,6 @@ export ODOO_WRITE_ENABLED=true
 export ODOO_API_MODE=json2
 export PYTHONPATH="${runtime}"
 
-set +e
 "${install_root}/venv/bin/python" -m scripts.sparex_catalog_discovery \
   --odoo-env-file "${odoo_env}" \
   --dealer-env-file "${odoo_env}" \
@@ -38,12 +50,3 @@ set +e
   --apply \
   --confirm sparex-discovery-queue \
   --reason "Continuous durable Sparex listing discovery after accepted canaries"
-status=$?
-set -e
-
-if [[ "${status}" -ne 0 ]]; then
-  echo "Durable Sparex discovery failed; disabling its timer for supervised review." >&2
-  systemctl disable --now titan-sparex-durable-discovery.timer 2>/dev/null || true
-  exit "${status}"
-fi
-
