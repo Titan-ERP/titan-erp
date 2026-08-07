@@ -14,7 +14,7 @@ def migrate(cr, version):
                source.code,
                source.partner_id,
                source.default_category_id,
-               COALESCE(product.website_published, FALSE)
+               COALESCE(product.is_published, FALSE)
           FROM southern_vendor_catalog_item item
           JOIN southern_vendor_catalog_source source ON source.id = item.source_id
           LEFT JOIN product_template product ON product.id = item.product_id
