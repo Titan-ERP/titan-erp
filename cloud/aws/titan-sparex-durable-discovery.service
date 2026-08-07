@@ -1,5 +1,5 @@
 [Unit]
-Description=Run one bounded phase of the durable Sparex catalog cycle
+Description=Run one protected internal Sparex catalog cycle
 Wants=network-online.target
 After=network-online.target
 
