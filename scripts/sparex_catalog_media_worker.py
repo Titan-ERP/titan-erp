@@ -7,6 +7,7 @@ import base64
 import hashlib
 import json
 import struct
+import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -81,6 +82,7 @@ def main() -> int:
     parser.add_argument("--s3-bucket", required=True)
     parser.add_argument("--s3-prefix", default="sparex-product-catalog/media")
     parser.add_argument("--limit", type=int, default=25)
+    parser.add_argument("--throttle-seconds", type=float, default=3.0)
     args = parser.parse_args()
     limit = max(1, min(args.limit, 25))
     client = OdooClient(OdooConfig.from_env(args.odoo_env_file)).connect()
@@ -105,9 +107,14 @@ def main() -> int:
     s3 = boto3.client("s3")
     prepared = []
     failures = []
+    last_request = 0.0
     for row in rows:
         try:
+            wait_seconds = max(3.0, args.throttle_seconds) - (time.monotonic() - last_request)
+            if wait_seconds > 0:
+                time.sleep(wait_seconds)
             content, mime_type, width, height = download_image(row["image_url"])
+            last_request = time.monotonic()
             image_sha = hashlib.sha256(content).hexdigest()
             key = f"{args.s3_prefix.rstrip('/')}/{image_sha[:2]}/{image_sha}"
             s3.put_object(
@@ -132,6 +139,7 @@ def main() -> int:
                 }
             )
         except (requests.RequestException, ValueError) as error:
+            last_request = time.monotonic()
             failures.append({"item_id": row["id"], "failure": str(error)[:200]})
     applied = []
     if prepared:

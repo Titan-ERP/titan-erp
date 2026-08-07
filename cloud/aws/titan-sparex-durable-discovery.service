@@ -1,5 +1,5 @@
 [Unit]
-Description=Run one durable Sparex listing discovery checkpoint
+Description=Run one bounded phase of the durable Sparex catalog cycle
 Wants=network-online.target
 After=network-online.target
 
@@ -23,4 +23,4 @@ ProtectSystem=strict
 ReadWritePaths=/opt/southern-parts/catalog-agent/artifacts
 StandardOutput=journal
 StandardError=journal
-TimeoutStartSec=12min
+TimeoutStartSec=15min

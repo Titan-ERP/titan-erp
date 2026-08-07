@@ -6,6 +6,7 @@ runtime="${install_root}/current"
 odoo_env="${ODOO_ENV_FILE:-/opt/southern-parts/Odoo/odoo_connection.env}"
 artifact_root="${install_root}/artifacts/discovery"
 lock_file="${SPAREX_DISCOVERY_LOCK_FILE:-/run/titan-sparex-catalog/durable-discovery.lock}"
+phase_file="${install_root}/artifacts/catalog-cycle.phase"
 
 fail_closed() {
   status=$?
@@ -33,20 +34,73 @@ test "${AWS_DEFAULT_REGION:-${AWS_REGION:-}}" = "us-east-1"
 test -f "${odoo_env}"
 test -d "${runtime}"
 
-mkdir -p "${artifact_root}"
+mkdir -p "${artifact_root}" "${install_root}/artifacts/cost" "${install_root}/artifacts/release"
 export ODOO_WRITE_ENABLED=true
 export ODOO_API_MODE=json2
 export PYTHONPATH="${runtime}"
 
-"${install_root}/venv/bin/python" -m scripts.sparex_catalog_discovery \
-  --odoo-env-file "${odoo_env}" \
-  --dealer-env-file "${odoo_env}" \
-  --artifact-root "${artifact_root}" \
-  --s3-bucket "${SOUTHERN_PRODUCT_ARTIFACT_BUCKET}" \
-  --run-key sparex-full-catalog-inventory-v3-cycle-26 \
-  --max-pages-per-checkpoint 50 \
-  --throttle-seconds 3.0 \
-  --manifest-queue-url "${SPAREX_CATALOG_QUEUE_URL}" \
-  --apply \
-  --confirm sparex-discovery-queue \
-  --reason "Continuous durable Sparex listing discovery after accepted canaries"
+phase="$(cat "${phase_file}" 2>/dev/null || printf discovery)"
+case "${phase}" in
+  discovery)
+    "${install_root}/venv/bin/python" -m scripts.sparex_catalog_discovery \
+      --odoo-env-file "${odoo_env}" \
+      --dealer-env-file "${odoo_env}" \
+      --artifact-root "${artifact_root}" \
+      --s3-bucket "${SOUTHERN_PRODUCT_ARTIFACT_BUCKET}" \
+      --run-key sparex-full-catalog-inventory-v3-cycle-26 \
+      --max-pages-per-checkpoint 50 \
+      --throttle-seconds 3.0 \
+      --manifest-queue-url "${SPAREX_CATALOG_QUEUE_URL}" \
+      --apply \
+      --confirm sparex-discovery-queue \
+      --reason "Continuous durable Sparex listing discovery after accepted canaries"
+    next_phase=cost
+    ;;
+  cost)
+    "${install_root}/venv/bin/python" -m scripts.sparex_catalog_cost_worker \
+      --odoo-env-file "${odoo_env}" \
+      --dealer-env-file "${odoo_env}" \
+      --artifact-root "${install_root}/artifacts/cost" \
+      --s3-bucket "${SOUTHERN_PRODUCT_ARTIFACT_BUCKET}" \
+      --limit 5 \
+      --throttle-seconds 3.0 \
+      --confirm sparex-durable-cost-recovery \
+      --reason "Continuous exact dealer-cost recovery into durable staging"
+    next_phase=media
+    ;;
+  media)
+    "${install_root}/venv/bin/python" -m scripts.sparex_catalog_media_worker \
+      --odoo-env-file "${odoo_env}" \
+      --s3-bucket "${SOUTHERN_PRODUCT_ARTIFACT_BUCKET}" \
+      --limit 25 \
+      --throttle-seconds 3.0
+    next_phase=release
+    ;;
+  release)
+    "${install_root}/venv/bin/python" -m scripts.sparex_catalog_promotion_worker \
+      --odoo-env-file "${odoo_env}" \
+      --artifact-uri-prefix "s3://${SOUTHERN_PRODUCT_ARTIFACT_BUCKET}/sparex-product-catalog/promotion/production" \
+      --limit 100
+    "${install_root}/venv/bin/python" -m scripts.sparex_catalog_agents.orchestrator \
+      --odoo-env-file "${odoo_env}" \
+      --dealer-env-file "${odoo_env}" \
+      --artifact-root "${install_root}/artifacts/release" \
+      --s3-bucket "${SOUTHERN_PRODUCT_ARTIFACT_BUCKET}" \
+      --limit 50 \
+      --source-repair-limit 5 \
+      --skip-cost-recovery \
+      --skip-quote-publication \
+      --throttle-seconds 3.0 \
+      --apply \
+      --publish \
+      --confirm catalog-agent-automation \
+      --reason "Continuous evidence-gated Sparex operational and website release"
+    next_phase=discovery
+    ;;
+  *)
+    echo "Unknown Sparex catalog cycle phase: ${phase}" >&2
+    exit 2
+    ;;
+esac
+printf '%s\n' "${next_phase}" > "${phase_file}"
+echo "Completed Sparex catalog cycle phase ${phase}; next phase is ${next_phase}."
