@@ -7,5 +7,6 @@ from . import accounting_policy
 from . import daily_control
 from . import shop_boss_document
 from . import shop_boss_payment_batch
+from . import accounting_automation
 from . import bank_coding
 from . import commercial_order

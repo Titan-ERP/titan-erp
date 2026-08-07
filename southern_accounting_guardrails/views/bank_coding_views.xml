@@ -13,6 +13,7 @@
                 <field name="amount_direction"/>
                 <field name="target_account_id"/>
                 <field name="target_account_name"/>
+                <field name="rule_version"/>
                 <field name="match_count"/>
                 <field name="active"/>
             </list>
@@ -44,6 +45,7 @@
                         <group>
                             <field name="target_account_id"/>
                             <field name="target_account_name"/>
+                            <field name="rule_version"/>
                             <field name="minimum_amount"/>
                             <field name="maximum_amount"/>
                             <field name="effective_from"/>
@@ -84,8 +86,12 @@
                 <field name="date_from"/>
                 <field name="date_to"/>
                 <field name="state"/>
+                <field name="mode"/>
+                <field name="worker"/>
                 <field name="lines_scanned"/>
                 <field name="candidate_count"/>
+                <field name="auto_applied_count"/>
+                <field name="finding_count"/>
                 <field name="unmatched_count"/>
             </list>
         </field>
@@ -108,12 +114,18 @@
                             <field name="company_id"/>
                             <field name="date_from"/>
                             <field name="date_to"/>
+                            <field name="mode"/>
+                            <field name="worker"/>
+                            <field name="policy_id"/>
+                            <field name="policy_version"/>
                         </group>
                         <group>
                             <field name="started_at"/>
                             <field name="finished_at"/>
                             <field name="lines_scanned"/>
                             <field name="candidate_count"/>
+                            <field name="auto_applied_count"/>
+                            <field name="finding_count"/>
                             <field name="unmatched_count"/>
                         </group>
                     </group>
@@ -124,6 +136,9 @@
                             <field name="amount"/>
                             <field name="rule_id"/>
                             <field name="target_account_id"/>
+                            <field name="auto_apply_eligible"/>
+                            <field name="reason_code"/>
+                            <field name="application_result"/>
                             <field name="state"/>
                         </list>
                     </field>
@@ -144,14 +159,19 @@
         <field name="name">southern.bank.coding.candidate.list</field>
         <field name="model">southern.bank.coding.candidate</field>
         <field name="arch" type="xml">
-            <list decoration-warning="state == 'pending'"
+            <list decoration-warning="state in ['candidate', 'review_required', 'pending']"
                   decoration-success="state == 'applied'"
-                  decoration-danger="state == 'exception'">
+                  decoration-danger="state in ['exception', 'stale', 'blocked']">
                 <field name="bank_date"/>
                 <field name="bank_label"/>
                 <field name="amount"/>
                 <field name="rule_id"/>
                 <field name="target_account_id"/>
+                <field name="match_type"/>
+                <field name="policy_eligible"/>
+                <field name="auto_apply_eligible"/>
+                <field name="reason_code"/>
+                <field name="application_result"/>
                 <field name="state"/>
                 <field name="approved_by_id"/>
                 <field name="applied_by_id"/>
@@ -166,13 +186,13 @@
             <form>
                 <header>
                     <button name="action_approve" type="object" string="Approve" class="btn-primary"
-                            invisible="state != 'pending'"/>
+                            invisible="state not in ['candidate', 'review_required', 'pending']"/>
                     <button name="action_reject" type="object" string="Reject"
-                            invisible="state != 'pending'"/>
+                            invisible="state not in ['candidate', 'review_required', 'pending']"/>
                     <button name="action_apply" type="object" string="Apply Coding" class="btn-primary"
-                            invisible="state != 'approved'"/>
+                            invisible="state not in ['approved', 'eligible']"/>
                     <field name="state" widget="statusbar"
-                           statusbar_visible="pending,approved,applied,rejected,exception"/>
+                           statusbar_visible="candidate,eligible,applied,rejected,stale,exception"/>
                 </header>
                 <sheet>
                     <group>
@@ -182,16 +202,42 @@
                             <field name="bank_date"/>
                             <field name="bank_label"/>
                             <field name="amount"/>
+                            <field name="mode"/>
+                            <field name="match_type"/>
+                            <field name="deterministic_match"/>
                         </group>
                         <group>
                             <field name="rule_id"/>
                             <field name="target_account_id"/>
+                            <field name="policy_id"/>
+                            <field name="policy_version"/>
+                            <field name="policy_eligible"/>
+                            <field name="auto_apply_eligible"/>
+                            <field name="reason_code"/>
                             <field name="approved_by_id"/>
                             <field name="approved_at"/>
                             <field name="applied_by_id"/>
                             <field name="applied_at"/>
                         </group>
                     </group>
+                    <group string="AI Suggestion">
+                        <field name="ai_confidence"/>
+                        <field name="ai_suggested_partner_id"/>
+                        <field name="ai_suggested_account_id"/>
+                        <field name="ai_explanation"/>
+                    </group>
+                    <group string="Audit">
+                        <field name="suspense_move_line_id"/>
+                        <field name="evaluation_hash"/>
+                        <field name="application_key"/>
+                        <field name="application_attempted_at"/>
+                        <field name="application_result"/>
+                        <field name="application_error"/>
+                        <field name="applied_move_line_id"/>
+                        <field name="applied_from_account_id"/>
+                        <field name="applied_to_account_id"/>
+                    </group>
+                    <field name="reason_note"/>
                     <field name="review_note"/>
                     <field name="error_message"/>
                 </sheet>
@@ -204,6 +250,6 @@
         <field name="name">Bank Coding Candidates</field>
         <field name="res_model">southern.bank.coding.candidate</field>
         <field name="view_mode">list,form</field>
-        <field name="domain">[('state', 'in', ['pending', 'approved', 'exception'])]</field>
+        <field name="domain">[('state', 'in', ['candidate', 'eligible', 'review_required', 'blocked', 'pending', 'approved', 'stale', 'exception'])]</field>
     </record>
 </odoo>

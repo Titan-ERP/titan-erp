@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="group_southern_accounting_automation_worker" model="res.groups">
+        <field name="name">Southern Accounting Automation Worker</field>
+        <field name="comment">
+            Service-account group for Southern Accounting Automation workers. It can create
+            automation runs, findings, and bank-coding candidates, but it must not receive
+            generic account.move.line write access.
+        </field>
+    </record>
+</odoo>

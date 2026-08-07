@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_southern_accounting_automation_policy_list" model="ir.ui.view">
+        <field name="name">southern.accounting.automation.policy.list</field>
+        <field name="model">southern.accounting.automation.policy</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'active'" decoration-danger="emergency_stop">
+                <field name="name"/>
+                <field name="company_id"/>
+                <field name="lane"/>
+                <field name="state"/>
+                <field name="mode"/>
+                <field name="policy_version"/>
+                <field name="per_line_limit"/>
+                <field name="daily_apply_limit"/>
+                <field name="emergency_stop"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_southern_accounting_automation_policy_form" model="ir.ui.view">
+        <field name="name">southern.accounting.automation.policy.form</field>
+        <field name="model">southern.accounting.automation.policy</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_activate" type="object" string="Activate" class="btn-primary"
+                            invisible="state != 'draft'"/>
+                    <button name="action_new_version" type="object" string="New Version"
+                            invisible="state == 'draft'"/>
+                    <button name="action_enable_emergency_stop" type="object" string="Emergency Stop"
+                            invisible="emergency_stop"/>
+                    <button name="action_clear_emergency_stop" type="object" string="Clear Stop"
+                            invisible="not emergency_stop"/>
+                    <button name="action_retire" type="object" string="Retire"
+                            invisible="state in ['retired', 'superseded']"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,active,superseded,retired"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group>
+                            <field name="company_id"/>
+                            <field name="lane"/>
+                            <field name="mode"/>
+                            <field name="policy_version"/>
+                            <field name="effective_from"/>
+                            <field name="superseded_by_id"/>
+                        </group>
+                        <group>
+                            <field name="per_line_limit"/>
+                            <field name="daily_apply_limit"/>
+                            <field name="emergency_stop"/>
+                            <field name="protected_account_ids" widget="many2many_tags"/>
+                        </group>
+                    </group>
+                    <field name="note"/>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_southern_accounting_automation_policies" model="ir.actions.act_window">
+        <field name="name">Automation Policies</field>
+        <field name="res_model">southern.accounting.automation.policy</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="action_create_default_southern_accounting_automation_policy" model="ir.actions.server">
+        <field name="name">Create Default Bank Coding Policy</field>
+        <field name="model_id" ref="model_southern_accounting_automation_policy"/>
+        <field name="binding_model_id" ref="model_southern_accounting_automation_policy"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_create_default_bank_coding_policy()</field>
+    </record>
+
+    <record id="view_southern_accounting_automation_run_list" model="ir.ui.view">
+        <field name="name">southern.accounting.automation.run.list</field>
+        <field name="model">southern.accounting.automation.run</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'succeeded'"
+                  decoration-warning="state in ['queued', 'running', 'blocked']"
+                  decoration-danger="state == 'failed'">
+                <field name="started_at"/>
+                <field name="name"/>
+                <field name="company_id"/>
+                <field name="lane"/>
+                <field name="mode"/>
+                <field name="worker"/>
+                <field name="state"/>
+                <field name="lines_scanned"/>
+                <field name="finding_count"/>
+                <field name="candidate_count"/>
+                <field name="auto_applied_count"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_southern_accounting_automation_run_form" model="ir.ui.view">
+        <field name="name">southern.accounting.automation.run.form</field>
+        <field name="model">southern.accounting.automation.run</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_cancel" type="object" string="Cancel"
+                            invisible="state not in ['queued', 'running']"/>
+                    <field name="state" widget="statusbar" statusbar_visible="queued,running,succeeded,blocked,failed,cancelled"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group>
+                            <field name="company_id"/>
+                            <field name="lane"/>
+                            <field name="mode"/>
+                            <field name="worker"/>
+                            <field name="policy_id"/>
+                            <field name="policy_version"/>
+                        </group>
+                        <group>
+                            <field name="date_from"/>
+                            <field name="date_to"/>
+                            <field name="started_at"/>
+                            <field name="finished_at"/>
+                            <field name="external_run_id"/>
+                            <field name="command_id"/>
+                        </group>
+                    </group>
+                    <group string="Results">
+                        <field name="lines_scanned"/>
+                        <field name="finding_count"/>
+                        <field name="candidate_count"/>
+                        <field name="auto_applied_count"/>
+                        <field name="blocked_count"/>
+                    </group>
+                    <group string="Evidence">
+                        <field name="artifact_uri"/>
+                        <field name="artifact_sha256"/>
+                        <field name="artifact_schema_version"/>
+                    </group>
+                    <field name="evidence_summary"/>
+                    <field name="error_message"/>
+                    <field name="finding_ids">
+                        <list>
+                            <field name="severity"/>
+                            <field name="reason_code"/>
+                            <field name="bank_date"/>
+                            <field name="amount"/>
+                            <field name="state"/>
+                        </list>
+                    </field>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_southern_accounting_automation_runs" model="ir.actions.act_window">
+        <field name="name">Automation Runs</field>
+        <field name="res_model">southern.accounting.automation.run</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="view_southern_accounting_automation_finding_list" model="ir.ui.view">
+        <field name="name">southern.accounting.automation.finding.list</field>
+        <field name="model">southern.accounting.automation.finding</field>
+        <field name="arch" type="xml">
+            <list decoration-danger="severity == 'high'"
+                  decoration-warning="severity == 'medium'"
+                  decoration-muted="state in ['resolved', 'ignored']">
+                <field name="severity"/>
+                <field name="reason_code"/>
+                <field name="bank_date"/>
+                <field name="amount"/>
+                <field name="bank_statement_line_id"/>
+                <field name="candidate_id"/>
+                <field name="state"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_southern_accounting_automation_finding_form" model="ir.ui.view">
+        <field name="name">southern.accounting.automation.finding.form</field>
+        <field name="model">southern.accounting.automation.finding</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_mark_reviewed" type="object" string="Mark Reviewed"/>
+                    <button name="action_resolve" type="object" string="Resolve" class="btn-primary"/>
+                    <field name="state" widget="statusbar" statusbar_visible="open,reviewed,resolved,ignored"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="run_id"/>
+                            <field name="company_id"/>
+                            <field name="lane"/>
+                            <field name="mode"/>
+                            <field name="severity"/>
+                            <field name="reason_code"/>
+                        </group>
+                        <group>
+                            <field name="bank_statement_line_id"/>
+                            <field name="candidate_id"/>
+                            <field name="bank_date"/>
+                            <field name="amount"/>
+                        </group>
+                    </group>
+                    <field name="reason_note"/>
+                    <field name="ai_explanation"/>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_southern_accounting_automation_findings" model="ir.actions.act_window">
+        <field name="name">Automation Findings</field>
+        <field name="res_model">southern.accounting.automation.finding</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('state', 'in', ['open', 'reviewed'])]</field>
+    </record>
+</odoo>

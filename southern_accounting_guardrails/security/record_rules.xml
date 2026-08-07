@@ -18,4 +18,22 @@
         <field name="domain_force">[('company_id', 'in', company_ids)]</field>
         <field name="global" eval="True"/>
     </record>
+    <record id="rule_southern_accounting_automation_policy_company" model="ir.rule">
+        <field name="name">Accounting automation policies allowed companies</field>
+        <field name="model_id" ref="model_southern_accounting_automation_policy"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="global" eval="True"/>
+    </record>
+    <record id="rule_southern_accounting_automation_run_company" model="ir.rule">
+        <field name="name">Accounting automation runs allowed companies</field>
+        <field name="model_id" ref="model_southern_accounting_automation_run"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="global" eval="True"/>
+    </record>
+    <record id="rule_southern_accounting_automation_finding_company" model="ir.rule">
+        <field name="name">Accounting automation findings allowed companies</field>
+        <field name="model_id" ref="model_southern_accounting_automation_finding"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="global" eval="True"/>
+    </record>
 </odoo>
