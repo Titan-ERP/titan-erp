@@ -1,7 +1,7 @@
 import struct
 import unittest
 
-from scripts.sparex_catalog_media_worker import image_metadata
+from scripts.sparex_catalog_media_worker import image_metadata, s3_image_metadata
 
 
 class SparexCatalogMediaWorkerTests(unittest.TestCase):
@@ -12,6 +12,12 @@ class SparexCatalogMediaWorkerTests(unittest.TestCase):
     def test_rejects_non_image_content(self):
         with self.assertRaisesRegex(ValueError, "unsupported_or_invalid_image"):
             image_metadata(b"<html>not an image</html>")
+
+    def test_s3_metadata_normalizes_odoo_false_to_string(self):
+        self.assertEqual(
+            s3_image_metadata({"image_source_sha256": False}, 640, 480),
+            {"source-url-sha256": "", "width": "640", "height": "480"},
+        )
 
 
 if __name__ == "__main__":
