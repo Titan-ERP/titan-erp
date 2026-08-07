@@ -13,6 +13,8 @@ Environment=CATALOG_AGENT_INSTALL_ROOT=/opt/southern-parts/catalog-agent
 Environment=ODOO_ENV_FILE=/opt/southern-parts/Odoo/odoo_connection.env
 Environment=PYTHONPATH=/opt/southern-parts/catalog-agent/current
 ExecStart=/bin/bash /opt/southern-parts/catalog-agent/current/scripts/run_sparex_durable_discovery.sh
+RuntimeDirectory=titan-sparex-catalog
+RuntimeDirectoryMode=0750
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
@@ -21,4 +23,3 @@ ReadWritePaths=/opt/southern-parts/catalog-agent/artifacts
 StandardOutput=journal
 StandardError=journal
 TimeoutStartSec=12min
-

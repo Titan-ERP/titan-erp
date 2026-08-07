@@ -8,6 +8,8 @@ class SparexDurableDiscoveryServiceTests(unittest.TestCase):
     def test_launcher_is_bounded_locked_and_fail_closed(self):
         launcher = (ROOT / "scripts" / "run_sparex_durable_discovery.sh").read_text(encoding="utf-8")
         self.assertIn("flock -n 9", launcher)
+        self.assertIn("/run/titan-sparex-catalog/durable-discovery.lock", launcher)
+        self.assertIn("trap fail_closed ERR", launcher)
         self.assertIn("2097152", launcher)
         self.assertIn("--max-pages-per-checkpoint 50", launcher)
         self.assertIn("--throttle-seconds 3.0", launcher)
@@ -29,6 +31,7 @@ class SparexDurableDiscoveryServiceTests(unittest.TestCase):
         self.assertIn("OnUnitInactiveSec=20min", timer)
         self.assertIn("Unit=titan-sparex-durable-discovery.service", timer)
         self.assertIn("run_sparex_durable_discovery.sh", service)
+        self.assertIn("RuntimeDirectory=titan-sparex-catalog", service)
         self.assertIn("ProtectSystem=strict", service)
         self.assertIn("disable --now titan-sparex-durable-discovery.timer", installer)
 
