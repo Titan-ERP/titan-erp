@@ -15,6 +15,13 @@ class SparexDurableDiscoveryServiceTests(unittest.TestCase):
         self.assertIn("--throttle-seconds 3.0", launcher)
         self.assertIn("--manifest-queue-url", launcher)
         self.assertIn("systemctl disable --now titan-sparex-durable-discovery.timer", launcher)
+        self.assertIn('phase="$(cat "${phase_file}"', launcher)
+        self.assertIn("-m scripts.sparex_catalog_cost_worker", launcher)
+        self.assertIn("-m scripts.sparex_catalog_media_worker", launcher)
+        self.assertIn("-m scripts.sparex_catalog_promotion_worker", launcher)
+        self.assertIn("-m scripts.sparex_catalog_agents.orchestrator", launcher)
+        self.assertIn("--skip-quote-publication", launcher)
+        self.assertIn("--throttle-seconds 3.0", launcher)
         self.assertNotIn("--create-missing-products", launcher)
 
     def test_timer_preserves_healthy_portal_spacing(self):

@@ -1,0 +1,33 @@
+import unittest
+from unittest.mock import patch
+
+from scripts import sparex_catalog_cost_worker as worker
+
+
+class SparexCatalogCostWorkerTests(unittest.TestCase):
+    def test_confirmation_is_stable(self):
+        self.assertEqual(worker.CONFIRMATION, "sparex-durable-cost-recovery")
+
+    def test_portal_cooldown_returns_failure(self):
+        args = [
+            "worker",
+            "--odoo-env-file", "odoo.env",
+            "--dealer-env-file", "dealer.env",
+            "--artifact-root", "artifacts",
+            "--s3-bucket", "bucket",
+            "--confirm", worker.CONFIRMATION,
+            "--reason", "test",
+        ]
+        with patch.dict("os.environ", {"ODOO_WRITE_ENABLED": "true"}), patch(
+            "sys.argv", args
+        ), patch.object(worker, "ArtifactStore"), patch.object(
+            worker.OdooConfig, "from_env"
+        ), patch.object(worker, "OdooClient") as client, patch.object(
+            worker, "recover_dealer_costs", side_effect=worker.PortalCooldownError("warning")
+        ):
+            client.return_value.connect.return_value = object()
+            self.assertEqual(worker.main(), 2)
+
+
+if __name__ == "__main__":
+    unittest.main()

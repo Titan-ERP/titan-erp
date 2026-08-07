@@ -1,5 +1,5 @@
 [Unit]
-Description=Schedule protected durable Sparex listing discovery
+Description=Schedule the protected durable Sparex catalog cycle
 
 [Timer]
 OnActiveSec=15min
