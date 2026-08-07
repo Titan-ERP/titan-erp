@@ -18,14 +18,15 @@ The CloudFormation template creates the FIFO queue, five-attempt redrive policy,
 1. Deploy and upgrade `southern_parts_intelligence`.
 2. Run `scripts/sparex_catalog_conflict_preflight.py` and archive the report. Do not create the remaining production uniqueness indexes while the report is blocking.
 3. Deploy `cloud/aws/sparex-catalog-pipeline.yaml` and attach its managed policy only to the catalog worker role.
-4. Install the systemd units with `cloud/aws/install-sparex-catalog-pipeline.sh`; they remain disabled.
+4. Install the systemd units with `cloud/aws/install-sparex-catalog-pipeline.sh`; both timers remain disabled.
 5. Configure `SPAREX_CATALOG_QUEUE_URL` in `/opt/southern-parts/catalog-agent/catalog-pipeline.env`.
 6. Run two supervised five-page checkpoints. Stop immediately on any portal warning signal and retain the existing one-hour cooldown.
 7. After two healthy runs at each level, advance to 20-page and then 50-page logical jobs. Recovery evidence is still committed every five pages.
-8. Enable continuous ingestion only after queue, Odoo, media, and promotion telemetry are healthy.
+8. Enable `titan-sparex-catalog-ingestion.timer` only after queue and Odoo ingestion telemetry are healthy.
+9. Enable `titan-sparex-durable-discovery.timer` only after two healthy 50-page canaries and explicit operator approval. Its first run waits 15 minutes; subsequent runs start at least 20 minutes after the prior service becomes inactive. Each run uses a host lock and disables its timer on any worker failure. Portal cooldown remains enforced by the Odoo discovery run.
 
 ## State and ownership
 
 Catalog state is independent from website state. A product may be operational internally while remaining `not_ready` for the website. Staff can protect manual name, image, category, description, or sales-price changes with explicit product override flags. The pipeline continues to own exact vendor identity, URL, cost, supplier information, availability, evidence, and pricing basis.
 
-No crawler, queue consumer, media worker, promotion worker, or archival action is automatically enabled by this change.
+No crawler, queue consumer, media worker, promotion worker, or archival action is automatically enabled by installation. The durable discovery and ingestion timers require separate supervised activation.
