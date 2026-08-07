@@ -100,6 +100,8 @@ def main() -> int:
         domain=[
             ("source_id.code", "=", "sparex"),
             ("active", "=", True),
+            ("vendor_cost", ">", 0),
+            ("dealer_cost_evidence_sha256", "!=", False),
             ("image_write_verified", "=", False),
             ("image_url", "!=", False),
         ],

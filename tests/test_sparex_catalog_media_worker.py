@@ -1,5 +1,6 @@
 import struct
 import unittest
+from pathlib import Path
 
 from scripts.sparex_catalog_media_worker import image_metadata, s3_image_metadata
 
@@ -18,6 +19,13 @@ class SparexCatalogMediaWorkerTests(unittest.TestCase):
             s3_image_metadata({"image_source_sha256": False}, 640, 480),
             {"source-url-sha256": "", "width": "640", "height": "480"},
         )
+
+    def test_worker_prioritizes_cost_evidenced_items(self):
+        source = (Path(__file__).parents[1] / "scripts" / "sparex_catalog_media_worker.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('(\"vendor_cost\", \">\", 0)', source)
+        self.assertIn('(\"dealer_cost_evidence_sha256\", \"!=\", False)', source)
 
 
 if __name__ == "__main__":
