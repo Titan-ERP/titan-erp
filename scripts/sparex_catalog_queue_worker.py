@@ -7,6 +7,7 @@ import hashlib
 import json
 import threading
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any, Iterator
 
 from scripts.odoo_runtime import OdooClient, OdooConfig
@@ -77,12 +78,16 @@ def process_message(s3: Any, client: OdooClient, body: str) -> dict[str, Any]:
     return result
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--queue-url", required=True)
-    parser.add_argument("--odoo-env-file", required=True)
+    parser.add_argument("--odoo-env-file", required=True, type=Path)
     parser.add_argument("--wait-seconds", type=int, default=20)
-    args = parser.parse_args()
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
     import boto3
 
     sqs = boto3.client("sqs")
