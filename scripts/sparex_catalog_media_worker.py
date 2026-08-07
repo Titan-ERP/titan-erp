@@ -21,6 +21,14 @@ MIN_DIMENSION = 64
 MEDIA_CONFIRMATION = "sparex-media-batch-write"
 
 
+def s3_image_metadata(row: dict, width: int, height: int) -> dict[str, str]:
+    return {
+        "source-url-sha256": str(row.get("image_source_sha256") or ""),
+        "width": str(width),
+        "height": str(height),
+    }
+
+
 def image_metadata(content: bytes) -> tuple[str, int, int]:
     if content.startswith(b"\x89PNG\r\n\x1a\n") and len(content) >= 24:
         width, height = struct.unpack(">II", content[16:24])
@@ -122,11 +130,7 @@ def main() -> int:
                 Key=key,
                 Body=content,
                 ContentType=mime_type,
-                Metadata={
-                    "source-url-sha256": row["image_source_sha256"],
-                    "width": str(width),
-                    "height": str(height),
-                },
+                Metadata=s3_image_metadata(row, width, height),
             )
             prepared.append(
                 {
