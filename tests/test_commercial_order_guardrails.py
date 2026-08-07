@@ -6,6 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MODULE = ROOT / "southern_accounting_guardrails"
 MODEL = (MODULE / "models" / "commercial_order.py").read_text(encoding="utf-8")
 MANIFEST = (MODULE / "__manifest__.py").read_text(encoding="utf-8")
+ACCESS = (MODULE / "security" / "ir.model.access.csv").read_text(encoding="utf-8")
 
 
 def test_sales_and_purchase_guardrails_are_loaded():
@@ -13,6 +14,11 @@ def test_sales_and_purchase_guardrails_are_loaded():
     assert '"purchase"' in MANIFEST
     assert '"views/commercial_order_views.xml"' in MANIFEST
     assert "from . import commercial_order" in (MODULE / "models" / "__init__.py").read_text(encoding="utf-8")
+
+
+def test_accounting_policy_access_is_available_to_internal_users():
+    assert "model_southern_accounting_policy,base.group_user,1,0,0,0" in ACCESS
+    assert "model_southern_accounting_policy,account.group_account_manager,1,1,1,1" in ACCESS
 
 
 def test_sales_confirmation_and_invoice_account_are_guarded():
