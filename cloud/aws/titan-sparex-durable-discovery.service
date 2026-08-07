@@ -12,6 +12,7 @@ EnvironmentFile=/opt/southern-parts/catalog-agent/catalog-pipeline.env
 Environment=CATALOG_AGENT_INSTALL_ROOT=/opt/southern-parts/catalog-agent
 Environment=ODOO_ENV_FILE=/opt/southern-parts/Odoo/odoo_connection.env
 Environment=PYTHONPATH=/opt/southern-parts/catalog-agent/current
+Environment=SOUTHERN_PRODUCT_ARTIFACT_BUCKET=southern-parts-catalog-artifacts-475369996980-us-east-1
 ExecStart=/bin/bash /opt/southern-parts/catalog-agent/current/scripts/run_sparex_durable_discovery.sh
 RuntimeDirectory=titan-sparex-catalog
 RuntimeDirectoryMode=0750

@@ -9,13 +9,16 @@ lock_file="${SPAREX_DISCOVERY_LOCK_FILE:-/run/titan-sparex-catalog/durable-disco
 
 fail_closed() {
   status=$?
+  line=$1
+  command=$2
   trap - ERR
   set +e
-  echo "Durable Sparex discovery failed; disabling its timer for supervised review." >&2
+  echo "Durable Sparex discovery failed at line ${line}: ${command}" >&2
+  echo "Disabling its timer for supervised review." >&2
   systemctl disable --now titan-sparex-durable-discovery.timer 2>/dev/null
   exit "${status}"
 }
-trap fail_closed ERR
+trap 'fail_closed "${LINENO}" "${BASH_COMMAND}"' ERR
 
 exec 9>"${lock_file}"
 if ! flock -n 9; then
