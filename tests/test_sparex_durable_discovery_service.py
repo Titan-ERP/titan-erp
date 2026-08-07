@@ -1,0 +1,37 @@
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class SparexDurableDiscoveryServiceTests(unittest.TestCase):
+    def test_launcher_is_bounded_locked_and_fail_closed(self):
+        launcher = (ROOT / "scripts" / "run_sparex_durable_discovery.sh").read_text(encoding="utf-8")
+        self.assertIn("flock -n 9", launcher)
+        self.assertIn("2097152", launcher)
+        self.assertIn("--max-pages-per-checkpoint 50", launcher)
+        self.assertIn("--throttle-seconds 3.0", launcher)
+        self.assertIn("--manifest-queue-url", launcher)
+        self.assertIn("systemctl disable --now titan-sparex-durable-discovery.timer", launcher)
+        self.assertNotIn("--create-missing-products", launcher)
+
+    def test_timer_preserves_healthy_portal_spacing(self):
+        timer = (ROOT / "cloud" / "aws" / "titan-sparex-durable-discovery.timer").read_text(
+            encoding="utf-8"
+        )
+        service = (ROOT / "cloud" / "aws" / "titan-sparex-durable-discovery.service").read_text(
+            encoding="utf-8"
+        )
+        installer = (ROOT / "cloud" / "aws" / "install-sparex-catalog-pipeline.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("OnActiveSec=15min", timer)
+        self.assertIn("OnUnitInactiveSec=20min", timer)
+        self.assertIn("Unit=titan-sparex-durable-discovery.service", timer)
+        self.assertIn("run_sparex_durable_discovery.sh", service)
+        self.assertIn("ProtectSystem=strict", service)
+        self.assertIn("disable --now titan-sparex-durable-discovery.timer", installer)
+
+
+if __name__ == "__main__":
+    unittest.main()

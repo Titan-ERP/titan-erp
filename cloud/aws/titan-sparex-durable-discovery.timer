@@ -1,0 +1,13 @@
+[Unit]
+Description=Schedule protected durable Sparex listing discovery
+
+[Timer]
+OnActiveSec=15min
+OnUnitInactiveSec=20min
+RandomizedDelaySec=60s
+AccuracySec=1s
+Persistent=false
+Unit=titan-sparex-durable-discovery.service
+
+[Install]
+WantedBy=timers.target
