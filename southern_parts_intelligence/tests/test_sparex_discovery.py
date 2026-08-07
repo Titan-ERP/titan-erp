@@ -489,6 +489,10 @@ class TestSparexDiscovery(TransactionCase):
             }
         )
         self.env["southern.sparex.discovery.run"].prepare_reconciliation_run(run["id"])
+        prior_items = self.env["southern.sparex.discovery.item"].search(
+            [("normalized_sku", "in", ["S.700001", "S.700002"])]
+        )
+        self.assertEqual(set(prior_items.mapped("reconciliation_state")), {"current"})
         self.env["southern.sparex.discovery.run"].claim_discovery_checkpoint(run["id"], "current-worker", 180)
         result = self.env["southern.sparex.discovery.run"].record_discovery_page(
             run["id"],

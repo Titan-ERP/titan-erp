@@ -536,37 +536,10 @@ class SouthernSparexDiscoveryRun(models.Model):
         run.invalidate_recordset()
         if run.reconciliation_state != "pending":
             return run.read(self._worker_fields())[0]
-        Item = self.env["southern.sparex.discovery.item"]
         now = fields.Datetime.now()
-        Item.flush_model(
-            ["reconciliation_state", "source_enrichment_candidate", "publication_candidate"]
-        )
-        self.env.cr.execute(
-            """
-            UPDATE southern_sparex_discovery_item
-               SET reconciliation_state = 'pending',
-                   source_enrichment_candidate = FALSE,
-                   publication_candidate = FALSE,
-                   write_uid = %s,
-                   write_date = %s
-             WHERE company_id = %s
-            """,
-            [self.env.uid, now, run.company_id.id],
-        )
-        self.env.cr.execute(
-            """
-            UPDATE southern_sparex_discovery_item
-               SET reconciliation_state = 'current',
-                   write_uid = %s,
-                   write_date = %s
-             WHERE company_id = %s
-               AND last_seen_run_id = %s
-            """,
-            [self.env.uid, now, run.company_id.id, run.id],
-        )
-        Item.invalidate_model(
-            ["reconciliation_state", "source_enrichment_candidate", "publication_candidate"]
-        )
+        # A new sweep must not demote evidence accepted by the preceding sweep.
+        # last_seen_run_id isolates observations for absence reconciliation, and
+        # only a completed sweep is allowed to mark unseen records stale.
         run.write(
             {
                 "reconciliation_state": "in_progress",

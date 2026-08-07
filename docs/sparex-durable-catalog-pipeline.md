@@ -10,6 +10,7 @@ This implementation separates vendor access, immutable evidence, Odoo catalog re
 4. Odoo serializes staging, promotion, media, and reconciliation with `pg_advisory_xact_lock(0x535041524558::bigint)`. Manifest processing uses 50-record savepoints and bounded bisection for rejected records.
 5. `scripts.sparex_catalog_media_worker` validates image bytes and dimensions, archives the original by content hash, and sends no image data through SQS.
 6. `scripts.sparex_catalog_promotion_worker` creates or refreshes only blocker-free operational products. Website publication remains a separate state and workflow.
+7. The protected systemd service runs discovery, five exact dealer-cost checks, media validation, and internal promotion sequentially under one host lock. It does not publish website products.
 
 ## Safe rollout
 
@@ -23,7 +24,7 @@ The CloudFormation template creates the FIFO queue, five-attempt redrive policy,
 6. Run two supervised five-page checkpoints. Stop immediately on any portal warning signal and retain the existing one-hour cooldown.
 7. After two healthy runs at each level, advance to 20-page and then 50-page logical jobs. Recovery evidence is still committed every five pages.
 8. Enable `titan-sparex-catalog-ingestion.timer` only after queue and Odoo ingestion telemetry are healthy.
-9. Enable `titan-sparex-durable-discovery.timer` only after two healthy 50-page canaries and explicit operator approval. Its first run waits 15 minutes; subsequent runs start at least 20 minutes after the prior service becomes inactive. Each run uses a host lock and disables its timer on any worker failure. Portal cooldown remains enforced by the Odoo discovery run.
+9. Enable `titan-sparex-durable-discovery.timer` only after two healthy 50-page canaries and explicit operator approval. Its first run waits 15 minutes; subsequent runs start at least 20 minutes after the prior service becomes inactive. Each invocation completes one sequential internal-catalog cycle under a host lock and disables its timer on any worker failure. Portal cooldown remains enforced by the Odoo discovery and exact-cost workers.
 
 ## State and ownership
 
