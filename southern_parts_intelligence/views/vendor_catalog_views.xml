@@ -64,6 +64,8 @@
         <field name="availability"/>
         <field name="match_state"/>
         <field name="promotion_state"/>
+        <field name="catalog_state"/>
+        <field name="website_state"/>
         <field name="blocker_code"/>
         <field name="promotion_requested"/>
         <field name="demand_count"/>
@@ -97,6 +99,8 @@
             <group>
               <field name="match_state"/>
               <field name="promotion_state"/>
+              <field name="catalog_state"/>
+              <field name="website_state"/>
               <field name="blocker_code"/>
               <field name="promotion_requested"/>
               <field name="demand_count"/>
@@ -115,6 +119,23 @@
             <field name="source_url" password="1"/>
             <field name="image_url" password="1"/>
             <field name="content_sha256"/>
+            <field name="page_sha256"/>
+            <field name="card_sha256"/>
+            <field name="image_source_sha256"/>
+            <field name="image_artifact_uri"/>
+            <field name="image_artifact_sha256"/>
+            <field name="image_write_verified"/>
+            <field name="validated_image_1920" widget="image"/>
+            <field name="dealer_currency_code"/>
+            <field name="pricing_basis"/>
+            <field name="pricing_margin_percent"/>
+            <field name="pricing_calculated_at"/>
+            <field name="last_seen_sweep_key"/>
+            <field name="name_evidence_present"/>
+            <field name="dealer_cost_evidence_uri"/>
+            <field name="dealer_cost_evidence_sha256"/>
+            <field name="dealer_cost_observed_at"/>
+            <field name="readiness_blockers_json"/>
             <field name="source_artifact_uri"/>
             <field name="source_artifact_sha256"/>
             <field name="schema_version"/>
@@ -143,10 +164,13 @@
         <filter name="missing" string="Not Yet in Odoo" domain="[('match_state','=','missing')]"/>
         <filter name="promoted" string="Promoted" domain="[('promotion_state','=','promoted')]"/>
         <filter name="blocked" string="Blocked" domain="[('promotion_state','=','blocked')]"/>
+        <filter name="operational" string="Operational" domain="[('catalog_state','=','operational')]"/>
         <filter name="active_items" string="Active Items" domain="[('active','=',True)]"/>
         <separator/>
         <filter name="group_source" string="Vendor Source" context="{'group_by':'source_id'}"/>
         <filter name="group_state" string="Promotion State" context="{'group_by':'promotion_state'}"/>
+        <filter name="group_catalog_state" string="Catalog State" context="{'group_by':'catalog_state'}"/>
+        <filter name="group_website_state" string="Website State" context="{'group_by':'website_state'}"/>
         <filter name="group_blocker" string="Blocker" context="{'group_by':'blocker_code'}"/>
       </search>
     </field>

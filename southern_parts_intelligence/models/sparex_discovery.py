@@ -2883,6 +2883,32 @@ class SouthernSparexDiscoveryItem(models.Model):
         return True
 
     @api.model
+    def record_durable_cost_staged(self, item_id, worker_id, catalog_item_id):
+        item = self.browse(int(item_id)).exists()
+        catalog_item = self.env["southern.vendor.catalog.item"].sudo().browse(int(catalog_item_id)).exists()
+        if not item or not catalog_item or item.company_id != self.env.company:
+            raise UserError(_("The durable dealer-cost claim or staging record is unavailable."))
+        self.env.cr.execute("SELECT id FROM southern_sparex_discovery_item WHERE id = %s FOR UPDATE NOWAIT", [item.id])
+        item.invalidate_recordset()
+        if item.cost_recovery_state != "claimed" or item.cost_recovery_worker_id != (worker_id or "").strip():
+            raise UserError(_("The durable dealer-cost claim is no longer owned by this worker."))
+        if (
+            item.normalized_sku != catalog_item.normalized_sku
+            or catalog_item.vendor_cost <= 0
+            or not catalog_item.dealer_cost_evidence_sha256
+        ):
+            raise UserError(_("Durable dealer-cost staging did not verify the exact SKU and evidence."))
+        item.write(
+            {
+                "cost_recovery_state": "resolved",
+                "cost_recovery_worker_id": False,
+                "cost_recovery_next_at": False,
+                "cost_recovery_last_error": False,
+            }
+        )
+        return True
+
+    @api.model
     def prepare_source_link_plan(self, limit=MAX_SOURCE_LINK_BATCH):
         bounded = max(1, min(int(limit or MAX_SOURCE_LINK_BATCH), MAX_SOURCE_LINK_BATCH))
         candidates = self.search(

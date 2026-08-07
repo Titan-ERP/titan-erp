@@ -1,0 +1,112 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Durable FIFO delivery and alarms for the Sparex catalog evidence pipeline.
+
+Parameters:
+  AlarmTopicArn:
+    Type: String
+    Default: ""
+  ArtifactBucketName:
+    Type: String
+
+Conditions:
+  HasAlarmTopic: !Not [!Equals [!Ref AlarmTopicArn, ""]]
+
+Resources:
+  SparexCatalogDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: titan-sparex-catalog-dlq.fifo
+      FifoQueue: true
+      ContentBasedDeduplication: false
+      MessageRetentionPeriod: 1209600
+
+  SparexCatalogQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: titan-sparex-catalog.fifo
+      FifoQueue: true
+      ContentBasedDeduplication: false
+      MessageRetentionPeriod: 1209600
+      ReceiveMessageWaitTimeSeconds: 20
+      VisibilityTimeout: 180
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt SparexCatalogDeadLetterQueue.Arn
+        maxReceiveCount: 5
+
+  SparexCatalogQueueDepthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: titan-sparex-catalog-queue-depth
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt SparexCatalogQueue.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        Fn::If:
+          - HasAlarmTopic
+          - - Ref: AlarmTopicArn
+          - Ref: AWS::NoValue
+
+  SparexCatalogDeadLetterAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: titan-sparex-catalog-dead-letter-messages
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt SparexCatalogDeadLetterQueue.QueueName
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        Fn::If:
+          - HasAlarmTopic
+          - - Ref: AlarmTopicArn
+          - Ref: AWS::NoValue
+
+  SparexCatalogWorkerPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: TitanSparexCatalogWorker
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: QueueDelivery
+            Effect: Allow
+            Action:
+              - sqs:SendMessage
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:ChangeMessageVisibility
+              - sqs:GetQueueAttributes
+            Resource:
+              - !GetAtt SparexCatalogQueue.Arn
+              - !GetAtt SparexCatalogDeadLetterQueue.Arn
+          - Sid: ImmutableCatalogEvidence
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:GetObjectAttributes
+              - s3:PutObject
+            Resource: !Sub arn:${AWS::Partition}:s3:::${ArtifactBucketName}/sparex-product-catalog/*
+
+Outputs:
+  QueueUrl:
+    Value: !Ref SparexCatalogQueue
+  QueueArn:
+    Value: !GetAtt SparexCatalogQueue.Arn
+  DeadLetterQueueUrl:
+    Value: !Ref SparexCatalogDeadLetterQueue
+  WorkerPolicyArn:
+    Value: !Ref SparexCatalogWorkerPolicy

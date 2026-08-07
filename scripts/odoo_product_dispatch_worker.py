@@ -102,7 +102,10 @@ def build_job_command(
             "--reason",
             "Odoo-dispatched throttled Sparex evidence checkpoint",
         ]
-        if request.get("create_missing_products"):
+        manifest_queue_url = os.environ.get("SPAREX_CATALOG_QUEUE_URL", "").strip()
+        if manifest_queue_url:
+            command.extend(["--manifest-queue-url", manifest_queue_url])
+        elif request.get("create_missing_products"):
             command.append("--create-missing-products")
         return command
     if claim.get("job_type") == "catalog_release":
