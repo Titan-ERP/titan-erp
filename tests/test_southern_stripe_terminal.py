@@ -200,6 +200,8 @@ def test_moto_flow_is_explicit_permissioned_and_reuses_native_reconciliation():
     assert "moto_enabled = fields.Boolean(" in config
     assert 'id="group_stripe_terminal_moto"' in groups
     assert "account.group_account_invoice" in groups
+    assert 'id="account.group_account_manager"' not in groups
+    assert 'id="base.group_system"' not in groups
 
 
 def test_terminal_fee_uses_linked_supplemental_invoice_and_one_native_payment():
