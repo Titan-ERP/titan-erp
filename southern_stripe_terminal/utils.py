@@ -2,6 +2,28 @@ import hashlib
 import hmac
 import time
 
+TERMINAL_PAYMENT_MODE_CARD_PRESENT = "card_present"
+TERMINAL_PAYMENT_MODE_MOTO = "moto"
+
+
+def stripe_terminal_payment_method_type(payment_mode):
+    """Return the Stripe PaymentIntent method for an immutable terminal mode."""
+    if payment_mode == TERMINAL_PAYMENT_MODE_CARD_PRESENT:
+        return "card_present"
+    if payment_mode == TERMINAL_PAYMENT_MODE_MOTO:
+        return "card"
+    raise ValueError(f"Unsupported Stripe Terminal payment mode: {payment_mode}")
+
+
+def stripe_terminal_process_data(payment_intent_id, payment_mode):
+    """Build reader processing data without ever handling cardholder data."""
+    data = {"payment_intent": payment_intent_id}
+    if payment_mode == TERMINAL_PAYMENT_MODE_MOTO:
+        data["process_config[moto]"] = "true"
+    elif payment_mode != TERMINAL_PAYMENT_MODE_CARD_PRESENT:
+        raise ValueError(f"Unsupported Stripe Terminal payment mode: {payment_mode}")
+    return data
+
 
 def verify_stripe_signature(payload, signature_header, secret, *, tolerance=300, now=None):
     """Verify Stripe's timestamped v1 webhook signature without logging secrets or payloads."""

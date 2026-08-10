@@ -2,7 +2,9 @@ import uuid
 
 from odoo import Command, _, api, fields, models
 from odoo.addons.payment import utils as payment_utils
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
+
+from ..utils import stripe_terminal_payment_method_type, stripe_terminal_process_data
 
 
 class SouthernStripeTerminalPayment(models.Model):
@@ -35,6 +37,19 @@ class SouthernStripeTerminalPayment(models.Model):
         readonly=True,
     )
     reader_id = fields.Char(related="config_id.reader_id", store=True)
+    payment_mode = fields.Selection(
+        [
+            ("card_present", "Card Present"),
+            ("moto", "Phone / Mail Order (MOTO)"),
+        ],
+        string="Terminal Mode",
+        required=True,
+        default="card_present",
+        readonly=True,
+        copy=False,
+        index=True,
+        tracking=True,
+    )
     invoice_amount = fields.Monetary(
         string="Invoice Balance",
         readonly=True,
@@ -134,9 +149,40 @@ class SouthernStripeTerminalPayment(models.Model):
         "The Stripe PaymentIntent is already linked.",
     )
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        if any(values.get("payment_mode", "card_present") == "moto" for values in vals_list):
+            self._require_moto_access()
+        return super().create(vals_list)
+
+    def write(self, vals):
+        if "payment_mode" in vals and any(
+            payment.payment_mode != vals["payment_mode"] for payment in self
+        ):
+            raise ValidationError(_("A Stripe Terminal payment mode cannot be changed after creation."))
+        return super().write(vals)
+
+    def _require_moto_access(self):
+        if not self.env.user.has_group("southern_stripe_terminal.group_stripe_terminal_moto"):
+            raise AccessError(_("You are not authorized to accept Stripe payments by phone."))
+
+    def _validate_moto_configuration(self):
+        self.ensure_one()
+        if self.payment_mode != "moto":
+            return
+        self._require_moto_access()
+        if not self.config_id.moto_enabled:
+            raise UserError(
+                _(
+                    "MOTO is not enabled on this reader configuration. Stripe Support must "
+                    "approve telephone payments before this option is used."
+                )
+            )
+
     @api.constrains(
         "invoice_id",
         "config_id",
+        "payment_mode",
         "currency_id",
         "invoice_amount",
         "processing_fee_amount",
@@ -150,6 +196,8 @@ class SouthernStripeTerminalPayment(models.Model):
                 raise ValidationError(_("Terminal payments require a posted customer invoice."))
             if payment.config_id.company_id != payment.invoice_id.company_id:
                 raise ValidationError(_("The reader and invoice must belong to the same company."))
+            if payment.payment_mode == "moto" and not payment.config_id.moto_enabled:
+                raise ValidationError(_("MOTO is not enabled on this Stripe Terminal reader."))
             if payment.currency_id != payment.invoice_id.currency_id:
                 raise ValidationError(_("The terminal payment currency must match the invoice currency."))
             if payment.currency_id != payment.config_id.currency_id:
@@ -192,12 +240,13 @@ class SouthernStripeTerminalPayment(models.Model):
             data={
                 "amount": minor_amount,
                 "currency": self.currency_id.name.lower(),
-                "payment_method_types[]": "card_present",
+                "payment_method_types[]": stripe_terminal_payment_method_type(self.payment_mode),
                 "capture_method": "automatic",
                 "metadata[odoo_terminal_payment_id]": str(self.id),
                 "metadata[odoo_company_id]": str(self.company_id.id),
                 "metadata[odoo_invoice_amount]": str(self.invoice_amount),
                 "metadata[odoo_terminal_fee]": str(self.processing_fee_amount),
+                "metadata[odoo_terminal_mode]": self.payment_mode,
             },
             idempotency_key=f"odoo-terminal-intent-{self.idempotency_key}",
         )
@@ -207,7 +256,7 @@ class SouthernStripeTerminalPayment(models.Model):
         return self.provider_id.sudo()._send_api_request(
             "POST",
             f"terminal/readers/{self.reader_id}/process_payment_intent",
-            data={"payment_intent": self.payment_intent_id},
+            data=stripe_terminal_process_data(self.payment_intent_id, self.payment_mode),
             idempotency_key=f"odoo-terminal-process-{self.idempotency_key}-{self.retry_count}",
         )
 
@@ -223,6 +272,7 @@ class SouthernStripeTerminalPayment(models.Model):
 
     def action_send_to_reader(self):
         self.ensure_one()
+        self._validate_moto_configuration()
         if self.state != "draft":
             raise UserError(_("Only a draft terminal payment can be sent to a reader."))
         if self.invoice_id.payment_state in ("paid", "reversed"):
@@ -258,13 +308,19 @@ class SouthernStripeTerminalPayment(models.Model):
                 "stripe_failure_message": False,
             }
         )
+        payment_label = _("phone payment") if self.payment_mode == "moto" else _("in-person payment")
         self.invoice_id.message_post(
-            body=_("Stripe Terminal payment sent to reader %(reader)s.", reader=self.config_id.name)
+            body=_(
+                "Stripe Terminal %(payment_label)s sent to reader %(reader)s.",
+                payment_label=payment_label,
+                reader=self.config_id.name,
+            )
         )
         return self.action_open_form()
 
     def action_retry(self):
         self.ensure_one()
+        self._validate_moto_configuration()
         if self.state != "failed":
             raise UserError(_("Only a failed terminal payment can be retried."))
         if self.currency_id.compare_amounts(self.invoice_amount, self.invoice_id.amount_residual):
@@ -386,6 +442,7 @@ class SouthernStripeTerminalPayment(models.Model):
             )
             return self.env["account.payment"]
 
+        payment_channel = _("Stripe Terminal MOTO") if self.payment_mode == "moto" else _("Stripe Terminal")
         wizard = (
             self.env["account.payment.register"]
             .with_company(self.company_id)
@@ -397,7 +454,11 @@ class SouthernStripeTerminalPayment(models.Model):
                     "amount": self.amount,
                     "currency_id": self.currency_id.id,
                     "payment_date": fields.Date.context_today(self),
-                    "communication": _("Stripe Terminal %(intent)s", intent=self.payment_intent_id),
+                    "communication": _(
+                        "%(payment_channel)s %(intent)s",
+                        payment_channel=payment_channel,
+                        intent=self.payment_intent_id,
+                    ),
                     "group_payment": True,
                 }
             )
@@ -417,7 +478,8 @@ class SouthernStripeTerminalPayment(models.Model):
         )
         invoice.message_post(
             body=_(
-                "Stripe Terminal payment completed and registered as %(payment)s, including a processing fee of %(fee)s.",
+                "%(payment_channel)s payment completed and registered as %(payment)s, including a processing fee of %(fee)s.",
+                payment_channel=payment_channel,
                 payment=account_payment.display_name,
                 fee=self.processing_fee_amount,
             )

@@ -41,6 +41,14 @@ class SouthernStripeTerminalConfig(models.Model):
         string="Stripe Location ID",
         help="Optional Stripe Terminal location identifier used for operational verification.",
     )
+    moto_enabled = fields.Boolean(
+        string="MOTO Enabled by Stripe",
+        default=False,
+        help=(
+            "Enable only after Stripe Support has approved mail-order/telephone-order "
+            "payments for this account and this reader is a supported S700/S710 or WisePOS E."
+        ),
+    )
     journal_id = fields.Many2one(
         "account.journal",
         required=True,

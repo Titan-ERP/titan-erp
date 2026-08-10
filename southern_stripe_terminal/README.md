@@ -1,10 +1,11 @@
 # Southern Stripe Terminal
 
-This Odoo 19 module sends the exact residual balance of a posted customer invoice to a Stripe Terminal reader and registers the successful card-present charge through Odoo's native `account.payment.register` workflow.
+This Odoo 19 module sends the exact residual balance of a posted customer invoice to a Stripe Terminal reader and registers the successful charge through Odoo's native `account.payment.register` workflow. It keeps card-present and telephone-order (MOTO) payments as separate, immutable payment modes.
 
-Posted customer invoices replace the generic **Pay** action with three explicit choices:
+Posted customer invoices replace the generic **Pay** action with four explicit choices:
 
-- **Pay with Terminal** sends the exact residual to Stripe Terminal.
+- **Pay with Terminal** collects an in-person card-present payment.
+- **Pay by Phone** collects a Stripe-approved MOTO payment by entering card details only on a supported reader.
 - **Pay with Cash** opens native payment registration with the configured cash journal and method.
 - **Pay with ACH** opens native payment registration with the configured ACH bank journal and method.
 
@@ -19,6 +20,8 @@ Cash and ACH require operator review and confirmation in Odoo's standard payment
 - Registers the accounting payment only after retrieving a `succeeded` PaymentIntent from Stripe.
 - Stops in `Needs Review` if the Odoo invoice balance changes after Stripe collected the card.
 - Stores Stripe and Odoo identifiers, but no PAN, CVV, customer card data, or API secrets in transaction records.
+- Requires a dedicated Odoo access group and an administrator-confirmed reader setting before MOTO can start.
+- Creates MOTO PaymentIntents with `card` and sends `process_config[moto]=true`; ordinary Terminal payments remain `card_present`.
 - Ships the polling cron disabled; signed webhooks and the operator Refresh Status action are available immediately.
 
 ## Test before hardware arrives
@@ -34,6 +37,18 @@ Cash and ACH require operator review and confirmation in Odoo's standard payment
 9. Confirm one Stripe PaymentIntent, one Odoo payment, correct reconciliation, and no duplicate payment after webhook replay or repeated refresh.
 
 Stripe's simulator is sandbox-only and does not move money. Live mode must remain disabled until the physical reader is registered, the correct location is verified, and a controlled low-value end-to-end test passes.
+
+## Pay by Phone (MOTO)
+
+MOTO is available only on Stripe Reader S700/S710 and BBPOS WisePOS E devices and must first be enabled by Stripe Support. After approval:
+
+1. An Accounting Administrator enables **MOTO Enabled by Stripe** on the default reader.
+2. An administrator assigns **Southern Payments / Stripe Pay by Phone** only to authorized employees.
+3. The employee opens a posted customer invoice and clicks **Pay by Phone**.
+4. Card number, expiration, CVC, and postal code are entered on the reader, never in Odoo.
+5. The existing signed webhook and idempotent reconciliation path create the native Odoo payment after Stripe reports success.
+
+MOTO is card-not-present. Card-present pricing, fraud liability shift, and other card-present protections do not apply. Use it only when a customer who is not physically present initiates the payment by phone or mail.
 
 ## Accounting behavior
 

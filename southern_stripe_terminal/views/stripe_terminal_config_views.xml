@@ -11,6 +11,7 @@
                 <field name="provider_id"/>
                 <field name="reader_id"/>
                 <field name="location_id" optional="hide"/>
+                <field name="moto_enabled" optional="show"/>
                 <field name="journal_id"/>
                 <field name="is_default"/>
                 <field name="webhook_ready"/>
@@ -40,6 +41,7 @@
                             <field name="currency_id" readonly="1"/>
                             <field name="reader_id"/>
                             <field name="location_id"/>
+                            <field name="moto_enabled" groups="account.group_account_manager"/>
                             <field name="webhook_ready" readonly="1"/>
                         </group>
                         <group string="Odoo Accounting">
@@ -55,6 +57,9 @@
                     </div>
                     <div class="alert alert-warning" role="alert" invisible="provider_state != 'test'">
                         Test Mode supports a simulated S710, so the full workflow can be validated before physical hardware arrives.
+                    </div>
+                    <div class="alert alert-warning" role="alert" invisible="not moto_enabled">
+                        Pay by Phone is a card-not-present MOTO transaction. Keep this enabled only while Stripe has approved MOTO for the account, and never enter card details anywhere except the reader.
                     </div>
                 </sheet>
             </form>

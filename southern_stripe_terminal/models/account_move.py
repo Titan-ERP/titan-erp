@@ -1,5 +1,5 @@
 from odoo import Command, _, api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
 
 
 class AccountMove(models.Model):
@@ -22,6 +22,7 @@ class AccountMove(models.Model):
     southern_payment_type = fields.Selection(
         [
             ("stripe_terminal", "Stripe Terminal"),
+            ("stripe_moto", "Stripe Terminal - Pay by Phone"),
             ("cash", "Cash"),
             ("ach", "ACH"),
             ("online_link", "Online Payment Link"),
@@ -30,7 +31,10 @@ class AccountMove(models.Model):
         default=_default_southern_payment_type,
         copy=False,
         tracking=True,
-        help="Select Stripe Terminal to add the configured processing fee to this draft invoice.",
+        help=(
+            "Select Stripe Terminal or Stripe Terminal - Pay by Phone to add the configured "
+            "processing fee to this draft invoice."
+        ),
     )
     southern_processing_fee_amount = fields.Monetary(
         string="Transaction Processing Fee",
@@ -120,7 +124,7 @@ class AccountMove(models.Model):
             if move.southern_terminal_fee_payment_id:
                 continue
             fee_lines = move.invoice_line_ids.filtered("southern_is_processing_fee")
-            if move.southern_payment_type != "stripe_terminal":
+            if move.southern_payment_type not in ("stripe_terminal", "stripe_moto"):
                 if fee_lines:
                     fee_lines.with_context(southern_skip_processing_fee_sync=True).unlink()
                 continue
@@ -254,6 +258,11 @@ class AccountMove(models.Model):
 
     def _southern_validate_selected_payment_type(self, payment_type):
         self.ensure_one()
+        terminal_types = {"stripe_terminal", "stripe_moto"}
+        if self.southern_payment_type in terminal_types and payment_type in terminal_types:
+            if self.southern_payment_type != payment_type:
+                self.southern_payment_type = payment_type
+            return
         if self.southern_payment_type and self.southern_payment_type != payment_type:
             selected = dict(self._fields["southern_payment_type"].selection).get(
                 self.southern_payment_type,
@@ -274,13 +283,19 @@ class AccountMove(models.Model):
     def action_pay_with_ach(self):
         return self._southern_open_payment_route("ach")
 
-    def action_pay_with_stripe_terminal(self):
+    def _southern_pay_with_stripe_terminal(self, *, payment_type, payment_mode):
         self._southern_validate_payment_invoice()
-        self._southern_validate_selected_payment_type("stripe_terminal")
+        self._southern_validate_selected_payment_type(payment_type)
+
+        if payment_mode == "moto" and not self.env.user.has_group(
+            "southern_stripe_terminal.group_stripe_terminal_moto"
+        ):
+            raise AccessError(_("You are not authorized to accept Stripe payments by phone."))
 
         existing = self.env["southern.stripe.terminal.payment"].search(
             [
                 ("invoice_id", "=", self.id),
+                ("payment_mode", "=", payment_mode),
                 ("state", "in", ("draft", "in_progress", "stripe_succeeded", "failed", "needs_review")),
             ],
             order="id desc",
@@ -289,15 +304,22 @@ class AccountMove(models.Model):
         if existing:
             return existing.action_open_form()
 
-        config = self.env["southern.stripe.terminal.config"].search(
-            [
-                ("company_id", "=", self.company_id.id),
-                ("active", "=", True),
-                ("is_default", "=", True),
-            ],
-            limit=1,
-        )
+        config_domain = [
+            ("company_id", "=", self.company_id.id),
+            ("active", "=", True),
+            ("is_default", "=", True),
+        ]
+        if payment_mode == "moto":
+            config_domain.append(("moto_enabled", "=", True))
+        config = self.env["southern.stripe.terminal.config"].search(config_domain, limit=1)
         if not config:
+            if payment_mode == "moto":
+                raise UserError(
+                    _(
+                        "Enable MOTO on the company's default Stripe reader only after Stripe "
+                        "Support approves telephone payments."
+                    )
+                )
             raise UserError(_("Configure one active default Stripe Terminal reader for this company."))
         busy_reader = self.env["southern.stripe.terminal.payment"].search(
             [("config_id", "=", config.id), ("state", "=", "in_progress")],
@@ -322,6 +344,7 @@ class AccountMove(models.Model):
             {
                 "invoice_id": self.id,
                 "config_id": config.id,
+                "payment_mode": payment_mode,
                 "invoice_amount": invoice_amount,
                 "processing_fee_amount": fee_amount,
                 "processing_fee_embedded": fee_snapshot.get("processing_fee_embedded", False),
@@ -340,6 +363,18 @@ class AccountMove(models.Model):
         )
         terminal_payment.action_send_to_reader()
         return terminal_payment.action_open_form()
+
+    def action_pay_with_stripe_terminal(self):
+        return self._southern_pay_with_stripe_terminal(
+            payment_type="stripe_terminal",
+            payment_mode="card_present",
+        )
+
+    def action_pay_by_phone(self):
+        return self._southern_pay_with_stripe_terminal(
+            payment_type="stripe_moto",
+            payment_mode="moto",
+        )
 
 
 class AccountMoveLine(models.Model):
