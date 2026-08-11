@@ -14,6 +14,125 @@ def _load_utils():
     return module
 
 
+def _load_moto_preflight():
+    spec = importlib.util.spec_from_file_location(
+        "odoo_stripe_moto_rollout_preflight",
+        ROOT / "scripts" / "odoo_stripe_moto_rollout_preflight.py",
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class _FakeOdooClient:
+    def __init__(self, *, installed_version="19.0.1.6.0", moto_enabled=False, moto_group=True):
+        self.installed_version = installed_version
+        self.moto_enabled = moto_enabled
+        self.moto_group = moto_group
+
+    def fields(self, model):
+        if model == "southern.stripe.terminal.config":
+            fields = {
+                "id": {},
+                "name": {},
+                "active": {},
+                "is_default": {},
+                "provider_id": {},
+                "journal_id": {},
+                "payment_method_line_id": {},
+                "reader_id": {},
+                "location_id": {},
+                "webhook_ready": {},
+                "company_id": {},
+            }
+            if self.installed_version == "19.0.1.6.0":
+                fields["moto_enabled"] = {}
+            return fields
+        if model == "southern.invoice.payment.route":
+            return {"id": {}}
+        if model == "res.groups":
+            return {"id": {}, "name": {}, "user_ids": {}}
+        return {"id": {}}
+
+    def execute(self, model, method, args=None, kwargs=None):
+        assert method == "search_read"
+        fields = (kwargs or {}).get("fields", [])
+        if model == "res.company":
+            return [{"id": 2, "name": "Southern Equipment Company (Laurel)"}]
+        if model == "ir.module.module":
+            return [
+                {
+                    "id": 1476,
+                    "name": "southern_stripe_terminal",
+                    "state": "installed",
+                    "latest_version": self.installed_version,
+                    "installed_version": self.installed_version,
+                }
+            ]
+        if model == "payment.provider":
+            return [
+                {
+                    "id": 26,
+                    "name": "Stripe",
+                    "state": "enabled",
+                    "journal_id": [95, "Bank"],
+                    "company_id": [2, "Southern Equipment Company (Laurel)"],
+                }
+            ]
+        if model == "southern.stripe.terminal.config":
+            row = {
+                "id": 1,
+                "name": "SEC Laurel S710",
+                "active": True,
+                "is_default": True,
+                "provider_id": [26, "Stripe"],
+                "journal_id": [95, "Bank"],
+                "payment_method_line_id": [56, "Stripe (Bank)"],
+                "reader_id": "tmr_test",
+                "location_id": "tml_test",
+                "webhook_ready": True,
+                "company_id": [2, "Southern Equipment Company (Laurel)"],
+            }
+            if "moto_enabled" in fields:
+                row["moto_enabled"] = self.moto_enabled
+            return [row]
+        if model == "southern.invoice.payment.route":
+            return [
+                {
+                    "id": 1,
+                    "company_id": [2, "Southern Equipment Company (Laurel)"],
+                    "processing_fee_enabled": True,
+                    "processing_fee_percentage": 3.5,
+                    "processing_fee_fixed": 0.3,
+                    "processing_fee_income_account_id": [1459, "Transaction Processing Fee Income"],
+                    "processing_fee_tax_ids": [],
+                }
+            ]
+        if model == "account.payment.method.line":
+            return [
+                {
+                    "id": 56,
+                    "name": "Stripe",
+                    "journal_id": [95, "Bank"],
+                    "payment_account_id": [1063, "Outstanding Receipts"],
+                    "payment_method_id": [7, "Stripe"],
+                    "company_id": [2, "Southern Equipment Company (Laurel)"],
+                }
+            ]
+        if model == "account.account":
+            return [
+                {"id": 1060, "name": "Operating Checking - SEC Laurel", "account_type": "asset_cash", "company_ids": [2]},
+                {"id": 1063, "name": "Outstanding Receipts", "account_type": "asset_current", "company_ids": [2]},
+                {"id": 1459, "name": "Transaction Processing Fee Income", "account_type": "income", "company_ids": [2]},
+                {"id": 1440, "name": "Bank Merchant Fees", "account_type": "expense", "company_ids": [2]},
+            ]
+        if model == "res.groups" and self.moto_group:
+            return [{"id": 10, "name": "Stripe Pay by Phone", "user_ids": []}]
+        if model == "res.users":
+            return []
+        return []
+
+
 def test_manifest_requires_native_accounting_and_stripe_modules():
     manifest = (MODULE / "__manifest__.py").read_text(encoding="utf-8")
     assert '"account"' in manifest
@@ -31,6 +150,19 @@ def test_webhook_signature_validation_accepts_only_current_matching_signature():
     assert utils.verify_stripe_signature(payload, header, secret, now=timestamp)
     assert not utils.verify_stripe_signature(payload, header, "wrong", now=timestamp)
     assert not utils.verify_stripe_signature(payload, header, secret, now=timestamp + 301)
+
+
+def test_terminal_mode_builders_keep_card_present_and_moto_requests_separate():
+    utils = _load_utils()
+    assert utils.stripe_terminal_payment_method_type("card_present") == "card_present"
+    assert utils.stripe_terminal_process_data("pi_present", "card_present") == {
+        "payment_intent": "pi_present"
+    }
+    assert utils.stripe_terminal_payment_method_type("moto") == "card"
+    assert utils.stripe_terminal_process_data("pi_moto", "moto") == {
+        "payment_intent": "pi_moto",
+        "process_config[moto]": "true",
+    }
 
 
 def test_payment_flow_uses_native_registration_and_never_forces_invoice_paid():
@@ -53,12 +185,14 @@ def test_write_capable_polling_cron_is_disabled_by_default():
     assert '<field name="active" eval="False"/>' in cron
 
 
-def test_invoice_replaces_pay_with_three_explicit_payment_routes():
+def test_invoice_replaces_pay_with_four_explicit_payment_routes():
     view = (MODULE / "views" / "account_move_views.xml").read_text(encoding="utf-8")
     assert "//button[@id='account_invoice_payment_btn']" in view
     assert "//button[@id='account_invoice_payment_secondary_btn']" in view
     assert "move_type == 'out_invoice'" in view
     assert 'string="Pay with Terminal"' in view
+    assert 'string="Pay by Phone"' in view
+    assert 'groups="southern_stripe_terminal.group_stripe_terminal_moto"' in view
     assert 'string="Pay with Cash"' in view
     assert 'string="Pay with ACH"' in view
     assert 'name="southern_payment_type"' in view
@@ -110,12 +244,13 @@ def test_manual_payment_type_controls_the_draft_fee_line():
     source = (MODULE / "models" / "account_move.py").read_text(encoding="utf-8")
     assert "southern_payment_type = fields.Selection(" in source
     assert '("stripe_terminal", "Stripe Terminal")' in source
+    assert '("stripe_moto", "Stripe Terminal - Pay by Phone")' in source
     assert '("cash", "Cash")' in source
     assert '("ach", "ACH")' in source
     assert '("online_link", "Online Payment Link")' in source
     assert "def _southern_sync_terminal_fee_line" in source
     assert "if move.southern_terminal_fee_payment_id:" in source
-    assert 'move.southern_payment_type != "stripe_terminal"' in source
+    assert 'move.southern_payment_type not in ("stripe_terminal", "stripe_moto")' in source
     assert "fee_lines.with_context(southern_skip_processing_fee_sync=True).unlink()" in source
     assert '"southern_is_processing_fee": True' in source
     assert "def action_update_processing_fee" not in source
@@ -155,8 +290,81 @@ def test_upgrade_retires_only_the_legacy_studio_fee_path_and_migrates_drafts():
 def test_payment_buttons_honor_the_manual_payment_type():
     source = (MODULE / "models" / "account_move.py").read_text(encoding="utf-8")
     assert "def _southern_validate_selected_payment_type(self, payment_type):" in source
-    assert 'self._southern_validate_selected_payment_type("stripe_terminal")' in source
+    assert "self._southern_validate_selected_payment_type(payment_type)" in source
     assert 'self._southern_validate_selected_payment_type(route_name)' in source
+
+
+def test_moto_flow_is_explicit_permissioned_and_reuses_native_reconciliation():
+    account_move = (MODULE / "models" / "account_move.py").read_text(encoding="utf-8")
+    payment = (MODULE / "models" / "stripe_terminal_payment.py").read_text(encoding="utf-8")
+    config = (MODULE / "models" / "stripe_terminal_config.py").read_text(encoding="utf-8")
+    groups = (MODULE / "security" / "groups.xml").read_text(encoding="utf-8")
+
+    assert "def action_pay_by_phone(self):" in account_move
+    assert 'payment_type="stripe_moto"' in account_move
+    assert 'payment_mode="moto"' in account_move
+    assert '("payment_mode", "=", payment_mode)' in account_move
+    assert 'config_domain.append(("moto_enabled", "=", True))' in account_move
+    assert "group_stripe_terminal_moto" in account_move
+
+    assert 'payment_mode = fields.Selection(' in payment
+    assert "A Stripe Terminal payment mode cannot be changed after creation." in payment
+    assert 'payment.payment_mode == "moto" and not payment.config_id.moto_enabled' in payment
+    assert 'stripe_terminal_payment_method_type(self.payment_mode)' in payment
+    assert 'stripe_terminal_process_data(self.payment_intent_id, self.payment_mode)' in payment
+    assert '"metadata[odoo_terminal_mode]": self.payment_mode' in payment
+    assert "def _require_moto_access(self):" in payment
+    assert 'self.env["account.payment.register"]' in payment
+
+    assert "moto_enabled = fields.Boolean(" in config
+    assert 'id="group_stripe_terminal_moto"' in groups
+    assert "account.group_account_invoice" in groups
+    assert 'id="account.group_account_manager"' not in groups
+    assert 'id="base.group_system"' not in groups
+
+
+def test_moto_rollout_preflight_is_read_only_and_blocks_surprise_enablement():
+    source = (ROOT / "scripts" / "odoo_stripe_moto_rollout_preflight.py").read_text(
+        encoding="utf-8"
+    )
+    assert '"search_read"' in source
+    assert '"fields_get"' not in source
+    assert '"create"' not in source
+    assert '"write"' not in source
+    assert '"unlink"' not in source
+    assert "moto_enabled is already enabled outside an approved test window" in source
+    assert "--allow-moto-enabled" in source
+
+
+def test_moto_rollout_preflight_passes_clean_config():
+    preflight = _load_moto_preflight()
+    result = preflight.run_preflight(_FakeOdooClient())
+    assert result["status"] == "pass"
+    assert result["failures"] == []
+
+
+def test_moto_rollout_preflight_blocks_enabled_moto_without_test_window():
+    preflight = _load_moto_preflight()
+    result = preflight.run_preflight(_FakeOdooClient(moto_enabled=True))
+    assert result["status"] == "blocked"
+    assert "moto_enabled is already enabled outside an approved test window" in result["failures"]
+
+    allowed = preflight.run_preflight(
+        _FakeOdooClient(moto_enabled=True),
+        allow_moto_enabled=True,
+    )
+    assert allowed["status"] == "pass"
+
+
+def test_moto_rollout_preflight_blocks_pre_upgrade_database():
+    preflight = _load_moto_preflight()
+    result = preflight.run_preflight(
+        _FakeOdooClient(installed_version="19.0.1.5.1", moto_group=False)
+    )
+    assert result["status"] == "blocked"
+    assert "southern_stripe_terminal is 19.0.1.5.1; expected 19.0.1.6.0" in result["failures"]
+    assert "Terminal config is missing moto_enabled; PR/module upgrade is not installed" in result["failures"]
+    assert "Stripe Pay by Phone group is missing; PR/module upgrade is not installed" in result["failures"]
 
 
 def test_terminal_fee_uses_linked_supplemental_invoice_and_one_native_payment():

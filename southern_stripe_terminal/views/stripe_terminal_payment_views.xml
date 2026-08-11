@@ -7,6 +7,7 @@
             <list decoration-success="state == 'registered'" decoration-warning="state in ('in_progress', 'stripe_succeeded')" decoration-danger="state in ('failed', 'needs_review')">
                 <field name="invoice_id"/>
                 <field name="partner_id"/>
+                <field name="payment_mode"/>
                 <field name="config_id"/>
                 <field name="invoice_amount" optional="show"/>
                 <field name="processing_fee_amount" optional="show"/>
@@ -39,6 +40,7 @@
                     <group>
                         <group string="Payment">
                             <field name="partner_id" readonly="1"/>
+                            <field name="payment_mode" readonly="1"/>
                             <field name="invoice_amount" readonly="1"/>
                             <field name="processing_fee_amount" readonly="1"/>
                             <field name="processing_fee_embedded" readonly="1"/>
@@ -79,6 +81,7 @@
                 <filter name="needs_review" string="Needs Review" domain="[('state', '=', 'needs_review')]"/>
                 <filter name="registered" string="Registered" domain="[('state', '=', 'registered')]"/>
                 <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
+                <filter name="group_mode" string="Terminal Mode" context="{'group_by': 'payment_mode'}"/>
                 <filter name="group_reader" string="Reader" context="{'group_by': 'config_id'}"/>
                 <filter name="group_company" string="Company" context="{'group_by': 'company_id'}" groups="base.group_multi_company"/>
             </search>

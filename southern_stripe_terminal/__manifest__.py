@@ -2,7 +2,7 @@
 
 {
     "name": "Southern Stripe Terminal",
-    "version": "19.0.1.5.1",
+    "version": "19.0.1.6.0",
     "category": "Accounting/Payment",
     "summary": "Collect invoice balances on Stripe Terminal and register native Odoo payments.",
     "author": "Southern Equipment Company",
@@ -14,6 +14,7 @@
         "southern_accounting_guardrails",
     ],
     "data": [
+        "security/groups.xml",
         "security/ir.model.access.csv",
         "security/record_rules.xml",
         "data/ir_cron.xml",

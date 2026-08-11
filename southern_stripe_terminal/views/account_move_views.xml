@@ -30,6 +30,12 @@
                         class="oe_highlight"
                         groups="account.group_account_invoice"
                         invisible="move_type != 'out_invoice' or state != 'posted' or payment_state in ('paid', 'reversed') or amount_residual &lt;= 0"/>
+                <button name="action_pay_by_phone"
+                        string="Pay by Phone"
+                        type="object"
+                        class="btn-secondary"
+                        groups="southern_stripe_terminal.group_stripe_terminal_moto"
+                        invisible="move_type != 'out_invoice' or state != 'posted' or payment_state in ('paid', 'reversed') or amount_residual &lt;= 0"/>
                 <button name="action_pay_with_cash"
                         string="Pay with Cash"
                         type="object"
