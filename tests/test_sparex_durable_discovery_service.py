@@ -41,7 +41,7 @@ class SparexDurableDiscoveryServiceTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("OnActiveSec=15min", timer)
-        self.assertIn("OnUnitInactiveSec=10min", timer)
+        self.assertIn("OnUnitInactiveSec=5min", timer)
         self.assertIn("Unit=titan-sparex-durable-discovery.service", timer)
         self.assertIn("run_sparex_durable_discovery.sh", service)
         self.assertIn("RuntimeDirectory=titan-sparex-catalog", service)
