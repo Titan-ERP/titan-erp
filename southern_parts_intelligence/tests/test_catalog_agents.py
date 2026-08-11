@@ -92,6 +92,34 @@ class TestCatalogAgents(TransactionCase):
             }
         )
 
+    def _record_vendor_catalog_item(self, product, source_url):
+        source = self.env.ref("southern_parts_intelligence.vendor_catalog_source_sparex")
+        now = "2026-08-11 12:00:00"
+        evidence_sha = hashlib.sha256(f"vendor-item-{product.id}".encode()).hexdigest()
+        return self.env["southern.vendor.catalog.item"].create(
+            {
+                "company_id": self.env.company.id,
+                "source_id": source.id,
+                "vendor_sku": product.default_code,
+                "normalized_sku": product.default_code,
+                "internal_reference": product.default_code,
+                "title": product.name,
+                "source_url": source_url,
+                "currency_id": self.env.company.currency_id.id,
+                "content_sha256": evidence_sha,
+                "source_artifact_uri": f"s3://test-bucket/vendor/{product.id}.json",
+                "source_artifact_sha256": evidence_sha,
+                "schema_version": "sparex-manifest-v1",
+                "first_seen_at": now,
+                "last_seen_at": now,
+                "product_id": product.id,
+                "match_state": "matched",
+                "promotion_state": "promoted",
+                "catalog_state": "operational",
+                "website_state": "not_ready",
+            }
+        )
+
     def test_ready_snapshot_requires_customer_ready_product_data(self):
         product = self.env["product.template"].create(
             {
@@ -327,6 +355,7 @@ class TestCatalogAgents(TransactionCase):
             {"partner_id": supplier.id, "product_tmpl_id": product.id, "price": 15.0, "min_qty": 1.0}
         )
         self._record_current_dealer_evidence(product, "https://us.sparex.com/example-880001.html")
+        vendor_item = self._record_vendor_catalog_item(product, "https://us.sparex.com/example-880001.html")
         agents = self.env["southern.catalog.agent"].search(
             [("company_id", "=", self.env.company.id), ("active", "=", True)]
         )
@@ -371,6 +400,7 @@ class TestCatalogAgents(TransactionCase):
         )
         self.assertEqual(len(published), 1)
         self.assertTrue(product.website_published)
+        self.assertEqual(vendor_item.website_state, "ready_for_validation")
         self.assertEqual(product.list_price, list_price)
         self.assertEqual(product.standard_price, standard_price)
         discovery_item = self.env["southern.sparex.discovery.item"].search(
@@ -390,6 +420,12 @@ class TestCatalogAgents(TransactionCase):
         self.assertFalse(discovery_item.currently_published)
         self.assertTrue(discovery_item.publication_candidate)
         self.assertEqual(discovery_item.primary_blocker, "ready")
+        self.assertEqual(vendor_item.website_state, "publication_error")
+        release_task.publication_state = "published"
+        self.env["southern.catalog.agent.task"].confirm_publications(
+            [release_task.id], hashlib.sha256(b"public-verification").hexdigest()
+        )
+        self.assertEqual(vendor_item.website_state, "published")
 
     def test_verified_history_does_not_block_republication_of_hidden_product(self):
         product = self.env["product.template"].create(

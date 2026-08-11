@@ -1,8 +1,8 @@
 import hashlib
 import json
-import math
 import re
 import uuid
+from decimal import ROUND_CEILING, Decimal
 from urllib.parse import unquote, urlsplit
 
 from odoo import _, api, fields, models
@@ -49,6 +49,8 @@ CUSTOMER_COPY_CONTAMINATION_MARKERS = (
     "for (var ",
 )
 REQUIRED_COST_PLUS_MARGIN_PERCENT = 35.0
+GROSS_MARGIN_DENOMINATOR = Decimal("0.65")
+PRICE_QUANTUM = Decimal("0.01")
 
 
 def normalized_sparex_sku(value):
@@ -131,8 +133,8 @@ def exact_dealer_cost_evidence_ready(product):
 
 
 def pricing_basis_blockers(product, supplier):
-    supplier_cost = float(supplier.price or 0.0) if supplier else 0.0
-    sale_price = float(product.list_price or 0.0)
+    supplier_cost = Decimal(str(supplier.price or 0.0)) if supplier else Decimal(0)
+    sale_price = Decimal(str(product.list_price or 0.0))
     basis = product.southern_price_basis or "none"
     if basis == "retail_evidence":
         return []
@@ -143,8 +145,11 @@ def pricing_basis_blockers(product, supplier):
     if abs(margin - REQUIRED_COST_PLUS_MARGIN_PERCENT) > 1e-9:
         blockers.append("cost_plus_margin_not_35_percent")
     if supplier_cost > 0:
-        expected = math.ceil((supplier_cost / 0.65) * 100.0) / 100.0
-        if abs(sale_price - expected) > 0.01:
+        expected = (supplier_cost / GROSS_MARGIN_DENOMINATOR).quantize(
+            PRICE_QUANTUM,
+            rounding=ROUND_CEILING,
+        )
+        if abs(sale_price - expected) > PRICE_QUANTUM:
             blockers.append("cost_plus_price_not_35_percent_margin")
     return blockers
 
@@ -817,6 +822,24 @@ class SouthernCatalogAgentTask(models.Model):
         return records
 
     @api.model
+    def _vendor_items_for_products(self, products):
+        if not products:
+            return self.env["southern.vendor.catalog.item"]
+        return self.env["southern.vendor.catalog.item"].sudo().search(
+            [
+                ("company_id", "=", self.env.company.id),
+                ("source_id.code", "=", "sparex"),
+                ("product_id", "in", products.ids),
+            ]
+        )
+
+    @api.model
+    def _set_vendor_website_state(self, products, state):
+        items = self._vendor_items_for_products(products)
+        if items:
+            items.write({"website_state": state})
+
+    @api.model
     def _publication_fields(self):
         details = self.env["product.template"].fields_get(
             ["is_published", "website_published"], attributes=["readonly"]
@@ -875,6 +898,7 @@ class SouthernCatalogAgentTask(models.Model):
                     "worker_id": worker_id,
                 }
             )
+            self._set_vendor_website_state(product, "ready_for_validation")
             discovery_item = self._current_discovery_item(product, task.normalized_sku)
             if discovery_item:
                 discovery_item._refresh_readiness()
@@ -897,6 +921,7 @@ class SouthernCatalogAgentTask(models.Model):
                 "publication_verified_at": fields.Datetime.now(),
             }
         )
+        self._set_vendor_website_state(tasks.mapped("product_tmpl_id"), "published")
         return True
 
     @api.model
@@ -915,7 +940,8 @@ class SouthernCatalogAgentTask(models.Model):
             values = {name: bool(value) for name, value in before.items() if name in allowed}
             if not values:
                 raise UserError(_("Rollback snapshot contains no publication fields."))
-            task.product_tmpl_id.sudo().write(values)
+            product = task.product_tmpl_id.sudo()
+            product.write(values)
             task.write(
                 {
                     "publication_state": "rolled_back",
@@ -924,6 +950,7 @@ class SouthernCatalogAgentTask(models.Model):
                     "finished_at": fields.Datetime.now(),
                 }
             )
+            self._set_vendor_website_state(product, "publication_error")
             discovery_item = self._current_discovery_item(
                 task.product_tmpl_id.sudo(), task.normalized_sku
             )
