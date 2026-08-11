@@ -110,3 +110,67 @@ def test_apply_publishes_and_confirms_without_portal_calls(tmp_path, capsys):
         and call.kwargs["verification_sha256"] == expected_sha
         for call in client.call.mock_calls
     )
+
+
+def test_apply_resets_prepared_tasks_when_publication_is_rejected(tmp_path, capsys):
+    client = MagicMock()
+    prepared = [{"task_id": 21, "product_id": 31, "sku": "S.31"}]
+
+    def call(model, method, **params):
+        if method == "preview_ready_candidates":
+            return [{"product_id": 31, "sku": "S.31"}]
+        if method == "seed_ready_candidates":
+            return [{"id": 11}]
+        if method == "prepare_publication_plan":
+            return prepared
+        if method == "publish_prepared_tasks":
+            raise RuntimeError("native publication gate rejected the batch")
+        if method == "reset_prepared_publications":
+            return True
+        if method == "record_external_result":
+            return True
+        if method == "claim_tasks":
+            return []
+        raise AssertionError((model, method, params))
+
+    client.call.side_effect = call
+    config = MagicMock(company_id=1, url="https://odoo.example")
+    records = iter(
+        [
+            {"sha256": "a" * 64, "artifact_uri": "s3://test/plan.json"},
+            {"sha256": "b" * 64, "artifact_uri": "s3://test/result.json"},
+        ]
+    )
+    argv = [
+        "publication-worker",
+        "--odoo-env-file",
+        str(tmp_path / "odoo.env"),
+        "--artifact-root",
+        str(tmp_path / "artifacts"),
+        "--s3-bucket",
+        "test-bucket",
+        "--apply",
+        "--publish",
+        "--confirm",
+        publication_worker.WORKFLOW,
+        "--reason",
+        "test publication",
+    ]
+    with (
+        patch.object(sys, "argv", argv),
+        patch.dict("os.environ", {"ODOO_WRITE_ENABLED": "true"}),
+        patch.object(publication_worker.OdooConfig, "from_env", return_value=config),
+        patch.object(publication_worker, "require_company_context"),
+        patch.object(publication_worker.OdooClient, "connect", return_value=client),
+        patch.object(publication_worker, "_archive", side_effect=lambda *args: next(records)),
+    ):
+        assert publication_worker.main() == 1
+
+    result = json.loads(capsys.readouterr().out)
+    assert result["published_count"] == 0
+    assert result["terminal_state"] == "failed"
+    assert any(
+        call.args[:2] == ("southern.catalog.agent.task", "reset_prepared_publications")
+        and call.kwargs["task_ids"] == [21]
+        for call in client.call.mock_calls
+    )

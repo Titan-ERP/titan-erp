@@ -154,6 +154,13 @@ def main() -> int:
                 task_ids=[row["task_id"] for row in published],
                 reason=error,
             )
+        elif prepared:
+            client.call(
+                "southern.catalog.agent.task",
+                "reset_prepared_publications",
+                task_ids=[row["task_id"] for row in prepared],
+                reason=error,
+            )
 
     result = {
         "schema_version": "1.1",
