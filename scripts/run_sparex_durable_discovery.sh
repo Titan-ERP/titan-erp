@@ -91,7 +91,7 @@ if [[ "${portal_cooldown}" -eq 0 ]]; then
     --dealer-env-file "${odoo_env}" \
     --artifact-root "${install_root}/artifacts/cost" \
     --s3-bucket "${SOUTHERN_PRODUCT_ARTIFACT_BUCKET}" \
-    --limit 5 \
+    --limit "${SPAREX_COST_RECOVERY_LIMIT:-10}" \
     --throttle-seconds 3.0 \
     --confirm sparex-durable-cost-recovery \
     --reason "Continuous exact dealer-cost recovery into durable staging"

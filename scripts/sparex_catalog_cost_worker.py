@@ -14,6 +14,7 @@ from scripts.sparex_catalog_agents.cost_recovery import PortalCooldownError, rec
 
 CONFIRMATION = "sparex-durable-cost-recovery"
 PORTAL_COOLDOWN_EXIT_CODE = 75
+MAX_AUTOMATIC_COST_RECOVERY_BATCH = 10
 
 
 def main() -> int:
@@ -42,7 +43,7 @@ def main() -> int:
         result = recover_dealer_costs(
             client,
             worker_id=args.worker_id,
-            limit=max(1, min(args.limit, 5)),
+            limit=max(1, min(args.limit, MAX_AUTOMATIC_COST_RECOVERY_BATCH)),
             dealer_env_file=args.dealer_env_file,
             throttle_seconds=max(3.0, args.throttle_seconds),
             store=store,
@@ -55,7 +56,7 @@ def main() -> int:
         print(json.dumps({"state": "portal_cooldown", "write_blocked": True}, sort_keys=True))
         return PORTAL_COOLDOWN_EXIT_CODE
     print(json.dumps(result, sort_keys=True))
-    if result.get("state") == "portal_cooldown":
+    if result.get("state") == "portal_cooldown" or int(result.get("slow_pages") or 0) > 0:
         return PORTAL_COOLDOWN_EXIT_CODE
     return 2 if result.get("write_blocked") else 0
 

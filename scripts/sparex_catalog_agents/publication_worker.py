@@ -74,6 +74,25 @@ def main() -> int:
 
     gate = ApplyGate(WORKFLOW, True, args.confirm, args.reason, MAX_BATCH)
     gate.authorize(limit)
+    if not preview:
+        print(
+            json.dumps(
+                {
+                    "mode": "apply",
+                    "state": "idle",
+                    "candidate_count": 0,
+                    "seeded_count": 0,
+                    "prepared_count": 0,
+                    "published_count": 0,
+                    "portal_requests": 0,
+                    "terminal_state": "succeeded",
+                    "error": None,
+                },
+                sort_keys=True,
+            )
+        )
+        return 0
+
     run_stamp = utc_stamp()
     store = ArtifactStore(args.artifact_root / run_stamp, schema_version="1.1")
     archive_prefix = run_s3_prefix(args.s3_prefix, run_stamp)

@@ -317,8 +317,15 @@ def _checked_request(session: requests.Session, throttle: RequestThrottle, metho
     started = time.monotonic()
     try:
         response = session.request(method, url, timeout=45, allow_redirects=True, **kwargs)
+    except requests.Timeout as exc:
+        raise PortalCooldownError("portal_timeout") from exc
+    except requests.ConnectionError as exc:
+        raise PortalCooldownError("portal_connection_error") from exc
     finally:
-        throttle.record_request(time.monotonic() - started)
+        elapsed_seconds = time.monotonic() - started
+        throttle.record_request(elapsed_seconds)
+    if elapsed_seconds >= throttle.slow_request_seconds:
+        raise PortalCooldownError("portal_slow_page")
     if response.status_code in PORTAL_COOLDOWN_STATUSES:
         raise PortalCooldownError(f"portal_http_{response.status_code}")
     response.raise_for_status()

@@ -21,6 +21,7 @@ class SparexDurableDiscoveryServiceTests(unittest.TestCase):
         self.assertIn('portal_cooldown=1', launcher)
         self.assertIn('skipping portal access this cycle', launcher)
         self.assertIn("-m scripts.sparex_catalog_cost_worker", launcher)
+        self.assertIn('SPAREX_COST_RECOVERY_LIMIT:-10', launcher)
         self.assertIn("-m scripts.sparex_catalog_media_worker", launcher)
         self.assertIn("-m scripts.sparex_catalog_promotion_worker", launcher)
         self.assertNotIn("-m scripts.sparex_catalog_agents.orchestrator", launcher)
