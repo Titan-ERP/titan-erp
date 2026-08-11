@@ -4,7 +4,7 @@
 
 - PR: https://github.com/Titan-ERP/titan-erp/pull/124
 - Branch: `codex/stripe-terminal-moto`
-- Head: `2f26b57ca10be4ca68df9e992d4c8707e4dc8b5d`
+- Head: verify the latest PR head with `gh pr view 124 --repo Titan-ERP/titan-erp --json headRefOid`
 - Module: `southern_stripe_terminal`
 - Target version: `19.0.1.6.0`
 
@@ -36,13 +36,32 @@ No blocking accounting flaw was found in the MOTO path. The change keeps payment
 ## Validation Evidence
 
 - `py -3.13 -m ruff check southern_stripe_terminal tests\test_southern_stripe_terminal.py`: passed
+- `py -3.13 -m ruff check scripts\odoo_stripe_moto_rollout_preflight.py tests\test_southern_stripe_terminal.py`: passed
 - `py -3.13 -m compileall southern_stripe_terminal`: passed
-- `py -3.13 -m pytest tests\test_southern_stripe_terminal.py`: 21 passed
-- `py -3.13 -m pytest tests`: 212 passed
+- `py -3.13 -m pytest tests\test_southern_stripe_terminal.py`: 22 passed
+- `py -3.13 -m pytest tests`: 213 passed
 - `git diff --check`: passed
 - XML parse check for all `southern_stripe_terminal/**/*.xml`: passed
 - Manifest data file existence check: passed
-- GitHub validation checks on PR #124 head `2f26b57`: passed
+- GitHub validation checks on PR #124: passed on the pushed head used for this evidence update
+
+## Read-Only Odoo Preflight
+
+Run this before and after upgrade:
+
+```powershell
+py -3.13 scripts\odoo_stripe_moto_rollout_preflight.py --env C:\Users\cross\OneDrive\Documents\2.Titan\Odoo\odoo_connection.env
+```
+
+Expected before upgrade: `blocked` because production is still on `southern_stripe_terminal` `19.0.1.5.1`.
+
+Expected after upgrade, before the supervised test: `pass` with `moto_enabled=false`.
+
+During the approved supervised production test window only, rerun with:
+
+```powershell
+py -3.13 scripts\odoo_stripe_moto_rollout_preflight.py --env C:\Users\cross\OneDrive\Documents\2.Titan\Odoo\odoo_connection.env --allow-moto-enabled
+```
 
 ## Production Gates
 

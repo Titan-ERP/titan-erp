@@ -204,6 +204,19 @@ def test_moto_flow_is_explicit_permissioned_and_reuses_native_reconciliation():
     assert 'id="base.group_system"' not in groups
 
 
+def test_moto_rollout_preflight_is_read_only_and_blocks_surprise_enablement():
+    source = (ROOT / "scripts" / "odoo_stripe_moto_rollout_preflight.py").read_text(
+        encoding="utf-8"
+    )
+    assert '"search_read"' in source
+    assert '"fields_get"' not in source
+    assert '"create"' not in source
+    assert '"write"' not in source
+    assert '"unlink"' not in source
+    assert "moto_enabled is already enabled outside an approved test window" in source
+    assert "--allow-moto-enabled" in source
+
+
 def test_terminal_fee_uses_linked_supplemental_invoice_and_one_native_payment():
     source = (MODULE / "models" / "stripe_terminal_payment.py").read_text(encoding="utf-8")
     assert "def _ensure_processing_fee_invoice(self):" in source
