@@ -603,11 +603,12 @@ class TestSparexDiscovery(TransactionCase):
             return original_search(recordset, domain, *args, **kwargs)
 
         with patch.object(type(Item), "search", capture_search):
-            description_plan = Item.prepare_description_repair_plan(limit=5)
+            description_plan = Item.prepare_description_repair_plan(limit=5, item_ids=item.ids)
         self.assertIn(
             ("primary_blocker", "in", ("missing_customer_description", "already_published")),
             search_calls[0][0],
         )
+        self.assertIn(("id", "in", item.ids), search_calls[0][0])
         self.assertEqual(search_calls[0][1]["limit"], 20)
         self.assertEqual(len(description_plan), 1)
         repaired_descriptions = Item.apply_description_repair_plan(
