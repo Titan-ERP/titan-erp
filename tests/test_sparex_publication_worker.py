@@ -112,6 +112,46 @@ def test_apply_publishes_and_confirms_without_portal_calls(tmp_path, capsys):
     )
 
 
+def test_empty_apply_cycle_is_write_and_artifact_free(tmp_path, capsys):
+    client = MagicMock()
+    client.call.return_value = []
+    config = MagicMock(company_id=1)
+    argv = [
+        "publication-worker",
+        "--odoo-env-file",
+        str(tmp_path / "odoo.env"),
+        "--artifact-root",
+        str(tmp_path / "artifacts"),
+        "--s3-bucket",
+        "test-bucket",
+        "--apply",
+        "--publish",
+        "--confirm",
+        publication_worker.WORKFLOW,
+        "--reason",
+        "idle publication",
+    ]
+    with (
+        patch.object(sys, "argv", argv),
+        patch.dict("os.environ", {"ODOO_WRITE_ENABLED": "true"}),
+        patch.object(publication_worker.OdooConfig, "from_env", return_value=config),
+        patch.object(publication_worker, "require_company_context"),
+        patch.object(publication_worker.OdooClient, "connect", return_value=client),
+        patch.object(publication_worker, "_archive") as archive,
+    ):
+        assert publication_worker.main() == 0
+
+    result = json.loads(capsys.readouterr().out)
+    assert result["state"] == "idle"
+    assert result["candidate_count"] == 0
+    assert result["published_count"] == 0
+    assert result["portal_requests"] == 0
+    client.call.assert_called_once_with(
+        "southern.catalog.agent.task", "preview_ready_candidates", limit=25
+    )
+    archive.assert_not_called()
+
+
 def test_apply_resets_prepared_tasks_when_publication_is_rejected(tmp_path, capsys):
     client = MagicMock()
     prepared = [{"task_id": 21, "product_id": 31, "sku": "S.31"}]

@@ -4,7 +4,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import requests
+
 from scripts.sparex_catalog_discovery import (
+    PortalCooldownError,
     RequestThrottle,
     _checked_request,
     _read_archived_json,
@@ -40,7 +43,7 @@ class SparexCatalogDiscoveryParserTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             _read_archived_json("s3://catalog/pages/2.json", "0" * 64, S3())
 
-    def test_checked_request_records_request_latency_without_retries(self):
+    def test_checked_request_stops_on_first_slow_page(self):
         class Session:
             @staticmethod
             def request(*_args, **_kwargs):
@@ -50,13 +53,27 @@ class SparexCatalogDiscoveryParserTests(unittest.TestCase):
         with patch(
             "scripts.sparex_catalog_discovery.time.monotonic",
             side_effect=[100.0, 100.0, 101.0, 110.5],
-        ):
+        ), self.assertRaisesRegex(PortalCooldownError, "portal_slow_page"):
             _checked_request(Session(), throttle, "GET", "https://us.sparex.com/products")
 
         self.assertEqual(throttle.request_count, 1)
         self.assertEqual(throttle.slow_request_count, 1)
         self.assertEqual(throttle.max_request_seconds, 9.5)
         self.assertEqual(throttle.telemetry()["http_backoffs"], 0)
+
+    def test_checked_request_converts_timeout_to_portal_cooldown(self):
+        class Session:
+            @staticmethod
+            def request(*_args, **_kwargs):
+                raise requests.Timeout("timed out")
+
+        throttle = RequestThrottle(3.0)
+        with patch(
+            "scripts.sparex_catalog_discovery.time.monotonic",
+            side_effect=[100.0, 100.0, 101.0, 102.0],
+        ), self.assertRaisesRegex(PortalCooldownError, "portal_timeout"):
+            _checked_request(Session(), throttle, "GET", "https://us.sparex.com/products")
+        self.assertEqual(throttle.request_count, 1)
 
     def test_extracts_exact_links_images_and_next_listing_cursor(self):
         page = b"""
