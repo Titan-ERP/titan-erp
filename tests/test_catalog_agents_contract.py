@@ -71,6 +71,8 @@ class CatalogAgentsContractTests(unittest.TestCase):
         self.assertIn("MAX_AGENT_BATCH = 50", source)
         self.assertIn("throttle_seconds < 3.0", source)
         self.assertIn("exact_sparex_url(product.southern_source_url, normalized)", source)
+        self.assertIn("if any(bool(product[field_name]) for field_name in publication_fields):", source)
+        self.assertIn('["ready", "published", "verified"]', source)
 
     def test_external_worker_is_read_only_by_default(self):
         source = (ROOT / "scripts" / "sparex_catalog_agents" / "worker.py").read_text(encoding="utf-8")
