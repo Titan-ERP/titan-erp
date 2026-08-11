@@ -73,6 +73,9 @@ class PortalCooldownError(RuntimeError):
     """A real Sparex-origin signal that requires a cooldown."""
 
 
+PORTAL_COOLDOWN_EXIT_CODE = 75
+
+
 @dataclass
 class RequestThrottle:
     seconds: float
@@ -805,7 +808,13 @@ def main() -> int:
                 error_code=str(exc),
                 cooldown=True,
             )
-        raise
+        print(
+            json.dumps(
+                {"state": "portal_cooldown", "error_code": str(exc), "write_blocked": True},
+                sort_keys=True,
+            )
+        )
+        return PORTAL_COOLDOWN_EXIT_CODE
     except Exception as exc:
         if current_claim and current_claim.get("claimed"):
             client.call(

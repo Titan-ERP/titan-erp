@@ -13,6 +13,7 @@ from scripts.odoo_runtime import ArtifactStore, OdooClient, OdooConfig
 from scripts.sparex_catalog_agents.cost_recovery import PortalCooldownError, recover_dealer_costs
 
 CONFIRMATION = "sparex-durable-cost-recovery"
+PORTAL_COOLDOWN_EXIT_CODE = 75
 
 
 def main() -> int:
@@ -52,8 +53,10 @@ def main() -> int:
         )
     except PortalCooldownError:
         print(json.dumps({"state": "portal_cooldown", "write_blocked": True}, sort_keys=True))
-        return 2
+        return PORTAL_COOLDOWN_EXIT_CODE
     print(json.dumps(result, sort_keys=True))
+    if result.get("state") == "portal_cooldown":
+        return PORTAL_COOLDOWN_EXIT_CODE
     return 2 if result.get("write_blocked") else 0
 
 
