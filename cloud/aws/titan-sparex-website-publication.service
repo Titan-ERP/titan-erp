@@ -8,7 +8,7 @@ Type=oneshot
 User=root
 Group=root
 WorkingDirectory=/opt/southern-parts/catalog-agent/current
-ExecStart=/opt/southern-parts/catalog-agent/current/scripts/run_sparex_website_publication.sh
+ExecStart=/bin/bash /opt/southern-parts/catalog-agent/current/scripts/run_sparex_website_publication.sh
 Environment=CATALOG_AGENT_INSTALL_ROOT=/opt/southern-parts/catalog-agent
 Environment=ODOO_ENV_FILE=/opt/southern-parts/Odoo/odoo_connection.env
 Environment=ODOO_COMPANY_ID=1
