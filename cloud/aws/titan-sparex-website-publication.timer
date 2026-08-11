@@ -1,0 +1,13 @@
+[Unit]
+Description=Schedule evidence-controlled Sparex website publication
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=5min
+RandomizedDelaySec=30s
+AccuracySec=1s
+Persistent=false
+Unit=titan-sparex-website-publication.service
+
+[Install]
+WantedBy=timers.target
