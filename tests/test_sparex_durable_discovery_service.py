@@ -49,6 +49,16 @@ class SparexDurableDiscoveryServiceTests(unittest.TestCase):
         self.assertIn("ProtectSystem=strict", service)
         self.assertIn("disable --now titan-sparex-durable-discovery.timer", installer)
 
+    def test_website_publication_launcher_does_not_require_executable_file_mode(self):
+        service = (ROOT / "cloud" / "aws" / "titan-sparex-website-publication.service").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            "ExecStart=/bin/bash "
+            "/opt/southern-parts/catalog-agent/current/scripts/run_sparex_website_publication.sh",
+            service,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
