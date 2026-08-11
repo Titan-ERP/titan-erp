@@ -1,0 +1,26 @@
+[Unit]
+Description=Publish evidence-complete Sparex products to the Odoo website
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/opt/southern-parts/catalog-agent/current
+ExecStart=/opt/southern-parts/catalog-agent/current/scripts/run_sparex_website_publication.sh
+Environment=CATALOG_AGENT_INSTALL_ROOT=/opt/southern-parts/catalog-agent
+Environment=ODOO_ENV_FILE=/opt/southern-parts/Odoo/odoo_connection.env
+Environment=ODOO_COMPANY_ID=1
+Environment=SPAREX_WEBSITE_PUBLICATION_LIMIT=25
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/southern-parts/catalog-agent/artifacts
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=12min
+
+[Install]
+WantedBy=multi-user.target
