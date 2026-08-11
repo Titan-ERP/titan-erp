@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-# ruff: noqa: I001
-
 import argparse
+import importlib
 import json
 import sys
 from pathlib import Path
@@ -12,7 +11,10 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.odoo_runtime.client import OdooClient, OdooConfig, OdooError
+odoo_client_module = importlib.import_module("scripts.odoo_runtime.client")
+OdooClient = odoo_client_module.OdooClient
+OdooConfig = odoo_client_module.OdooConfig
+OdooError = odoo_client_module.OdooError
 
 
 COMPANY_NAME = "Southern Equipment Company (Laurel)"
