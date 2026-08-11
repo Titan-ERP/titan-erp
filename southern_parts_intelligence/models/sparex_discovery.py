@@ -2871,15 +2871,79 @@ class SouthernSparexDiscoveryItem(models.Model):
             or not catalog_item.dealer_cost_evidence_sha256
         ):
             raise UserError(_("Durable dealer-cost staging did not verify the exact SKU and evidence."))
-        item.write(
+        item._link_durable_cost_evidence(catalog_item)
+        return True
+
+    def _link_durable_cost_evidence(self, catalog_item):
+        self.ensure_one()
+        evidence_sha = (catalog_item.dealer_cost_evidence_sha256 or "").casefold()
+        source_url = (catalog_item.source_url or "").strip()
+        if (
+            catalog_item.source_id.code != "sparex"
+            or self.normalized_sku != catalog_item.normalized_sku
+            or catalog_item.vendor_cost <= 0
+            or not SHA256_PATTERN.fullmatch(evidence_sha)
+            or not catalog_item.dealer_cost_observed_at
+            or source_url != (self.source_url or "").strip()
+            or _sha256_text(source_url) != (self.source_url_sha256 or "").casefold()
+        ):
+            raise UserError(_("Durable dealer-cost evidence does not match the discovery identity."))
+        self.write(
             {
                 "cost_recovery_state": "resolved",
                 "cost_recovery_worker_id": False,
                 "cost_recovery_next_at": False,
                 "cost_recovery_last_error": False,
+                "cost_evidence_sha256": evidence_sha,
+                "cost_evidence_url_sha256": self.source_url_sha256,
+                "cost_recovery_parser_version": (catalog_item.schema_version or "")[:80],
+                "cost_recovered_at": catalog_item.dealer_cost_observed_at,
             }
         )
+        self._refresh_readiness()
         return True
+
+    @api.model
+    def backfill_durable_cost_evidence_links(self, limit=500):
+        bounded = max(1, min(int(limit or 500), 500))
+        from .sparex_manifest import acquire_sparex_catalog_lock
+
+        acquire_sparex_catalog_lock(self.env)
+        items = self.sudo().search(
+            [
+                ("company_id", "=", self.env.company.id),
+                ("reconciliation_state", "=", "current"),
+                ("cost_recovery_state", "=", "resolved"),
+                ("cost_evidence_sha256", "=", False),
+                ("matched_product_id", "!=", False),
+            ],
+            order="id",
+            limit=bounded,
+        )
+        source = self.env["southern.vendor.catalog.source"].sudo().search(
+            [("company_id", "=", self.env.company.id), ("code", "=", "sparex")],
+            limit=1,
+        )
+        catalog_items = self.env["southern.vendor.catalog.item"].sudo().search(
+            [
+                ("source_id", "=", source.id),
+                ("normalized_sku", "in", items.mapped("normalized_sku")),
+                ("vendor_cost", ">", 0),
+                ("dealer_cost_evidence_sha256", "!=", False),
+                ("dealer_cost_observed_at", "!=", False),
+            ]
+        )
+        by_sku = {catalog_item.normalized_sku: catalog_item for catalog_item in catalog_items}
+        linked = []
+        skipped = []
+        for item in items:
+            catalog_item = by_sku.get(item.normalized_sku)
+            if not catalog_item or (catalog_item.source_url or "").strip() != (item.source_url or "").strip():
+                skipped.append(item.id)
+                continue
+            item._link_durable_cost_evidence(catalog_item)
+            linked.append(item.id)
+        return {"linked_item_ids": linked, "skipped_item_ids": skipped}
 
     @api.model
     def prepare_source_link_plan(self, limit=MAX_SOURCE_LINK_BATCH):

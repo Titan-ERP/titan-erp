@@ -95,6 +95,17 @@ class CatalogAgentsContractTests(unittest.TestCase):
         self.assertIn('"state": "queued"', source)
         self.assertIn('task.publication_state not in {"published", "verified"}', source)
 
+    def test_durable_cost_staging_links_immutable_evidence_to_discovery(self):
+        source = (ROOT / "southern_parts_intelligence" / "models" / "sparex_discovery.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("item._link_durable_cost_evidence(catalog_item)", source)
+        self.assertIn('"cost_evidence_sha256": evidence_sha', source)
+        self.assertIn('"cost_evidence_url_sha256": self.source_url_sha256', source)
+        self.assertIn('"cost_recovered_at": catalog_item.dealer_cost_observed_at', source)
+        self.assertIn("self._refresh_readiness()", source)
+        self.assertIn("def backfill_durable_cost_evidence_links(self, limit=500):", source)
+
     def test_each_agent_has_one_read_only_function_tool(self):
         source = (ROOT / "scripts" / "sparex_catalog_agents" / "agent.py").read_text(encoding="utf-8")
         for tool_name in (
