@@ -24,7 +24,7 @@ The CloudFormation template creates the FIFO queue, five-attempt redrive policy,
 6. Run two supervised five-page checkpoints. Stop immediately on any portal warning signal and retain the existing one-hour cooldown.
 7. After two healthy runs at each level, advance to 20-page and then 50-page logical jobs. Recovery evidence is still committed every five pages.
 8. Enable `titan-sparex-catalog-ingestion.timer` only after queue and Odoo ingestion telemetry are healthy.
-9. Enable `titan-sparex-durable-discovery.timer` only after two healthy 50-page canaries and explicit operator approval. Its first run waits 15 minutes; subsequent runs start at least 20 minutes after the prior service becomes inactive. Each invocation completes one sequential internal-catalog cycle under a host lock and disables its timer on any worker failure. Portal cooldown remains enforced by the Odoo discovery and exact-cost workers.
+9. Enable `titan-sparex-durable-discovery.timer` only after two healthy 50-page canaries and explicit operator approval. Its first run waits 15 minutes; after sustained healthy ten-item cost-recovery cycles, subsequent runs start at least 10 minutes after the prior service becomes inactive. Each invocation completes one sequential internal-catalog cycle under a host lock and disables its timer on any unknown worker failure. Recognized portal warnings keep the timer active, enforce the shared one-hour cooldown, and resume automatically afterward.
 
 ## State and ownership
 

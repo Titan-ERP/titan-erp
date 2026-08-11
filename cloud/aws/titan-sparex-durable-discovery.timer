@@ -3,7 +3,7 @@ Description=Schedule the protected durable Sparex catalog cycle
 
 [Timer]
 OnActiveSec=15min
-OnUnitInactiveSec=20min
+OnUnitInactiveSec=10min
 RandomizedDelaySec=60s
 AccuracySec=1s
 Persistent=false
