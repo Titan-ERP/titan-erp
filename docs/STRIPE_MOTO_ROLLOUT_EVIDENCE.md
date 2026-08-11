@@ -38,8 +38,8 @@ No blocking accounting flaw was found in the MOTO path. The change keeps payment
 - `py -3.13 -m ruff check southern_stripe_terminal tests\test_southern_stripe_terminal.py`: passed
 - `py -3.13 -m ruff check scripts\odoo_stripe_moto_rollout_preflight.py tests\test_southern_stripe_terminal.py`: passed
 - `py -3.13 -m compileall southern_stripe_terminal`: passed
-- `py -3.13 -m pytest tests\test_southern_stripe_terminal.py`: 22 passed
-- `py -3.13 -m pytest tests`: 213 passed
+- `py -3.13 -m pytest tests\test_southern_stripe_terminal.py`: 25 passed
+- `py -3.13 -m pytest tests`: 216 passed
 - `git diff --check`: passed
 - XML parse check for all `southern_stripe_terminal/**/*.xml`: passed
 - Manifest data file existence check: passed

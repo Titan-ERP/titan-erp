@@ -14,6 +14,125 @@ def _load_utils():
     return module
 
 
+def _load_moto_preflight():
+    spec = importlib.util.spec_from_file_location(
+        "odoo_stripe_moto_rollout_preflight",
+        ROOT / "scripts" / "odoo_stripe_moto_rollout_preflight.py",
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class _FakeOdooClient:
+    def __init__(self, *, installed_version="19.0.1.6.0", moto_enabled=False, moto_group=True):
+        self.installed_version = installed_version
+        self.moto_enabled = moto_enabled
+        self.moto_group = moto_group
+
+    def fields(self, model):
+        if model == "southern.stripe.terminal.config":
+            fields = {
+                "id": {},
+                "name": {},
+                "active": {},
+                "is_default": {},
+                "provider_id": {},
+                "journal_id": {},
+                "payment_method_line_id": {},
+                "reader_id": {},
+                "location_id": {},
+                "webhook_ready": {},
+                "company_id": {},
+            }
+            if self.installed_version == "19.0.1.6.0":
+                fields["moto_enabled"] = {}
+            return fields
+        if model == "southern.invoice.payment.route":
+            return {"id": {}}
+        if model == "res.groups":
+            return {"id": {}, "name": {}, "user_ids": {}}
+        return {"id": {}}
+
+    def execute(self, model, method, args=None, kwargs=None):
+        assert method == "search_read"
+        fields = (kwargs or {}).get("fields", [])
+        if model == "res.company":
+            return [{"id": 2, "name": "Southern Equipment Company (Laurel)"}]
+        if model == "ir.module.module":
+            return [
+                {
+                    "id": 1476,
+                    "name": "southern_stripe_terminal",
+                    "state": "installed",
+                    "latest_version": self.installed_version,
+                    "installed_version": self.installed_version,
+                }
+            ]
+        if model == "payment.provider":
+            return [
+                {
+                    "id": 26,
+                    "name": "Stripe",
+                    "state": "enabled",
+                    "journal_id": [95, "Bank"],
+                    "company_id": [2, "Southern Equipment Company (Laurel)"],
+                }
+            ]
+        if model == "southern.stripe.terminal.config":
+            row = {
+                "id": 1,
+                "name": "SEC Laurel S710",
+                "active": True,
+                "is_default": True,
+                "provider_id": [26, "Stripe"],
+                "journal_id": [95, "Bank"],
+                "payment_method_line_id": [56, "Stripe (Bank)"],
+                "reader_id": "tmr_test",
+                "location_id": "tml_test",
+                "webhook_ready": True,
+                "company_id": [2, "Southern Equipment Company (Laurel)"],
+            }
+            if "moto_enabled" in fields:
+                row["moto_enabled"] = self.moto_enabled
+            return [row]
+        if model == "southern.invoice.payment.route":
+            return [
+                {
+                    "id": 1,
+                    "company_id": [2, "Southern Equipment Company (Laurel)"],
+                    "processing_fee_enabled": True,
+                    "processing_fee_percentage": 3.5,
+                    "processing_fee_fixed": 0.3,
+                    "processing_fee_income_account_id": [1459, "Transaction Processing Fee Income"],
+                    "processing_fee_tax_ids": [],
+                }
+            ]
+        if model == "account.payment.method.line":
+            return [
+                {
+                    "id": 56,
+                    "name": "Stripe",
+                    "journal_id": [95, "Bank"],
+                    "payment_account_id": [1063, "Outstanding Receipts"],
+                    "payment_method_id": [7, "Stripe"],
+                    "company_id": [2, "Southern Equipment Company (Laurel)"],
+                }
+            ]
+        if model == "account.account":
+            return [
+                {"id": 1060, "name": "Operating Checking - SEC Laurel", "account_type": "asset_cash", "company_ids": [2]},
+                {"id": 1063, "name": "Outstanding Receipts", "account_type": "asset_current", "company_ids": [2]},
+                {"id": 1459, "name": "Transaction Processing Fee Income", "account_type": "income", "company_ids": [2]},
+                {"id": 1440, "name": "Bank Merchant Fees", "account_type": "expense", "company_ids": [2]},
+            ]
+        if model == "res.groups" and self.moto_group:
+            return [{"id": 10, "name": "Stripe Pay by Phone", "user_ids": []}]
+        if model == "res.users":
+            return []
+        return []
+
+
 def test_manifest_requires_native_accounting_and_stripe_modules():
     manifest = (MODULE / "__manifest__.py").read_text(encoding="utf-8")
     assert '"account"' in manifest
@@ -215,6 +334,37 @@ def test_moto_rollout_preflight_is_read_only_and_blocks_surprise_enablement():
     assert '"unlink"' not in source
     assert "moto_enabled is already enabled outside an approved test window" in source
     assert "--allow-moto-enabled" in source
+
+
+def test_moto_rollout_preflight_passes_clean_config():
+    preflight = _load_moto_preflight()
+    result = preflight.run_preflight(_FakeOdooClient())
+    assert result["status"] == "pass"
+    assert result["failures"] == []
+
+
+def test_moto_rollout_preflight_blocks_enabled_moto_without_test_window():
+    preflight = _load_moto_preflight()
+    result = preflight.run_preflight(_FakeOdooClient(moto_enabled=True))
+    assert result["status"] == "blocked"
+    assert "moto_enabled is already enabled outside an approved test window" in result["failures"]
+
+    allowed = preflight.run_preflight(
+        _FakeOdooClient(moto_enabled=True),
+        allow_moto_enabled=True,
+    )
+    assert allowed["status"] == "pass"
+
+
+def test_moto_rollout_preflight_blocks_pre_upgrade_database():
+    preflight = _load_moto_preflight()
+    result = preflight.run_preflight(
+        _FakeOdooClient(installed_version="19.0.1.5.1", moto_group=False)
+    )
+    assert result["status"] == "blocked"
+    assert "southern_stripe_terminal is 19.0.1.5.1; expected 19.0.1.6.0" in result["failures"]
+    assert "Terminal config is missing moto_enabled; PR/module upgrade is not installed" in result["failures"]
+    assert "Stripe Pay by Phone group is missing; PR/module upgrade is not installed" in result["failures"]
 
 
 def test_terminal_fee_uses_linked_supplemental_invoice_and_one_native_payment():
