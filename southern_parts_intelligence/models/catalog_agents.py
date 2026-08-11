@@ -522,19 +522,11 @@ class SouthernCatalogAgentTask(models.Model):
                     blockers.append("missing_customer_description")
                 if not task._current_discovery_item(product, normalized):
                     blockers.append("missing_current_discovery_evidence")
+                for blocker in sparex_publication_blockers(product, supplier, normalized):
+                    if blocker not in blockers:
+                        blockers.append(blocker)
 
-            ready = bool(
-                product
-                and product.active
-                and is_hidden
-                and has_cost
-                and has_sales_price
-                and has_url
-                and has_image
-                and product.public_categ_ids
-                and customer_description_ready(product)
-                and task._current_discovery_item(product, normalized)
-            )
+            ready = bool(product and is_hidden and not blockers)
             snapshot = {
                 "schema_version": "1.1",
                 "agent": task.agent_code,
@@ -612,6 +604,19 @@ class SouthernCatalogAgentTask(models.Model):
     @api.model
     def _ready_products(self, limit=MAX_AGENT_BATCH):
         bounded = max(1, min(int(limit or MAX_AGENT_BATCH), MAX_AGENT_BATCH))
+        scan_limit = max(500, bounded * 20)
+        catalog_items = self.env["southern.vendor.catalog.item"].sudo().search(
+            [
+                ("company_id", "=", self.env.company.id),
+                ("source_id.code", "=", "sparex"),
+                ("catalog_state", "=", "operational"),
+                ("match_state", "=", "matched"),
+                ("product_id", "!=", False),
+                ("active", "=", True),
+            ],
+            order="last_seen_at desc, id",
+            limit=scan_limit,
+        )
         discovery_items = self.env["southern.sparex.discovery.item"].search(
             [
                 ("company_id", "=", self.env.company.id),
@@ -620,15 +625,18 @@ class SouthernCatalogAgentTask(models.Model):
                 ("matched_product_id", "!=", False),
             ],
             order="readiness_refreshed_at, last_seen_at desc, id",
-            limit=bounded * 4,
+            limit=scan_limit,
         )
         ready = self.env["product.template"]
-        for item in discovery_items:
-            product = item.matched_product_id.sudo()
+        product_ids = catalog_items.mapped("product_id").ids + discovery_items.mapped("matched_product_id").ids
+        candidates = self.env["product.template"].sudo().browse(list(dict.fromkeys(product_ids)))
+        for product in candidates:
+            product = product.sudo()
             normalized = normalized_sparex_sku(product.default_code)
             if not normalized or not exact_sparex_url(product.southern_source_url, normalized):
                 continue
-            if not self._positive_sparex_supplier(product):
+            supplier = self._positive_sparex_supplier(product)
+            if sparex_publication_blockers(product, supplier, normalized):
                 continue
             if not self._current_discovery_item(product, normalized):
                 continue

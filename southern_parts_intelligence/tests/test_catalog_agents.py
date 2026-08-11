@@ -270,6 +270,8 @@ class TestCatalogAgents(TransactionCase):
         ), self.env.cr.savepoint():
             product.website_published = True
 
+        self.assertNotIn(product, self.env["southern.catalog.agent.task"]._ready_products(limit=50))
+
     def test_native_publication_gate_requires_verified_price_basis(self):
         product = self.env["product.template"].create(
             {
