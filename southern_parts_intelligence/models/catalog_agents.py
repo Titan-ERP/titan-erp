@@ -966,6 +966,28 @@ class SouthernCatalogAgentTask(models.Model):
                 discovery_item._refresh_readiness()
         return True
 
+    @api.model
+    def reset_prepared_publications(self, task_ids, reason):
+        if not (reason or "").strip():
+            raise UserError(_("Publication-plan reset requires a reason."))
+        tasks = self.browse([int(value) for value in task_ids]).exists()
+        for task in tasks:
+            if task.agent_code != "website_release" or task.publication_state != "ready":
+                continue
+            task.write(
+                {
+                    "state": "queued",
+                    "publication_state": "not_applicable",
+                    "worker_id": False,
+                    "claimed_at": False,
+                    "finished_at": False,
+                    "output_json": False,
+                    "result_sha256": False,
+                    "error_message": (reason or "")[:2000],
+                }
+            )
+        return True
+
     def action_cancel(self):
         active = self.filtered(lambda task: task.state in {"queued", "claimed"})
         active.write({"state": "cancelled", "finished_at": fields.Datetime.now()})
