@@ -120,8 +120,10 @@ def exact_dealer_cost_evidence_ready(product):
         [
             ("matched_product_id", "=", product.id),
             ("normalized_sku", "=", normalized_sparex_sku(product.default_code)),
+            ("reconciliation_state", "=", "current"),
+            ("state", "=", "verified"),
+            ("source_state", "=", "verified"),
             ("source_url_sha256", "=", source_sha),
-            ("cost_recovery_state", "=", "resolved"),
             ("cost_evidence_url_sha256", "=", source_sha),
             ("cost_evidence_sha256", "!=", False),
             ("cost_recovered_at", "!=", False),

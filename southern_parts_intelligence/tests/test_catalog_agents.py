@@ -272,6 +272,37 @@ class TestCatalogAgents(TransactionCase):
 
         self.assertNotIn(product, self.env["southern.catalog.agent.task"]._ready_products(limit=50))
 
+    def test_native_publication_gate_uses_immutable_cost_evidence_after_queue_resolution(self):
+        product = self.env["product.template"].create(
+            {
+                "name": "Resolved dealer-cost Sparex part",
+                "default_code": "S.880004",
+                "active": True,
+                "list_price": 15.39,
+                "standard_price": 10.0,
+                "southern_price_basis": "cost_plus",
+                "southern_cost_plus_margin_percent": 35.0,
+                "southern_source_url": "https://us.sparex.com/example-880004.html",
+                "image_1920": base64.b64encode(b"resolved-cost-image"),
+                "public_categ_ids": [(6, 0, self.website_category.ids)],
+                "description_ecommerce": "Customer-ready replacement part description.",
+                "website_published": False,
+            }
+        )
+        supplier = self.env["res.partner"].create({"name": "Sparex", "supplier_rank": 1})
+        self.env["product.supplierinfo"].create(
+            {"partner_id": supplier.id, "product_tmpl_id": product.id, "price": 10.0, "min_qty": 1.0}
+        )
+        self._record_current_dealer_evidence(product, product.southern_source_url)
+        evidence = self.env["southern.sparex.discovery.item"].search(
+            [("matched_product_id", "=", product.id)], order="id desc", limit=1
+        )
+        evidence.cost_recovery_state = "not_required"
+
+        product.website_published = True
+
+        self.assertTrue(product.website_published)
+
     def test_native_publication_gate_requires_verified_price_basis(self):
         product = self.env["product.template"].create(
             {

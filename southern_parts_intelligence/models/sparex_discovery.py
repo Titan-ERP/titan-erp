@@ -2978,20 +2978,23 @@ class SouthernSparexDiscoveryItem(models.Model):
         return prepared
 
     @api.model
-    def prepare_description_repair_plan(self, limit=MAX_SOURCE_LINK_BATCH):
+    def prepare_description_repair_plan(self, limit=MAX_SOURCE_LINK_BATCH, item_ids=None):
         """Plan bounded repair of placeholder or contaminated customer copy."""
         bounded = max(1, min(int(limit or MAX_SOURCE_LINK_BATCH), MAX_SOURCE_LINK_BATCH))
+        domain = [
+            ("reconciliation_state", "=", "current"),
+            ("state", "=", "verified"),
+            ("source_state", "=", "verified"),
+            ("odoo_match_state", "=", "matched_active"),
+            ("has_exact_sparex_url", "=", True),
+            ("has_image", "=", True),
+            ("listing_title", "!=", False),
+            ("primary_blocker", "in", ("missing_customer_description", "already_published")),
+        ]
+        if item_ids is not None:
+            domain.append(("id", "in", [int(item_id) for item_id in item_ids]))
         candidates = self.search(
-            [
-                ("reconciliation_state", "=", "current"),
-                ("state", "=", "verified"),
-                ("source_state", "=", "verified"),
-                ("odoo_match_state", "=", "matched_active"),
-                ("has_exact_sparex_url", "=", True),
-                ("has_image", "=", True),
-                ("listing_title", "!=", False),
-                ("primary_blocker", "in", ("missing_customer_description", "already_published")),
-            ],
+            domain,
             order="readiness_refreshed_at, id",
             limit=bounded * 4,
         )

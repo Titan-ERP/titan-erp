@@ -669,7 +669,51 @@ class SouthernVendorCatalogItem(models.Model):
                     "artifact_sha256": artifact_sha256,
                 }
             )
+        self.browse([row["item_id"] for row in promoted])._refresh_linked_sparex_discovery()
         return promoted
+
+    def _refresh_linked_sparex_discovery(self):
+        """Link and refresh only current discovery rows represented by this batch."""
+        sparex_items = self.filtered(
+            lambda item: item.source_id.code == "sparex" and item.product_id and item.normalized_sku
+        )
+        if not sparex_items:
+            return self.env["southern.sparex.discovery.item"]
+        by_identity = {
+            (item.company_id.id, item.normalized_sku): item
+            for item in sparex_items
+        }
+        discovery_items = self.env["southern.sparex.discovery.item"].sudo().search(
+            [
+                ("company_id", "in", sparex_items.mapped("company_id").ids),
+                ("normalized_sku", "in", sparex_items.mapped("normalized_sku")),
+                ("reconciliation_state", "=", "current"),
+            ]
+        )
+        linked = self.env["southern.sparex.discovery.item"]
+        for discovery in discovery_items:
+            catalog_item = by_identity.get((discovery.company_id.id, discovery.normalized_sku))
+            if not catalog_item:
+                continue
+            product = catalog_item.product_id.sudo()
+            if discovery.matched_product_id and discovery.matched_product_id != product:
+                raise UserError(
+                    _("Sparex discovery identity %s is linked to a different product.")
+                    % discovery.normalized_sku
+                )
+            match_state = "matched_active" if product.active else "matched_archived"
+            values = {}
+            if discovery.odoo_match_state != match_state:
+                values["odoo_match_state"] = match_state
+            if discovery.matched_product_id != product:
+                values["matched_product_id"] = product.id
+            if discovery.duplicate_product_ids:
+                values["duplicate_product_ids"] = [(5, 0, 0)]
+            if values:
+                discovery.write(values)
+            linked |= discovery
+        linked._refresh_readiness()
+        return linked
 
     @api.model
     def apply_media_batch(self, records, artifact_uri, artifact_sha256, confirmation):
@@ -912,6 +956,7 @@ class SouthernVendorCatalogItem(models.Model):
                     "supplierinfo_id": suppliers.id if suppliers else False,
                 }
             )
+        items._refresh_linked_sparex_discovery()
         return results
 
     @api.model
