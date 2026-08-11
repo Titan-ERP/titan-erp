@@ -628,10 +628,13 @@ class SouthernCatalogAgentTask(models.Model):
             limit=scan_limit,
         )
         ready = self.env["product.template"]
+        publication_fields = self._publication_fields()
         product_ids = catalog_items.mapped("product_id").ids + discovery_items.mapped("matched_product_id").ids
         candidates = self.env["product.template"].sudo().browse(list(dict.fromkeys(product_ids)))
         for product in candidates:
             product = product.sudo()
+            if any(bool(product[field_name]) for field_name in publication_fields):
+                continue
             normalized = normalized_sparex_sku(product.default_code)
             if not normalized or not exact_sparex_url(product.southern_source_url, normalized):
                 continue
@@ -643,7 +646,7 @@ class SouthernCatalogAgentTask(models.Model):
             active_pipeline = self.search_count(
                 [
                     ("product_tmpl_id", "=", product.id),
-                    ("publication_state", "in", ["ready", "published"]),
+                    ("publication_state", "in", ["ready", "published", "verified"]),
                 ]
             )
             if active_pipeline:
