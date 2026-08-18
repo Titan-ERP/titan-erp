@@ -8,9 +8,13 @@ artifact_root="${install_root}/artifacts/discovery"
 lock_file="${SPAREX_DISCOVERY_LOCK_FILE:-/run/titan-sparex-catalog/durable-discovery.lock}"
 portal_cooldown_file="${SPAREX_PORTAL_COOLDOWN_FILE:-${install_root}/artifacts/portal-cooldown-until}"
 portal_cooldown_seconds="${SPAREX_PORTAL_COOLDOWN_SECONDS:-3600}"
+internal_retry_limit="${SPAREX_INTERNAL_RETRY_LIMIT:-5}"
 portal_cooldown=0
 if ! [[ "${portal_cooldown_seconds}" =~ ^[0-9]+$ ]] || [[ "${portal_cooldown_seconds}" -lt 3600 ]]; then
   portal_cooldown_seconds=3600
+fi
+if ! [[ "${internal_retry_limit}" =~ ^[0-9]+$ ]] || [[ "${internal_retry_limit}" -lt 1 ]]; then
+  internal_retry_limit=5
 fi
 
 fail_closed() {
@@ -38,6 +42,46 @@ run_portal_step() {
     portal_cooldown=1
     echo "Sparex portal warning recorded; portal access is paused for at least ${portal_cooldown_seconds} seconds." >&2
     return 0
+  fi
+  return "${status}"
+}
+
+run_internal_step() {
+  local step_name=$1
+  local output_file="${install_root}/artifacts/${step_name}-last-output.log"
+  local retry_file="${install_root}/artifacts/${step_name}-transient-failures"
+  local retry_count=0
+  local status
+  shift
+
+  if "$@" >"${output_file}" 2>&1; then
+    cat "${output_file}"
+    rm -f "${output_file}" "${retry_file}"
+    return 0
+  else
+    status=$?
+  fi
+  cat "${output_file}" >&2
+
+  if grep -Eqi \
+    'Odoo JSON-2 request failed with HTTP (404|429|500|502|503|504)|timed out|TimeoutError|Temporary failure in name resolution|Connection reset|RemoteDisconnected' \
+    "${output_file}"; then
+    if [[ -f "${retry_file}" ]]; then
+      retry_count="$(cat "${retry_file}")"
+    fi
+    if ! [[ "${retry_count}" =~ ^[0-9]+$ ]]; then
+      retry_count=0
+    fi
+    retry_count=$((retry_count + 1))
+    printf '%s\n' "${retry_count}" >"${retry_file}"
+    rm -f "${output_file}"
+    if [[ "${retry_count}" -lt "${internal_retry_limit}" ]]; then
+      echo "Transient Odoo failure in ${step_name}; keeping the timer active for retry ${retry_count}/${internal_retry_limit}." >&2
+      return 0
+    fi
+    echo "Transient Odoo failure limit reached in ${step_name}: ${retry_count}/${internal_retry_limit}." >&2
+  else
+    rm -f "${output_file}"
   fi
   return "${status}"
 }
@@ -97,13 +141,13 @@ if [[ "${portal_cooldown}" -eq 0 ]]; then
     --reason "Continuous exact dealer-cost recovery into durable staging"
 fi
 
-"${install_root}/venv/bin/python" -m scripts.sparex_catalog_media_worker \
+run_internal_step media "${install_root}/venv/bin/python" -m scripts.sparex_catalog_media_worker \
   --odoo-env-file "${odoo_env}" \
   --s3-bucket "${SOUTHERN_PRODUCT_ARTIFACT_BUCKET}" \
   --limit 25 \
   --throttle-seconds 3.0
 
-"${install_root}/venv/bin/python" -m scripts.sparex_catalog_promotion_worker \
+run_internal_step promotion "${install_root}/venv/bin/python" -m scripts.sparex_catalog_promotion_worker \
   --odoo-env-file "${odoo_env}" \
   --artifact-uri-prefix "s3://${SOUTHERN_PRODUCT_ARTIFACT_BUCKET}/sparex-product-catalog/promotion/production" \
   --limit 100
