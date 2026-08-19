@@ -130,6 +130,23 @@ class SparexDiscoveryReconciliationContractTests(unittest.TestCase):
         self.assertIn("southern_sparex_discovery_item_release_idx", discovery)
         self.assertIn("southern_sparex_discovery_item_refresh_idx", discovery)
 
+    def test_cost_recovery_prefers_unattempted_items_before_retries(self):
+        discovery = (ROOT / "southern_parts_intelligence" / "models" / "sparex_discovery.py").read_text(
+            encoding="utf-8"
+        )
+        item_init = discovery.split("def init(self):", 1)[1].split("def _compute_blocker_summary", 1)[0]
+        claim = discovery.split("def claim_cost_recovery_batch", 1)[1].split(
+            "def apply_cost_recovery_plan", 1
+        )[0]
+        expected_order = (
+            "cost_recovery_priority DESC,\n"
+            "                   cost_recovery_attempt_count,\n"
+            "                   readiness_refreshed_at,\n"
+            "                   id"
+        )
+        self.assertIn(expected_order, claim)
+        self.assertIn("cost_recovery_attempt_count", item_init)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1674,7 +1674,13 @@ class SouthernSparexDiscoveryItem(models.Model):
             """
             CREATE INDEX IF NOT EXISTS southern_sparex_discovery_item_release_idx
                 ON southern_sparex_discovery_item
-                    (company_id, cost_recovery_priority DESC, readiness_refreshed_at, id)
+                    (
+                        company_id,
+                        cost_recovery_priority DESC,
+                        cost_recovery_attempt_count,
+                        readiness_refreshed_at,
+                        id
+                    )
              WHERE reconciliation_state = 'current'
                AND odoo_match_state = 'matched_active'
             """
@@ -2450,7 +2456,11 @@ class SouthernSparexDiscoveryItem(models.Model):
                AND reconciliation_state = 'current'
                AND cost_recovery_state IN ('queued', 'retry_wait')
                AND (cost_recovery_next_at IS NULL OR cost_recovery_next_at <= %s)
-             ORDER BY cost_recovery_priority DESC, readiness_refreshed_at, id
+             ORDER BY
+                   cost_recovery_priority DESC,
+                   cost_recovery_attempt_count,
+                   readiness_refreshed_at,
+                   id
              FOR UPDATE SKIP LOCKED LIMIT %s
             """,
             [self.env.company.id, now, bounded],
