@@ -19,6 +19,7 @@ class SouthernAccountingRevenueRule(models.Model):
             ("parts", "Parts"),
             ("service", "Service"),
             ("rental", "Rental"),
+            ("freight", "Freight"),
             ("equipment", "Equipment / Asset Sale"),
             ("fees", "Fees"),
             ("other", "Other"),

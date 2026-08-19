@@ -31,6 +31,11 @@ class SouthernAccountingPolicy(models.Model):
         domain="[('account_type', '=', 'income')]",
         tracking=True,
     )
+    freight_revenue_account_id = fields.Many2one(
+        "account.account",
+        domain="[('account_type', '=', 'income')]",
+        tracking=True,
+    )
     equipment_revenue_account_id = fields.Many2one(
         "account.account",
         domain="[('account_type', '=', 'income')]",
@@ -153,6 +158,7 @@ class SouthernAccountingPolicy(models.Model):
             "parts": self.parts_revenue_account_id,
             "service": self.service_revenue_account_id,
             "rental": self.rental_revenue_account_id,
+            "freight": self.freight_revenue_account_id,
             "equipment": self.equipment_revenue_account_id,
             "fees": self.fees_revenue_account_id,
         }.get(bucket, self.env["account.account"])
@@ -183,6 +189,7 @@ class SouthernAccountingPolicy(models.Model):
             "parts_revenue_account_id": "Parts Revenue",
             "service_revenue_account_id": "Service Revenue",
             "rental_revenue_account_id": "Rental Revenue",
+            "freight_revenue_account_id": "Shipping / Freight Revenue",
             "equipment_revenue_account_id": "Equipment Sales Revenue",
             "fees_revenue_account_id": "Card Processing Fee Income",
             "merchant_fee_account_id": "Bank Merchant Fees",
