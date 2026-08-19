@@ -108,24 +108,5 @@
         <field name="res_model">southern.stripe.payout.evidence</field>
         <field name="view_mode">list,form</field>
         <field name="domain">[]</field>
-        <field name="context">{'search_default_unmatched': 1}</field>
-    </record>
-
-    <record id="view_southern_stripe_payout_evidence_search" model="ir.ui.view">
-        <field name="name">southern.stripe.payout.evidence.search</field>
-        <field name="model">southern.stripe.payout.evidence</field>
-        <field name="arch" type="xml">
-            <search>
-                <field name="stripe_payout_id"/>
-                <field name="arrival_date"/>
-                <filter name="unmatched" string="Needs Attention"
-                        domain="[('state', 'in', ['candidate', 'in_transit', 'review_required', 'blocked'])]"/>
-                <filter name="matched" string="Matched" domain="[('state', '=', 'matched')]"/>
-                <group string="Group By">
-                    <filter name="group_state" string="State" context="{'group_by': 'state'}"/>
-                    <filter name="group_arrival_date" string="Arrival Date" context="{'group_by': 'arrival_date'}"/>
-                </group>
-            </search>
-        </field>
     </record>
 </odoo>
