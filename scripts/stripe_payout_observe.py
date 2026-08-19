@@ -671,7 +671,7 @@ def write_odoo_payout_evidence(
             "state": row["state"],
             "reason_code": row["reason_code"],
         }
-        client.execute("southern.stripe.payout.evidence", "upsert_from_worker", [values])
+        client.call("southern.stripe.payout.evidence", "upsert_from_worker", values=values)
         written += 1
     return written
 
