@@ -10,6 +10,7 @@
                 <field name="parts_revenue_account_id"/>
                 <field name="service_revenue_account_id"/>
                 <field name="rental_revenue_account_id"/>
+                <field name="freight_revenue_account_id"/>
                 <field name="parts_cost_account_id"/>
                 <field name="service_cost_account_id"/>
                 <field name="merchant_fee_account_id"/>
@@ -46,6 +47,7 @@
                         <field name="parts_revenue_account_id"/>
                         <field name="service_revenue_account_id"/>
                         <field name="rental_revenue_account_id"/>
+                        <field name="freight_revenue_account_id"/>
                         <field name="equipment_revenue_account_id"/>
                         <field name="fees_revenue_account_id"/>
                     </group>
