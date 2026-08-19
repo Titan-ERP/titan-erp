@@ -21,6 +21,7 @@
         "data/revenue_rules.xml",
         "data/ir_cron.xml",
         "views/accounting_automation_views.xml",
+        "views/stripe_payout_views.xml",
         "views/revenue_rule_views.xml",
         "views/bank_coding_views.xml",
         "views/daily_control_views.xml",
