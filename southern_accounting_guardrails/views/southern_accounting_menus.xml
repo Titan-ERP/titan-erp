@@ -61,6 +61,11 @@
               parent="menu_southern_accounting_guardrails_root"
               action="action_southern_accounting_automation_findings"
               sequence="25"/>
+    <menuitem id="menu_southern_stripe_payout_evidence"
+              name="Stripe Payout Evidence"
+              parent="menu_southern_accounting_guardrails_root"
+              action="action_southern_stripe_payout_evidence"
+              sequence="26"/>
     <menuitem id="menu_southern_bank_coding_candidates"
               name="Bank Coding Candidates"
               parent="menu_southern_accounting_guardrails_root"
