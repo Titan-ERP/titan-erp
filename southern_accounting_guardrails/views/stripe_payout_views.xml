@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_southern_stripe_payout_evidence_list" model="ir.ui.view">
+        <field name="name">southern.stripe.payout.evidence.list</field>
+        <field name="model">southern.stripe.payout.evidence</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'matched'"
+                  decoration-warning="state in ['candidate', 'in_transit']"
+                  decoration-danger="state in ['review_required', 'blocked']">
+                <field name="arrival_date"/>
+                <field name="stripe_payout_id"/>
+                <field name="stripe_payout_net"/>
+                <field name="gross_charges"/>
+                <field name="stripe_fees"/>
+                <field name="processing_fee_charged"/>
+                <field name="processing_fee_margin"/>
+                <field name="variance"/>
+                <field name="state"/>
+                <field name="reason_code"/>
+                <field name="matched_bank_line_count"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_southern_stripe_payout_evidence_form" model="ir.ui.view">
+        <field name="name">southern.stripe.payout.evidence.form</field>
+        <field name="model">southern.stripe.payout.evidence</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_mark_review_required" type="object" string="Review Required"
+                            invisible="state == 'review_required'"/>
+                    <button name="action_mark_matched" type="object" string="Mark Matched" class="btn-primary"
+                            invisible="state == 'matched'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="observed,candidate,in_transit,matched,review_required,blocked"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="company_id"/>
+                            <field name="run_id"/>
+                            <field name="stripe_payout_id"/>
+                            <field name="status"/>
+                            <field name="arrival_date"/>
+                            <field name="created_date"/>
+                            <field name="currency_id"/>
+                        </group>
+                        <group>
+                            <field name="state"/>
+                            <field name="reason_code"/>
+                            <field name="transaction_count"/>
+                            <field name="charge_count"/>
+                            <field name="matched_bank_line_count"/>
+                        </group>
+                    </group>
+                    <group string="Stripe Math">
+                        <field name="gross_charges"/>
+                        <field name="stripe_fees"/>
+                        <field name="refunds"/>
+                        <field name="disputes"/>
+                        <field name="adjustments"/>
+                        <field name="expected_net"/>
+                        <field name="stripe_payout_net"/>
+                        <field name="variance"/>
+                    </group>
+                    <group string="Customer Fee Margin">
+                        <field name="processing_fee_charged"/>
+                        <field name="processing_fee_margin"/>
+                    </group>
+                    <notebook>
+                        <page string="Bank Lines">
+                            <field name="matched_bank_line_ids"/>
+                        </page>
+                        <page string="Odoo Links">
+                            <group>
+                                <field name="matched_payment_ids"/>
+                                <field name="linked_invoice_ids"/>
+                                <field name="matched_terminal_payment_ids_text"/>
+                            </group>
+                        </page>
+                        <page string="Clearing Evidence">
+                            <group>
+                                <field name="stripe_clearing_move_ids"/>
+                                <field name="stripe_bridge_move_ids"/>
+                            </group>
+                        </page>
+                        <page string="Evidence">
+                            <group>
+                                <field name="artifact_uri"/>
+                                <field name="artifact_sha256"/>
+                                <field name="artifact_schema_version"/>
+                            </group>
+                            <field name="unmatched_payment_intents"/>
+                            <field name="reason_note"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_southern_stripe_payout_evidence" model="ir.actions.act_window">
+        <field name="name">Stripe Payout Evidence</field>
+        <field name="res_model">southern.stripe.payout.evidence</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[]</field>
+    </record>
+</odoo>

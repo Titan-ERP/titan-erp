@@ -12,6 +12,7 @@ class SouthernAccountingAutomationStaticTests(unittest.TestCase):
     def test_manifest_includes_accounting_automation_views(self):
         manifest = ast.literal_eval((MODULE / "__manifest__.py").read_text(encoding="utf-8"))
         self.assertIn("views/accounting_automation_views.xml", manifest["data"])
+        self.assertIn("views/stripe_payout_views.xml", manifest["data"])
 
     def test_new_models_have_access_rules(self):
         with (MODULE / "security" / "ir.model.access.csv").open(encoding="utf-8-sig", newline="") as handle:
@@ -20,6 +21,7 @@ class SouthernAccountingAutomationStaticTests(unittest.TestCase):
         self.assertIn("model_southern_accounting_automation_policy", model_ids)
         self.assertIn("model_southern_accounting_automation_run", model_ids)
         self.assertIn("model_southern_accounting_automation_finding", model_ids)
+        self.assertIn("model_southern_stripe_payout_evidence", model_ids)
         worker_move_line = [
             row
             for row in rows
@@ -31,6 +33,7 @@ class SouthernAccountingAutomationStaticTests(unittest.TestCase):
 
     def test_views_parse(self):
         ET.parse(MODULE / "views" / "accounting_automation_views.xml")
+        ET.parse(MODULE / "views" / "stripe_payout_views.xml")
         ET.parse(MODULE / "views" / "bank_coding_views.xml")
         ET.parse(MODULE / "views" / "southern_accounting_menus.xml")
 
@@ -125,6 +128,41 @@ class SouthernAccountingAutomationStaticTests(unittest.TestCase):
         self.assertIn('"southern.bank.coding.run"', source)
         self.assertIn('"action_evaluate"', source)
         self.assertNotIn('"account.move.line",\\n        "write"', source)
+
+    def test_stripe_payout_evidence_model_tracks_bank_linkage(self):
+        source = (MODULE / "models" / "stripe_payout.py").read_text(encoding="utf-8")
+        for token in (
+            "_name = \"southern.stripe.payout.evidence\"",
+            "stripe_payout_id",
+            "gross_charges",
+            "stripe_fees",
+            "processing_fee_charged",
+            "processing_fee_margin",
+            "expected_net",
+            "stripe_payout_net",
+            "matched_bank_line_ids",
+            "stripe_clearing_move_ids",
+            "stripe_bridge_move_ids",
+            "matched_payment_ids",
+            "linked_invoice_ids",
+            "unique(company_id, stripe_payout_id)",
+            "upsert_from_worker",
+        ):
+            self.assertIn(token, source)
+
+    def test_stripe_payout_observe_can_write_evidence_without_accounting_mutation(self):
+        source = (ROOT / "scripts" / "stripe_payout_observe.py").read_text(encoding="utf-8")
+        for token in (
+            "--write-odoo-evidence",
+            "write_odoo_payout_evidence",
+            "southern.stripe.payout.evidence",
+            "upsert_from_worker",
+            "bridge_bank_line_ids",
+            "matched_bank_line_ids",
+        ):
+            self.assertIn(token, source)
+        self.assertNotIn('"account.move.line", "write"', source)
+        self.assertNotIn('"account.move", "action_post"', source)
 
 
 if __name__ == "__main__":
