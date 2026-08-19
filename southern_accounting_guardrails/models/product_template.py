@@ -93,6 +93,7 @@ class ProductTemplate(models.Model):
 
     @api.depends(
         "southern_revenue_bucket",
+        "southern_expected_income_account_id",
         "property_account_income_id",
         "property_account_income_id.code",
         "categ_id.property_account_income_categ_id",
@@ -105,22 +106,25 @@ class ProductTemplate(models.Model):
             "rental": "430",
         }
         for template in self:
+            if not template.southern_revenue_bucket or template.southern_revenue_bucket == "other":
+                template.southern_income_account_review = "needs_review"
+                continue
             prefix = expected_prefix.get(template.southern_revenue_bucket)
             account = template.property_account_income_id or template.categ_id.property_account_income_categ_id
             code = account.code or ""
             if (
-                template.southern_expected_income_account_id
-                and account
-                and account != template.southern_expected_income_account_id
+                not account
+                or not template.southern_expected_income_account_id
+                or account != template.southern_expected_income_account_id
+                or (prefix and code and not code.startswith(prefix))
             ):
-                template.southern_income_account_review = "needs_review"
-            elif prefix and account and code and not code.startswith(prefix):
                 template.southern_income_account_review = "needs_review"
             else:
                 template.southern_income_account_review = "ok"
 
     @api.depends(
         "southern_revenue_bucket",
+        "southern_expected_expense_account_id",
         "company_id",
         "property_account_expense_id",
         "property_account_expense_id.code",
@@ -135,20 +139,21 @@ class ProductTemplate(models.Model):
             "rental": "530",
         }
         for template in self:
+            if not template.southern_revenue_bucket or template.southern_revenue_bucket == "other":
+                template.southern_expense_account_review = "needs_review"
+                continue
             prefix = expected_prefix.get(template.southern_revenue_bucket)
             if not prefix:
                 template.southern_expense_account_review = "not_required"
                 continue
             account = template.property_account_expense_id or template.categ_id.property_account_expense_categ_id
             code = account.code if account else ""
-            if not account:
-                template.southern_expense_account_review = "needs_review"
-            elif (
-                template.southern_expected_expense_account_id
-                and account != template.southern_expected_expense_account_id
+            if (
+                not account
+                or not template.southern_expected_expense_account_id
+                or account != template.southern_expected_expense_account_id
+                or (code and not code.startswith(prefix))
             ):
-                template.southern_expense_account_review = "needs_review"
-            elif code and not code.startswith(prefix):
                 template.southern_expense_account_review = "needs_review"
             else:
                 template.southern_expense_account_review = "ok"
