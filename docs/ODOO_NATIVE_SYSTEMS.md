@@ -52,7 +52,9 @@ temporary migration flag is set.
 - `southern.parts.catalog.sync`
 - `southern.parts.automation.run`
 - `southern.parts.order.refresh.queue`
-- `southern.product.quality.issue`
+- `southern.product.quality.issue` with work lanes `live_fix`,
+  `enrich`, and `release`. Open Daily Control product-issue counts exclude
+  `publication_ready` rows; those appear as the ready-to-publish count.
 
 The shared disk safety floor is 2 GB. A catalog run can also be blocked by a
 cooldown, next-allowed time, pending approval, or another running workflow.

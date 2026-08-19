@@ -27,6 +27,8 @@ class ProductionHardeningTests(unittest.TestCase):
         catalog = self.source("southern_parts_intelligence/models/catalog_sync.py")
         self.assertIn("limit=500", quality)
         self.assertIn("pg_try_advisory_xact_lock", quality)
+        self.assertIn("work_lane", quality)
+        self.assertIn("classify_product_quality(", quality)
         self.assertIn("pg_try_advisory_xact_lock", evidence)
         self.assertIn("internal_cron_enabled", catalog)
         self.assertIn("batch_size = max(min", catalog)

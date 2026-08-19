@@ -66,8 +66,10 @@ models and views load, then run the read-only smoke tests below.
 
 1. Open **Southern Operations → Daily Control** for each allowed company and
    verify the counts differ when the underlying company data differs.
-2. Open **Product Master Quality** and review blocker, evidence, taxonomy,
-   duplicate, and publication-readiness categories.
+2. Open **Product Master Quality** and confirm work lanes split live website
+   fixes, unpublished enrichment, and ready-to-publish. Ready products must
+   not appear in the default Needs Work filter or Daily Control open-issue
+   count. Review blocker, evidence, taxonomy, and duplicate categories.
 3. Open **Product Automation Runs** and verify idempotency key, worker command,
    artifact, hash, schema, archive URI, and archive verification fields.
 4. Run CRM classification preview; confirm imported references remain separate

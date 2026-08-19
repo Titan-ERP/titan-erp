@@ -38,6 +38,8 @@ class SouthernOperationsDailyControl(models.Model):
     imported_reference_count = fields.Integer(readonly=True)
     overdue_activity_count = fields.Integer(readonly=True)
     open_product_issue_count = fields.Integer(readonly=True)
+    product_live_fix_count = fields.Integer(readonly=True)
+    product_ready_count = fields.Integer(readonly=True)
     product_blocker_count = fields.Integer(readonly=True)
     product_automation_failure_count = fields.Integer(readonly=True)
     equipment_review_count = fields.Integer(readonly=True)
@@ -123,7 +125,30 @@ class SouthernOperationsDailyControl(models.Model):
                 "open_product_issue_count": self.env[
                     "southern.product.quality.issue"
                 ].search_count(
-                    company_domain + [("state", "in", ["open", "in_progress", "blocked"])]
+                    company_domain
+                    + [
+                        ("state", "in", ["open", "in_progress", "blocked"]),
+                        ("issue_type", "!=", "publication_ready"),
+                    ]
+                ),
+                "product_live_fix_count": self.env[
+                    "southern.product.quality.issue"
+                ].search_count(
+                    company_domain
+                    + [
+                        ("state", "in", ["open", "in_progress", "blocked"]),
+                        ("issue_type", "!=", "publication_ready"),
+                        ("product_published", "=", True),
+                    ]
+                ),
+                "product_ready_count": self.env[
+                    "southern.product.quality.issue"
+                ].search_count(
+                    company_domain
+                    + [
+                        ("state", "in", ["open", "in_progress", "blocked"]),
+                        ("issue_type", "=", "publication_ready"),
+                    ]
                 ),
                 "product_blocker_count": self.env[
                     "southern.product.quality.issue"

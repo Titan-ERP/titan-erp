@@ -14,6 +14,8 @@
                 <field name="sale_to_invoice_count"/>
                 <field name="stale_crm_count"/>
                 <field name="product_blocker_count"/>
+                <field name="product_live_fix_count"/>
+                <field name="product_ready_count"/>
                 <field name="product_automation_failure_count"/>
                 <field name="equipment_review_count"/>
                 <field name="last_refreshed_at"/>
@@ -73,10 +75,16 @@
                         </page>
                         <page string="Products &amp; Automation">
                             <group>
-                                <field name="open_product_issue_count"/>
-                                <field name="product_blocker_count"/>
-                                <field name="product_automation_failure_count"/>
-                                <field name="equipment_review_count"/>
+                                <group>
+                                    <field name="open_product_issue_count"/>
+                                    <field name="product_live_fix_count"/>
+                                    <field name="product_ready_count"/>
+                                </group>
+                                <group>
+                                    <field name="product_blocker_count"/>
+                                    <field name="product_automation_failure_count"/>
+                                    <field name="equipment_review_count"/>
+                                </group>
                             </group>
                         </page>
                     </notebook>

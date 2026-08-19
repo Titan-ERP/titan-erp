@@ -1,28 +1,17 @@
-from collections import Counter
+from collections import Counter, defaultdict
 
 from odoo import _, api, fields, models
+from odoo.exceptions import UserError
 
+from ..quality_rules import ISSUE_TYPES, WORK_LANES, classify_product_quality
 from .catalog_agents import customer_description_ready
-
-ISSUE_TYPES = [
-    ("placeholder_price", "Placeholder Price"),
-    ("price_not_above_cost", "Price Not Above Cost"),
-    ("missing_verified_supplier_cost", "Missing Verified Supplier Cost"),
-    ("missing_evidence", "Missing Evidence"),
-    ("taxonomy_review", "Taxonomy Review"),
-    ("duplicate_reference", "Duplicate Internal Reference"),
-    ("published_missing_image", "Published Without Image"),
-    ("published_missing_description", "Published Without Description"),
-    ("publication_gate_blocked", "Published but Sourcing Gate Blocked"),
-    ("publication_ready", "Publication Ready"),
-]
 
 
 class SouthernProductQualityIssue(models.Model):
     _name = "southern.product.quality.issue"
     _description = "Southern Product Master Quality Issue"
     _inherit = ["mail.thread", "mail.activity.mixin"]
-    _order = "severity desc, detected_at desc, id desc"
+    _order = "severity desc, work_lane, last_detected_at desc, id desc"
 
     name = fields.Char(compute="_compute_name", store=True)
     product_tmpl_id = fields.Many2one(
@@ -39,6 +28,7 @@ class SouthernProductQualityIssue(models.Model):
         index=True,
     )
     issue_type = fields.Selection(ISSUE_TYPES, required=True, index=True, tracking=True)
+    work_lane = fields.Selection(WORK_LANES, required=True, default="enrich", index=True)
     severity = fields.Selection(
         [("1_low", "Low"), ("2_medium", "Medium"), ("3_high", "High"), ("4_blocker", "Blocker")],
         default="2_medium",
@@ -84,22 +74,46 @@ class SouthernProductQualityIssue(models.Model):
     def action_start(self):
         self.write({"state": "in_progress"})
 
+    def action_assign_to_me(self):
+        self.write({"assigned_to_id": self.env.user.id, "state": "in_progress"})
+        return True
+
     def action_resolve(self):
         self.write({"state": "resolved", "resolved_at": fields.Datetime.now()})
+
+    def action_dismiss(self):
+        missing_note = self.filtered(lambda issue: not (issue.resolution_note or "").strip())
+        if missing_note:
+            raise UserError(_("Add a resolution note before dismissing a quality row."))
+        self.write({"state": "dismissed", "resolved_at": fields.Datetime.now()})
+        return True
 
     def action_reopen(self):
         self.write({"state": "open", "resolved_at": False})
 
+    def action_open_product(self):
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": self.product_tmpl_id.display_name,
+            "res_model": "product.template",
+            "view_mode": "form",
+            "res_id": self.product_tmpl_id.id,
+        }
+
     @api.model
-    def _issue_codes(self, product, duplicate_counts):
-        codes = []
+    def _product_findings(self, product, duplicate_counts):
         price = product.list_price or 0.0
         cost = product.standard_price or 0.0
         reference = "".join((product.default_code or "").upper().split())
         is_sparex = reference.startswith("S.")
-        sourcing_rows = product.southern_sparex_sourcing_ids if is_sparex else self.env["southern.sparex.sourcing.queue"]
+        sourcing_rows = (
+            product.southern_sparex_sourcing_ids if is_sparex else self.env["southern.sparex.sourcing.queue"]
+        )
         verified_supplier_costs = sourcing_rows.filtered(
-            lambda row: row.supplier_price > 0 and row.state in (
+            lambda row: row.supplier_price > 0
+            and row.state
+            in (
                 "cost_approved",
                 "cost_applied",
                 "retail_approved",
@@ -116,58 +130,35 @@ class SouthernProductQualityIssue(models.Model):
                 "southern_catalog_page_count",
             )
         )
-        if price <= 1.49:
-            codes.append("placeholder_price")
-        elif is_sparex and verified_supplier_cost > 0 and price <= verified_supplier_cost:
-            codes.append("price_not_above_cost")
-        elif not is_sparex and cost > 0 and price <= cost:
-            codes.append("price_not_above_cost")
-        if is_sparex and verified_supplier_cost <= 0:
-            codes.append("missing_verified_supplier_cost")
-        if not product.southern_source_url and not evidence_count:
-            codes.append("missing_evidence")
-        if product.website_published and not product.public_categ_ids:
-            codes.append("taxonomy_review")
-        if reference and duplicate_counts[reference] > 1:
-            codes.append("duplicate_reference")
-        if product.website_published and not product.image_128:
-            codes.append("published_missing_image")
-        if product.website_published and not customer_description_ready(product):
-            codes.append("published_missing_description")
-        if is_sparex and product.website_published and not product.southern_sparex_publication_eligible:
-            codes.append("publication_gate_blocked")
-        sourcing_ready = not is_sparex or product.southern_sparex_publication_eligible
-        if (
-            not product.website_published
-            and price > max(verified_supplier_cost if is_sparex else cost, 1.49)
-            and product.public_categ_ids
-            and product.image_128
-            and (product.southern_source_url or evidence_count)
-            and customer_description_ready(product)
-            and sourcing_ready
-        ):
-            codes.append("publication_ready")
-        return codes
+        return classify_product_quality(
+            price=price,
+            cost=cost,
+            verified_supplier_cost=verified_supplier_cost,
+            is_sparex=is_sparex,
+            published=bool(product.website_published),
+            source_url=product.southern_source_url or "",
+            evidence_count=evidence_count,
+            has_website_category=bool(product.public_categ_ids),
+            has_image=bool(product.image_128),
+            description_ready=customer_description_ready(product),
+            sparex_publication_eligible=bool(product.southern_sparex_publication_eligible),
+            reference=reference,
+            duplicate_count=duplicate_counts.get(reference, 0),
+        )
+
+    @api.model
+    def _issue_codes(self, product, duplicate_counts):
+        return [finding.issue_type for finding in self._product_findings(product, duplicate_counts)]
 
     @api.model
     def refresh_quality_queue(self, limit=None, after_id=0):
-        Product = self.env["product.template"].with_context(
-            active_test=False, bin_size=True
-        )
+        Product = self.env["product.template"].with_context(active_test=False, bin_size=True)
         product_domain = [
             ("company_id", "in", [False, self.env.company.id]),
             ("id", ">", int(after_id or 0)),
         ]
-        products = Product.search(
-            product_domain,
-            order="id",
-            limit=limit,
-        )
-        raw_references = [
-            reference
-            for reference in products.mapped("default_code")
-            if reference
-        ]
+        products = Product.search(product_domain, order="id", limit=limit)
+        raw_references = [reference for reference in products.mapped("default_code") if reference]
         duplicate_candidates = Product.search(
             [
                 ("company_id", "in", [False, self.env.company.id]),
@@ -182,66 +173,70 @@ class SouthernProductQualityIssue(models.Model):
         now = fields.Datetime.now()
         detected = set()
         created = updated = resolved = 0
+        existing_by_key = defaultdict(lambda: self.browse())
+        if products:
+            for issue in self.search(
+                [
+                    ("company_id", "=", self.env.company.id),
+                    ("product_tmpl_id", "in", products.ids),
+                    ("state", "in", ["open", "in_progress", "blocked"]),
+                ]
+            ):
+                existing_by_key[(issue.product_tmpl_id.id, issue.issue_type)] |= issue
         for product in products:
-            for issue_type in self._issue_codes(product, duplicate_counts):
-                key = (product.id, issue_type, self.env.company.id)
+            for finding in self._product_findings(product, duplicate_counts):
+                key = (product.id, finding.issue_type, self.env.company.id)
                 detected.add(key)
-                issue = self.search(
-                    [
-                        ("product_tmpl_id", "=", product.id),
-                        ("issue_type", "=", issue_type),
-                        ("company_id", "=", self.env.company.id),
-                        ("state", "not in", ["resolved", "dismissed"]),
-                    ],
-                    limit=1,
-                )
                 values = {
                     "last_detected_at": now,
+                    "details": finding.details,
+                    "severity": finding.severity,
+                    "work_lane": finding.work_lane,
                 }
-                if issue:
-                    issue.write(values)
+                existing = existing_by_key[(product.id, finding.issue_type)]
+                current = existing[:1]
+                extras = existing[1:]
+                if current:
+                    current.write(values)
                     updated += 1
+                    if extras:
+                        extras.write(
+                            {
+                                "state": "resolved",
+                                "resolved_at": now,
+                                "resolution_note": _("Duplicate quality row closed by the quality refresh."),
+                            }
+                        )
+                        resolved += len(extras)
                 else:
                     self.create(
                         dict(
                             values,
                             product_tmpl_id=product.id,
                             company_id=self.env.company.id,
-                            issue_type=issue_type,
-                            severity=(
-                                "4_blocker"
-                                if issue_type in (
-                                    "placeholder_price",
-                                    "price_not_above_cost",
-                                    "missing_verified_supplier_cost",
-                                    "publication_gate_blocked",
-                                )
-                                and product.website_published
-                                else "3_high"
-                                if issue_type.startswith("published_")
-                                else "2_medium"
-                            ),
+                            issue_type=finding.issue_type,
                         )
                     )
                     created += 1
-        product_ids = products.ids
         open_issues = self.search(
             [
                 ("company_id", "=", self.env.company.id),
-                ("product_tmpl_id", "in", product_ids),
+                ("product_tmpl_id", "in", products.ids),
                 ("state", "in", ["open", "in_progress", "blocked"]),
             ]
         )
-        for issue in open_issues:
-            if (issue.product_tmpl_id.id, issue.issue_type, issue.company_id.id) not in detected:
-                issue.write(
-                    {
-                        "state": "resolved",
-                        "resolved_at": now,
-                        "resolution_note": _("Automatically resolved by the quality refresh."),
-                    }
-                )
-                resolved += 1
+        stale = open_issues.filtered(
+            lambda issue: (issue.product_tmpl_id.id, issue.issue_type, issue.company_id.id) not in detected
+        )
+        if stale:
+            stale.write(
+                {
+                    "state": "resolved",
+                    "resolved_at": now,
+                    "resolution_note": _("Automatically resolved by the quality refresh."),
+                }
+            )
+            resolved += len(stale)
         return {
             "created": created,
             "updated": updated,
@@ -278,4 +273,48 @@ class SouthernProductQualityIssue(models.Model):
         return {
             "type": "ir.actions.client",
             "tag": "reload",
+        }
+
+
+class ProductTemplate(models.Model):
+    _inherit = "product.template"
+
+    southern_quality_issue_ids = fields.One2many(
+        "southern.product.quality.issue",
+        "product_tmpl_id",
+        string="Product Quality Issues",
+    )
+    southern_open_quality_issue_count = fields.Integer(
+        compute="_compute_southern_open_quality_issue_count",
+    )
+
+    def _compute_southern_open_quality_issue_count(self):
+        counts = dict.fromkeys(self.ids, 0)
+        if self.ids:
+            grouped = self.env["southern.product.quality.issue"]._read_group(
+                [
+                    ("product_tmpl_id", "in", self.ids),
+                    ("state", "in", ["open", "in_progress", "blocked"]),
+                    ("issue_type", "!=", "publication_ready"),
+                ],
+                ["product_tmpl_id"],
+                ["__count"],
+            )
+            for product, count in grouped:
+                counts[product.id] = count
+        for product in self:
+            product.southern_open_quality_issue_count = counts.get(product.id, 0)
+
+    def action_open_southern_quality_issues(self):
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Product Master Quality"),
+            "res_model": "southern.product.quality.issue",
+            "view_mode": "list,form",
+            "domain": [("product_tmpl_id", "=", self.id)],
+            "context": {
+                "default_product_tmpl_id": self.id,
+                "search_default_open": 1,
+            },
         }
