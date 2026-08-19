@@ -14,7 +14,7 @@ from scripts.sparex_catalog_agents.cost_recovery import PortalCooldownError, rec
 
 CONFIRMATION = "sparex-durable-cost-recovery"
 PORTAL_COOLDOWN_EXIT_CODE = 75
-MAX_AUTOMATIC_COST_RECOVERY_BATCH = 10
+MAX_AUTOMATIC_COST_RECOVERY_BATCH = 15
 
 
 def main() -> int:

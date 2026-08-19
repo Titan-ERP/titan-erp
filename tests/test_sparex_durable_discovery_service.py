@@ -21,7 +21,7 @@ class SparexDurableDiscoveryServiceTests(unittest.TestCase):
         self.assertIn('portal_cooldown=1', launcher)
         self.assertIn('skipping portal access this cycle', launcher)
         self.assertIn("-m scripts.sparex_catalog_cost_worker", launcher)
-        self.assertIn('SPAREX_COST_RECOVERY_LIMIT:-10', launcher)
+        self.assertIn('SPAREX_COST_RECOVERY_LIMIT:-15', launcher)
         self.assertIn("-m scripts.sparex_catalog_media_worker", launcher)
         self.assertIn("-m scripts.sparex_catalog_promotion_worker", launcher)
         self.assertIn("run_internal_step media", launcher)
@@ -47,7 +47,8 @@ class SparexDurableDiscoveryServiceTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("OnActiveSec=15min", timer)
-        self.assertIn("OnUnitInactiveSec=5min", timer)
+        self.assertIn("OnUnitInactiveSec=3min", timer)
+        self.assertIn("RandomizedDelaySec=30s", timer)
         self.assertIn("Unit=titan-sparex-durable-discovery.service", timer)
         self.assertIn("run_sparex_durable_discovery.sh", service)
         self.assertIn("RuntimeDirectory=titan-sparex-catalog", service)

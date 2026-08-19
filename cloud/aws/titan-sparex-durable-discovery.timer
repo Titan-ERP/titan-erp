@@ -3,8 +3,8 @@ Description=Schedule the protected durable Sparex catalog cycle
 
 [Timer]
 OnActiveSec=15min
-OnUnitInactiveSec=5min
-RandomizedDelaySec=60s
+OnUnitInactiveSec=3min
+RandomizedDelaySec=30s
 AccuracySec=1s
 Persistent=false
 Unit=titan-sparex-durable-discovery.service
