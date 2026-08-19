@@ -12,6 +12,7 @@ REVENUE_BUCKETS = [
     ("parts", "Parts Revenue"),
     ("service", "Service Revenue"),
     ("rental", "Rental Revenue"),
+    ("freight", "Shipping / Freight Revenue"),
     ("equipment", "Equipment Revenue"),
     ("fees", "Fees"),
     ("other", "Other Revenue"),
