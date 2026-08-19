@@ -100,13 +100,21 @@ def existing_reclass_move(client: OdooClient, ref: str) -> dict[str, object] | N
     return rows[0] if rows else None
 
 
+def single_id(value: object) -> int:
+    if isinstance(value, list):
+        if len(value) != 1:
+            raise RuntimeError(f"Expected one created move id, got {len(value)}.")
+        value = value[0]
+    return int(value)
+
+
 def create_reclass_move(client: OdooClient, item: dict[str, object]) -> int | None:
     ref = f"August Stripe revenue cleanup {item['issue_code']} AML {item['source_line_id']}"
     existing = existing_reclass_move(client, ref)
     if existing:
         if existing["state"] == "posted":
             return None
-        move_id = int(existing["id"])
+        move_id = single_id(existing["id"])
         client.call("account.move", "action_post", ids=[move_id])
         return move_id
     amount = float(item["amount"])
@@ -144,7 +152,7 @@ def create_reclass_move(client: OdooClient, item: dict[str, object]) -> int | No
             }
         ],
     )
-    move_id = int(move_id)
+    move_id = single_id(move_id)
     client.call("account.move", "action_post", ids=[move_id])
     return move_id
 
