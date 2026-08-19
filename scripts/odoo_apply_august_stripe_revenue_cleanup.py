@@ -90,14 +90,25 @@ def find_reclass_lines(client: OdooClient, old_account_id: int, new_account_id: 
     ]
 
 
-def already_posted(client: OdooClient, ref: str) -> bool:
-    return bool(client.execute("account.move", "search_count", [[("company_id", "=", COMPANY_ID), ("ref", "=", ref)]]))
+def existing_reclass_move(client: OdooClient, ref: str) -> dict[str, object] | None:
+    rows = client.execute(
+        "account.move",
+        "search_read",
+        [[("company_id", "=", COMPANY_ID), ("ref", "=", ref)]],
+        {"fields": ["id", "state"], "limit": 1},
+    )
+    return rows[0] if rows else None
 
 
 def create_reclass_move(client: OdooClient, item: dict[str, object]) -> int | None:
     ref = f"August Stripe revenue cleanup {item['issue_code']} AML {item['source_line_id']}"
-    if already_posted(client, ref):
-        return None
+    existing = existing_reclass_move(client, ref)
+    if existing:
+        if existing["state"] == "posted":
+            return None
+        move_id = int(existing["id"])
+        client.call("account.move", "action_post", ids=[move_id])
+        return move_id
     amount = float(item["amount"])
     move_id = client.execute(
         "account.move",
@@ -133,8 +144,9 @@ def create_reclass_move(client: OdooClient, item: dict[str, object]) -> int | No
             }
         ],
     )
-    client.execute("account.move", "action_post", [[move_id]])
-    return int(move_id)
+    move_id = int(move_id)
+    client.call("account.move", "action_post", ids=[move_id])
+    return move_id
 
 
 def write_audit(rows: list[dict[str, object]]) -> None:
