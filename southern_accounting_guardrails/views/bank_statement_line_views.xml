@@ -4,9 +4,9 @@
         <field name="name">southern.bank.statement.line.review.list</field>
         <field name="model">account.bank.statement.line</field>
         <field name="arch" type="xml">
-            <list decoration-success="southern_review_status == 'reviewed'"
-                  decoration-warning="southern_review_status == 'needs_review'"
-                  decoration-danger="southern_review_status == 'exception'">
+            <list decoration-success="southern_review_lane == 'reviewed'"
+                  decoration-warning="southern_review_lane in ['ordinary', 'missing_partner', 'check_payee', 'payroll', 'merchant']"
+                  decoration-danger="southern_review_lane == 'blocked'">
                 <button name="action_southern_mark_reviewed" type="object" string="Reviewed"/>
                 <button name="action_southern_mark_exception" type="object" string="Exception"/>
                 <button name="action_southern_mark_needs_review" type="object" string="Needs Review"/>
@@ -16,6 +16,8 @@
                 <field name="payment_ref"/>
                 <field name="amount"/>
                 <field name="is_reconciled"/>
+                <field name="southern_review_lane"/>
+                <field name="southern_review_details"/>
                 <field name="southern_manual_review_bucket"/>
                 <field name="southern_review_bucket"/>
                 <field name="southern_review_status"/>
@@ -31,9 +33,57 @@
         </field>
     </record>
 
+    <record id="view_southern_bank_statement_line_review_search" model="ir.ui.view">
+        <field name="name">southern.bank.statement.line.review.search</field>
+        <field name="model">account.bank.statement.line</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="payment_ref"/>
+                <field name="partner_id"/>
+                <field name="southern_review_details"/>
+                <filter name="work_needed" string="Work Needed"
+                        domain="[('southern_review_lane', 'not in', ['reviewed', 'not_required'])]"/>
+                <filter name="blocked" string="Blocked Exceptions"
+                        domain="[('southern_review_lane', '=', 'blocked')]"/>
+                <filter name="merchant" string="Merchant Settlements"
+                        domain="[('southern_review_lane', '=', 'merchant')]"/>
+                <filter name="payroll" string="Payroll"
+                        domain="[('southern_review_lane', '=', 'payroll')]"/>
+                <filter name="check_payee" string="Check Payee"
+                        domain="[('southern_review_lane', '=', 'check_payee')]"/>
+                <filter name="missing_partner" string="Missing Partner"
+                        domain="[('southern_review_lane', '=', 'missing_partner')]"/>
+                <filter name="ordinary" string="Ordinary Review"
+                        domain="[('southern_review_lane', '=', 'ordinary')]"/>
+                <filter name="reviewed" string="Reviewed"
+                        domain="[('southern_review_lane', '=', 'reviewed')]"/>
+                <separator/>
+                <filter name="group_lane" string="Work Lane" context="{'group_by': 'southern_review_lane'}"/>
+            </search>
+        </field>
+    </record>
+
     <record id="action_southern_bank_statement_line_review" model="ir.actions.act_window">
         <field name="name">Bank Matching Review</field>
         <field name="res_model">account.bank.statement.line</field>
         <field name="view_mode">list,form</field>
+        <field name="domain">[('southern_review_lane', 'not in', ['reviewed', 'not_required'])]</field>
+        <field name="context">{'search_default_work_needed': 1}</field>
+    </record>
+
+    <record id="action_southern_bank_blocked_review" model="ir.actions.act_window">
+        <field name="name">Bank Blocked Exceptions</field>
+        <field name="res_model">account.bank.statement.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('southern_review_lane', '=', 'blocked')]</field>
+        <field name="context">{'search_default_blocked': 1}</field>
+    </record>
+
+    <record id="action_southern_bank_merchant_review" model="ir.actions.act_window">
+        <field name="name">Merchant Settlements</field>
+        <field name="res_model">account.bank.statement.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('southern_review_lane', '=', 'merchant')]</field>
+        <field name="context">{'search_default_merchant': 1}</field>
     </record>
 </odoo>

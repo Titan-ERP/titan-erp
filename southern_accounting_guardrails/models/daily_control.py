@@ -34,6 +34,11 @@ class SouthernAccountingDailyControl(models.Model):
     product_account_needs_review_count = fields.Integer(readonly=True)
     draft_invoice_count = fields.Integer(readonly=True)
     unverified_migration_invoice_count = fields.Integer(readonly=True)
+    pending_coding_candidate_count = fields.Integer(readonly=True)
+    bank_blocked_count = fields.Integer(readonly=True)
+    bank_merchant_open_count = fields.Integer(readonly=True)
+    invoice_source_review_count = fields.Integer(readonly=True)
+    product_missing_bucket_count = fields.Integer(readonly=True)
     last_refreshed_at = fields.Datetime(readonly=True)
     review_note = fields.Text(tracking=True)
 
@@ -55,6 +60,7 @@ class SouthernAccountingDailyControl(models.Model):
         MoveLine = self.env["account.move.line"]
         Batch = self.env["southern.shop_boss.payment.batch"]
         Product = self.env["product.template"]
+        Candidate = self.env["southern.bank.coding.candidate"]
         for control in self:
             day_domain = [("company_id", "=", control.company_id.id), ("date", "=", control.control_date)]
             move_day_domain = [
@@ -109,6 +115,39 @@ class SouthernAccountingDailyControl(models.Model):
                             ("southern_shop_boss_verified", "=", False),
                         ]
                     ),
+                    "pending_coding_candidate_count": Candidate.search_count(
+                        [
+                            ("company_id", "=", control.company_id.id),
+                            ("state", "in", ("pending", "approved")),
+                        ]
+                    ),
+                    "bank_blocked_count": BankLine.search_count(
+                        [
+                            ("company_id", "=", control.company_id.id),
+                            ("southern_review_lane", "=", "blocked"),
+                        ]
+                    ),
+                    "bank_merchant_open_count": BankLine.search_count(
+                        [
+                            ("company_id", "=", control.company_id.id),
+                            ("southern_review_lane", "=", "merchant"),
+                        ]
+                    ),
+                    "invoice_source_review_count": Move.search_count(
+                        [
+                            ("company_id", "=", control.company_id.id),
+                            ("move_type", "in", ("out_invoice", "out_refund")),
+                            ("state", "!=", "cancel"),
+                            ("southern_review_lane", "in", ("source_review", "exception")),
+                        ]
+                    ),
+                    "product_missing_bucket_count": Product.search_count(
+                        [
+                            ("sale_ok", "=", True),
+                            ("company_id", "in", [False, control.company_id.id]),
+                            ("southern_accounting_review_lane", "=", "missing_bucket"),
+                        ]
+                    ),
                     "last_refreshed_at": fields.Datetime.now(),
                 }
             )
@@ -147,6 +186,60 @@ class SouthernAccountingDailyControl(models.Model):
             "domain": [("company_id", "=", self.company_id.id), ("date", "=", self.control_date)],
         }
 
+    def action_view_bank_blocked(self):
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Blocked Bank Exceptions"),
+            "res_model": "account.bank.statement.line",
+            "view_mode": "list,form",
+            "domain": [
+                ("company_id", "=", self.company_id.id),
+                ("southern_review_lane", "=", "blocked"),
+            ],
+        }
+
+    def action_view_bank_merchant(self):
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Open Merchant Settlements"),
+            "res_model": "account.bank.statement.line",
+            "view_mode": "list,form",
+            "domain": [
+                ("company_id", "=", self.company_id.id),
+                ("southern_review_lane", "=", "merchant"),
+            ],
+        }
+
+    def action_view_bank_coding_candidates(self):
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Pending Bank Coding"),
+            "res_model": "southern.bank.coding.candidate",
+            "view_mode": "list,form",
+            "domain": [
+                ("company_id", "=", self.company_id.id),
+                ("state", "in", ("pending", "approved")),
+            ],
+        }
+
+    def action_view_invoice_source_review(self):
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Invoice Source Review"),
+            "res_model": "account.move",
+            "view_mode": "list,form",
+            "domain": [
+                ("company_id", "=", self.company_id.id),
+                ("move_type", "in", ("out_invoice", "out_refund")),
+                ("state", "!=", "cancel"),
+                ("southern_review_lane", "in", ("source_review", "exception")),
+            ],
+        }
+
     def action_view_revenue_review(self):
         self.ensure_one()
         return {
@@ -171,12 +264,22 @@ class SouthernAccountingDailyControl(models.Model):
             "res_model": "product.template",
             "view_mode": "list,form",
             "domain": [
-                "&",
-                "&",
                 ("sale_ok", "=", True),
                 ("company_id", "in", [False, self.company_id.id]),
-                "|",
-                ("southern_income_account_review", "=", "needs_review"),
-                ("southern_expense_account_review", "=", "needs_review"),
+                ("southern_accounting_review_lane", "!=", "ok"),
+            ],
+        }
+
+    def action_view_product_missing_bucket(self):
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Missing Revenue Buckets"),
+            "res_model": "product.template",
+            "view_mode": "list,form",
+            "domain": [
+                ("sale_ok", "=", True),
+                ("company_id", "in", [False, self.company_id.id]),
+                ("southern_accounting_review_lane", "=", "missing_bucket"),
             ],
         }

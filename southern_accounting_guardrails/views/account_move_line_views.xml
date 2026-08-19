@@ -33,6 +33,6 @@
         <field name="name">Revenue Bucket Review</field>
         <field name="res_model">account.move.line</field>
         <field name="view_mode">list,form</field>
-        <field name="domain">[('move_id.move_type', 'in', ['out_invoice', 'out_refund']), ('account_id.account_type', '=', 'income'), ('display_type', '=', False)]</field>
+        <field name="domain">[('move_id.move_type', 'in', ['out_invoice', 'out_refund']), ('account_id.account_type', '=', 'income'), ('display_type', '=', False), ('southern_revenue_bucket_review', 'in', ['needs_review', 'exception'])]</field>
     </record>
 </odoo>

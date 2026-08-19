@@ -1,5 +1,7 @@
 from odoo import api, fields, models
 
+from ..accounting_review import classify_product_accounting_review
+
 
 class ProductCategory(models.Model):
     _inherit = "product.category"
@@ -70,6 +72,24 @@ class ProductTemplate(models.Model):
         store=True,
         index=True,
     )
+    southern_accounting_review_lane = fields.Selection(
+        [
+            ("ok", "OK"),
+            ("missing_bucket", "Missing Revenue Bucket"),
+            ("income", "Income Account"),
+            ("cost", "Cost Account"),
+            ("both", "Income and Cost"),
+        ],
+        string="Southern Accounting Review Lane",
+        compute="_compute_southern_accounting_review_lane",
+        store=True,
+        index=True,
+    )
+    southern_accounting_review_details = fields.Char(
+        string="Southern Accounting Review Details",
+        compute="_compute_southern_accounting_review_lane",
+        store=True,
+    )
 
     @api.depends("southern_revenue_bucket", "company_id")
     def _compute_southern_expected_income_account(self):
@@ -92,7 +112,9 @@ class ProductTemplate(models.Model):
             )
 
     @api.depends(
+        "sale_ok",
         "southern_revenue_bucket",
+        "company_id",
         "property_account_income_id",
         "property_account_income_id.code",
         "categ_id.property_account_income_categ_id",
@@ -104,7 +126,14 @@ class ProductTemplate(models.Model):
             "service": "420",
             "rental": "430",
         }
+        Policy = self.env["southern.accounting.policy"]
         for template in self:
+            company = template.company_id or self.env.company
+            policy = Policy.find_company_policy(company)
+            require_bucket = policy.require_product_bucket if policy else True
+            if template.sale_ok and require_bucket and not template.southern_revenue_bucket:
+                template.southern_income_account_review = "needs_review"
+                continue
             prefix = expected_prefix.get(template.southern_revenue_bucket)
             account = template.property_account_income_id or template.categ_id.property_account_income_categ_id
             code = account.code or ""
@@ -152,3 +181,30 @@ class ProductTemplate(models.Model):
                 template.southern_expense_account_review = "needs_review"
             else:
                 template.southern_expense_account_review = "ok"
+
+    @api.depends(
+        "sale_ok",
+        "southern_revenue_bucket",
+        "southern_income_account_review",
+        "southern_expense_account_review",
+        "southern_expected_income_account_id",
+        "southern_expected_expense_account_id",
+        "company_id",
+    )
+    def _compute_southern_accounting_review_lane(self):
+        Policy = self.env["southern.accounting.policy"]
+        for template in self:
+            company = template.company_id or self.env.company
+            policy = Policy.find_company_policy(company)
+            require_bucket = policy.require_product_bucket if policy else True
+            lane, details = classify_product_accounting_review(
+                template.sale_ok,
+                template.southern_revenue_bucket,
+                template.southern_income_account_review,
+                template.southern_expense_account_review,
+                require_product_bucket=require_bucket,
+                expected_income_name=template.southern_expected_income_account_id.display_name,
+                expected_expense_name=template.southern_expected_expense_account_id.display_name,
+            )
+            template.southern_accounting_review_lane = lane
+            template.southern_accounting_review_details = details

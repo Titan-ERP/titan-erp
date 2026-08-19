@@ -15,6 +15,8 @@ Adds non-blocking accounting review fields and queues for Southern Equipment.
 - Separates bank exceptions from ordinary review counts and blocks direct-to-revenue merchant settlements and direct-expense payroll withdrawals from being approved.
 - Adds Daily Controls with scheduled refresh counts for bank lines, reconciliation review, merchant batches, draft invoices, product setup issues, and revenue bucket exceptions.
 - Adds accounting review status fields for invoices and bank statement lines.
+- Splits invoice, bank, and product review into work lanes with a details
+  sentence so Daily Controls open the actual backlog instead of every record.
 - Adds manual bank-line bucket overrides and reviewed/exception controls without changing reconciliation.
 - Flags merchant settlements, generic checks, and missing bank-line partners.
 - Adds product/category revenue bucket fields for Parts, Service, Rental, Equipment, Fees, and Other.
@@ -28,6 +30,8 @@ Adds non-blocking accounting review fields and queues for Southern Equipment.
   - Southern Accounting / Shop Boss Documents
   - Southern Accounting / Shop Boss Payment Batches
   - Southern Accounting / Bank Matching Review
+  - Southern Accounting / Bank Blocked Exceptions
+  - Southern Accounting / Merchant Settlements
 
 ## What It Does Not Do
 

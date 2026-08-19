@@ -72,11 +72,21 @@ reference data has a separate action and does not count as pipeline.
 - `southern.bank.coding.rule`
 - `southern.bank.coding.run`
 - `southern.bank.coding.candidate`
+- `southern.accounting.daily.control`
+- `southern.accounting.policy`
+
+Invoice, bank, and product review rows store a work lane and details sentence.
+Native Odoo invoices stay out of Invoice Source Review unless a Shop Boss
+source or reference still needs verification. Bank Matching Review defaults to
+open work: blocked exceptions, merchant settlements, payroll, missing partners,
+and ordinary unmatched lines.
 
 The daily scheduled action evaluates approved rules and creates candidates.
 It does not apply accounting changes. A manager must approve a candidate, then
 invoke Apply Coding. Application is rejected unless exactly one Bank Suspense
 Account line exists and the target account is valid for the company.
+
+See [the accounting system map](ACCOUNTING_SYSTEM.md).
 
 ### Equipment discovery
 

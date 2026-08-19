@@ -78,6 +78,9 @@ models and views load, then run the read-only smoke tests below.
    no longer advertises partner pricing.
 7. Verify existing sales, accounting, inventory, website, equipment, and
    service workflows still open.
+8. Open **Accounting → Southern Accounting → Daily Controls**, refresh
+   counts, and confirm Invoice Source Review, Bank Blocked Exceptions, and
+   Product Accounting Review open work lanes rather than every record.
 
 ## First supervised product batch
 
