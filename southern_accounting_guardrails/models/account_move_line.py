@@ -5,6 +5,7 @@ from odoo import api, fields, models
 
 RENTAL_RE = re.compile(r"\b(TX60|TX18|TX10|U35)\b|RENTAL|RENT\b", re.I)
 SERVICE_RE = re.compile(r"SERVICE|LABOR|REPAIR|DIAG|DIAGNOSTIC|SHOP SUPPL", re.I)
+FREIGHT_RE = re.compile(r"\bFRT\b|FREIGHT|SHIPPING|HAULING|MILEAGE|TRANSPORTATION", re.I)
 PARTS_RE = re.compile(r"PART|FILTER|SEAL|HOSE|BOLT|BLADE|TOOTH|CUTTING EDGE", re.I)
 
 
@@ -16,6 +17,7 @@ class AccountMoveLine(models.Model):
             ("parts", "Parts"),
             ("service", "Service"),
             ("rental", "Rental"),
+            ("freight", "Freight"),
             ("equipment", "Equipment / Asset Sale"),
             ("fees", "Fees"),
             ("other", "Other"),
@@ -30,6 +32,7 @@ class AccountMoveLine(models.Model):
             ("parts", "Parts"),
             ("service", "Service"),
             ("rental", "Rental"),
+            ("freight", "Freight"),
             ("equipment", "Equipment / Asset Sale"),
             ("fees", "Fees"),
             ("other", "Other"),
@@ -127,6 +130,8 @@ class AccountMoveLine(models.Model):
         code = self.account_id.code or ""
         if code.startswith("430") or RENTAL_RE.search(text):
             return "rental"
+        if FREIGHT_RE.search(text):
+            return "freight"
         if code.startswith("420") or SERVICE_RE.search(text):
             return "service"
         if code.startswith("410") or PARTS_RE.search(text):
