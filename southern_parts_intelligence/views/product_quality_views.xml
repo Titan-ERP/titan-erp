@@ -15,6 +15,7 @@
                 <field name="internal_reference"/>
                 <field name="product_published"/>
                 <field name="details" optional="show"/>
+                <field name="next_action" optional="show"/>
                 <field name="state"/>
                 <field name="assigned_to_id"/>
                 <field name="last_detected_at"/>
@@ -34,6 +35,7 @@
                 <field name="internal_reference"/>
                 <field name="product_published"/>
                 <field name="details"/>
+                <field name="next_action"/>
                 <field name="state"/>
                 <field name="assigned_to_id"/>
                 <templates>
@@ -46,6 +48,9 @@
                         </div>
                         <div class="text-muted" t-if="record.details.raw_value">
                             <field name="details"/>
+                        </div>
+                        <div class="text-muted" t-if="record.next_action.raw_value">
+                            <field name="next_action"/>
                         </div>
                         <div class="mt-2">
                             <field name="severity"/> · <field name="state"/>
@@ -67,6 +72,11 @@
                     <button name="action_assign_to_me" type="object" string="Assign to Me"
                             invisible="state in ['resolved', 'dismissed']"/>
                     <button name="action_open_product" type="object" string="Open Product"/>
+                    <button name="action_open_sourcing" type="object" string="Open Sourcing"
+                            invisible="not sourcing_queue_id"/>
+                    <button name="action_open_discovery" type="object" string="Open Discovery"
+                            invisible="not discovery_item_id" groups="base.group_system"/>
+                    <button name="action_refresh_selected_products" type="object" string="Refresh Product"/>
                     <button name="action_resolve" type="object" string="Resolve" class="btn-primary"
                             invisible="state in ['resolved', 'dismissed']"/>
                     <button name="action_dismiss" type="object" string="Dismiss"
@@ -98,8 +108,13 @@
                     <group string="Why this is in the queue">
                         <field name="details" nolabel="1"/>
                     </group>
+                    <group string="Next action">
+                        <field name="next_action" nolabel="1" readonly="1"/>
+                        <field name="sourcing_queue_id" invisible="1"/>
+                        <field name="discovery_item_id" invisible="1"/>
+                    </group>
                     <group string="Resolution">
-                        <field name="resolution_note" nolabel="1" placeholder="Required to dismiss. Optional when resolving."/>
+                        <field name="resolution_note" nolabel="1" placeholder="Required to dismiss. Resolve is blocked while the finding is still present."/>
                     </group>
                 </sheet>
                 <chatter/>
@@ -116,6 +131,7 @@
                 <field name="internal_reference"/>
                 <field name="assigned_to_id"/>
                 <field name="details"/>
+                <field name="next_action"/>
                 <filter name="open" string="Open" domain="[('state', 'in', ['open', 'in_progress', 'blocked'])]"/>
                 <filter name="needs_work" string="Needs Work" domain="[('issue_type', '!=', 'publication_ready')]"/>
                 <filter name="live_fix" string="Live Website Fixes" domain="[('work_lane', '=', 'live_fix')]"/>
@@ -167,6 +183,14 @@
         <field name="binding_model_id" ref="model_southern_product_quality_issue"/>
         <field name="state">code</field>
         <field name="code">action = model.action_refresh_quality_queue()</field>
+    </record>
+    <record id="action_southern_product_quality_refresh_selected" model="ir.actions.server">
+        <field name="name">Refresh Selected Products</field>
+        <field name="model_id" ref="model_southern_product_quality_issue"/>
+        <field name="binding_model_id" ref="model_southern_product_quality_issue"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">action = records.action_refresh_selected_products()</field>
     </record>
 
     <record id="southern_parts_product_template_quality_buttons" model="ir.ui.view">

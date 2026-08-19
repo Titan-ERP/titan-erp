@@ -3,8 +3,18 @@ from collections import Counter, defaultdict
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
-from ..quality_rules import ISSUE_TYPES, WORK_LANES, classify_product_quality
-from .catalog_agents import customer_description_ready
+from ..quality_rules import (
+    ISSUE_TYPES,
+    QUALITY_BATCH_LIMIT,
+    QUALITY_PRIORITY_OPEN_LIMIT,
+    QUALITY_PRIORITY_PUBLISHED_LIMIT,
+    WORK_LANES,
+    classify_product_quality,
+    dismissed_should_reopen,
+    merge_quality_refresh_ids,
+    next_action_for,
+)
+from .catalog_agents import customer_description_ready, normalized_sparex_sku
 
 
 class SouthernProductQualityIssue(models.Model):
@@ -53,9 +63,18 @@ class SouthernProductQualityIssue(models.Model):
     last_detected_at = fields.Datetime(default=fields.Datetime.now, required=True)
     resolved_at = fields.Datetime(readonly=True)
     details = fields.Text()
+    next_action = fields.Char(compute="_compute_next_action", store=True)
     resolution_note = fields.Text(tracking=True)
     product_published = fields.Boolean(related="product_tmpl_id.website_published", store=True)
     internal_reference = fields.Char(related="product_tmpl_id.default_code", store=True, index=True)
+    sourcing_queue_id = fields.Many2one(
+        "southern.sparex.sourcing.queue",
+        compute="_compute_related_work",
+    )
+    discovery_item_id = fields.Many2one(
+        "southern.sparex.discovery.item",
+        compute="_compute_related_work",
+    )
 
     @api.depends(
         "product_tmpl_id",
@@ -71,6 +90,34 @@ class SouthernProductQualityIssue(models.Model):
                 issue.product_tmpl_id.display_name,
             )
 
+    @api.depends("issue_type")
+    def _compute_next_action(self):
+        for issue in self:
+            issue.next_action = next_action_for(issue.issue_type)
+
+    @api.depends(
+        "company_id",
+        "product_tmpl_id",
+        "product_tmpl_id.default_code",
+        "product_tmpl_id.southern_sparex_sourcing_ids",
+    )
+    def _compute_related_work(self):
+        Discovery = self.env["southern.sparex.discovery.item"].sudo()
+        for issue in self:
+            product = issue.product_tmpl_id
+            issue.sourcing_queue_id = product.southern_sparex_sourcing_ids[:1]
+            normalized = normalized_sparex_sku(product.default_code)
+            discovery = Discovery.browse()
+            if normalized:
+                discovery = Discovery.search(
+                    [
+                        ("company_id", "=", issue.company_id.id),
+                        ("normalized_sku", "=", normalized),
+                    ],
+                    limit=1,
+                )
+            issue.discovery_item_id = discovery
+
     def action_start(self):
         self.write({"state": "in_progress"})
 
@@ -79,7 +126,27 @@ class SouthernProductQualityIssue(models.Model):
         return True
 
     def action_resolve(self):
+        products = self.mapped("product_tmpl_id")
+        duplicate_counts = self._duplicate_counts_for(products)
+        still_present = self.browse()
+        for issue in self:
+            codes = {
+                finding.issue_type
+                for finding in self._product_findings(issue.product_tmpl_id, duplicate_counts)
+            }
+            if issue.issue_type in codes:
+                still_present |= issue
+        if still_present:
+            raise UserError(
+                _(
+                    "These quality rows are still present: %(names)s. "
+                    "Resolve only after the product facts change, or Dismiss with a "
+                    "note if the exception is accepted."
+                )
+                % {"names": ", ".join(still_present.mapped("display_name"))}
+            )
         self.write({"state": "resolved", "resolved_at": fields.Datetime.now()})
+        return True
 
     def action_dismiss(self):
         missing_note = self.filtered(lambda issue: not (issue.resolution_note or "").strip())
@@ -99,6 +166,41 @@ class SouthernProductQualityIssue(models.Model):
             "res_model": "product.template",
             "view_mode": "form",
             "res_id": self.product_tmpl_id.id,
+        }
+
+    def action_open_sourcing(self):
+        self.ensure_one()
+        if not self.sourcing_queue_id:
+            raise UserError(_("This product has no Sparex sourcing row yet."))
+        return {
+            "type": "ir.actions.act_window",
+            "name": self.sourcing_queue_id.display_name,
+            "res_model": "southern.sparex.sourcing.queue",
+            "view_mode": "form",
+            "res_id": self.sourcing_queue_id.id,
+        }
+
+    def action_open_discovery(self):
+        self.ensure_one()
+        if not self.discovery_item_id:
+            raise UserError(_("This product has no Sparex discovery row."))
+        return {
+            "type": "ir.actions.act_window",
+            "name": self.discovery_item_id.display_name,
+            "res_model": "southern.sparex.discovery.item",
+            "view_mode": "form",
+            "res_id": self.discovery_item_id.id,
+        }
+
+    def action_refresh_selected_products(self):
+        product_ids = list(dict.fromkeys(self.mapped("product_tmpl_id").ids))
+        self.refresh_quality_queue(
+            limit=min(len(product_ids), QUALITY_BATCH_LIMIT) or 1,
+            product_ids=product_ids[:QUALITY_BATCH_LIMIT],
+        )
+        return {
+            "type": "ir.actions.client",
+            "tag": "reload",
         }
 
     @api.model
@@ -151,38 +253,93 @@ class SouthernProductQualityIssue(models.Model):
         return [finding.issue_type for finding in self._product_findings(product, duplicate_counts)]
 
     @api.model
-    def refresh_quality_queue(self, limit=None, after_id=0):
+    def _product_company_domain(self):
+        return [("company_id", "in", [False, self.env.company.id])]
+
+    @api.model
+    def _duplicate_counts_for(self, products):
         Product = self.env["product.template"].with_context(active_test=False, bin_size=True)
-        product_domain = [
-            ("company_id", "in", [False, self.env.company.id]),
-            ("id", ">", int(after_id or 0)),
-        ]
-        products = Product.search(product_domain, order="id", limit=limit)
         raw_references = [reference for reference in products.mapped("default_code") if reference]
+        if not raw_references:
+            return Counter()
         duplicate_candidates = Product.search(
-            [
-                ("company_id", "in", [False, self.env.company.id]),
-                ("default_code", "in", raw_references),
-            ]
+            self._product_company_domain() + [("default_code", "in", raw_references)]
         )
-        duplicate_counts = Counter(
+        return Counter(
             "".join((reference or "").upper().split())
             for reference in duplicate_candidates.mapped("default_code")
             if reference
         )
+
+    @api.model
+    def _search_refresh_products(self, limit, after_id):
+        Product = self.env["product.template"].with_context(active_test=False, bin_size=True)
+        limit = int(limit or QUALITY_BATCH_LIMIT)
+        company_domain = self._product_company_domain()
+        published = Product.search(
+            company_domain + [("website_published", "=", True)],
+            order="write_date desc, id desc",
+            limit=min(QUALITY_PRIORITY_PUBLISHED_LIMIT, limit),
+        )
+        open_issue_products = self.search(
+            [
+                ("company_id", "=", self.env.company.id),
+                ("state", "in", ["open", "in_progress", "blocked"]),
+            ],
+            order="last_detected_at, id",
+            limit=QUALITY_PRIORITY_OPEN_LIMIT * 3,
+        ).mapped("product_tmpl_id")
+        used = set(published.ids)
+        stale_open_ids = []
+        for product in open_issue_products:
+            if product.id in used:
+                continue
+            used.add(product.id)
+            stale_open_ids.append(product.id)
+            if len(stale_open_ids) >= QUALITY_PRIORITY_OPEN_LIMIT:
+                break
+        remaining = max(limit - len(published) - len(stale_open_ids), 0)
+        cursor = Product.browse()
+        if remaining:
+            cursor = Product.search(
+                company_domain + [("id", ">", int(after_id or 0))],
+                order="id",
+                limit=remaining,
+            )
+            if not cursor and after_id:
+                cursor = Product.search(company_domain, order="id", limit=remaining)
+        product_ids = merge_quality_refresh_ids(
+            published.ids, stale_open_ids, cursor.ids, limit
+        )
+        return Product.browse(product_ids), cursor[-1].id if cursor else int(after_id or 0)
+
+    @api.model
+    def refresh_quality_queue(self, limit=None, after_id=0, product_ids=None):
+        Product = self.env["product.template"].with_context(active_test=False, bin_size=True)
+        if product_ids is not None:
+            products = Product.browse(list(product_ids)).exists()
+            last_product_id = int(after_id or 0)
+        else:
+            products, last_product_id = self._search_refresh_products(limit, after_id)
+        duplicate_counts = self._duplicate_counts_for(products)
         now = fields.Datetime.now()
         detected = set()
-        created = updated = resolved = 0
+        created = updated = resolved = skipped_dismissed = 0
         existing_by_key = defaultdict(lambda: self.browse())
+        dismissed_by_key = defaultdict(lambda: self.browse())
         if products:
             for issue in self.search(
                 [
                     ("company_id", "=", self.env.company.id),
                     ("product_tmpl_id", "in", products.ids),
-                    ("state", "in", ["open", "in_progress", "blocked"]),
+                    ("state", "in", ["open", "in_progress", "blocked", "dismissed"]),
                 ]
             ):
-                existing_by_key[(issue.product_tmpl_id.id, issue.issue_type)] |= issue
+                key = (issue.product_tmpl_id.id, issue.issue_type)
+                if issue.state == "dismissed":
+                    dismissed_by_key[key] |= issue
+                else:
+                    existing_by_key[key] |= issue
         for product in products:
             for finding in self._product_findings(product, duplicate_counts):
                 key = (product.id, finding.issue_type, self.env.company.id)
@@ -192,8 +349,10 @@ class SouthernProductQualityIssue(models.Model):
                     "details": finding.details,
                     "severity": finding.severity,
                     "work_lane": finding.work_lane,
+                    "next_action": finding.next_action,
                 }
                 existing = existing_by_key[(product.id, finding.issue_type)]
+                dismissed = dismissed_by_key[(product.id, finding.issue_type)]
                 current = existing[:1]
                 extras = existing[1:]
                 if current:
@@ -208,6 +367,21 @@ class SouthernProductQualityIssue(models.Model):
                             }
                         )
                         resolved += len(extras)
+                    continue
+                latest_dismissed = dismissed.sorted("id", reverse=True)[:1]
+                if latest_dismissed and not dismissed_should_reopen(
+                    {
+                        "details": latest_dismissed.details,
+                        "severity": latest_dismissed.severity,
+                        "work_lane": latest_dismissed.work_lane,
+                    },
+                    finding,
+                ):
+                    skipped_dismissed += 1
+                    continue
+                if latest_dismissed:
+                    latest_dismissed.write(dict(values, state="open", resolved_at=False))
+                    updated += 1
                 else:
                     self.create(
                         dict(
@@ -241,8 +415,9 @@ class SouthernProductQualityIssue(models.Model):
             "created": created,
             "updated": updated,
             "resolved": resolved,
+            "skipped_dismissed": skipped_dismissed,
             "scanned": len(products),
-            "last_product_id": products[-1].id if products else 0,
+            "last_product_id": last_product_id,
         }
 
     @api.model

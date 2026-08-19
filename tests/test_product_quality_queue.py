@@ -97,6 +97,34 @@ class ProductQualityQueueTests(unittest.TestCase):
         self.assertIn("missing_evidence", types)
         self.assertIn("duplicate_reference", types)
 
+    def test_ready_row_points_at_approved_release_not_direct_publish(self):
+        findings = self.classify()
+        self.assertIn("approved Sparex release", findings[0].next_action)
+        self.assertIn("does not publish the product", findings[0].next_action)
+
+    def test_refresh_ids_keep_live_products_ahead_of_the_catalog_cursor(self):
+        ids = self.rules.merge_quality_refresh_ids([30, 10], [10, 40], [1, 2, 3, 40], limit=5)
+        self.assertEqual(ids, [30, 10, 40, 1, 2])
+
+    def test_dismissed_rows_reopen_only_when_facts_change(self):
+        finding = self.classify(price=1.0, published=True, sparex_publication_eligible=False)[0]
+        self.assertFalse(
+            self.rules.dismissed_should_reopen(
+                {
+                    "details": finding.details,
+                    "severity": finding.severity,
+                    "work_lane": finding.work_lane,
+                },
+                finding,
+            )
+        )
+        self.assertTrue(
+            self.rules.dismissed_should_reopen(
+                {"details": "Sale price is $0.99", "severity": finding.severity, "work_lane": finding.work_lane},
+                finding,
+            )
+        )
+
     def test_quality_refresh_batches_existing_issues(self):
         source = (ROOT / "southern_parts_intelligence" / "models" / "product_quality.py").read_text(
             encoding="utf-8"
@@ -107,6 +135,9 @@ class ProductQualityQueueTests(unittest.TestCase):
         self.assertIn("limit=500", source)
         self.assertIn("pg_try_advisory_xact_lock", source)
         self.assertIn("issue_type", source)
+        self.assertIn("dismissed_should_reopen", source)
+        self.assertIn("_search_refresh_products", source)
+        self.assertIn("action_refresh_selected_products", source)
         self.assertNotIn("for issue_type in self._issue_codes", source)
 
     def test_quality_views_expose_work_lanes_and_need_work_default(self):
@@ -146,6 +177,15 @@ class ProductQualityQueueTests(unittest.TestCase):
         self.assertEqual(parts["version"], "19.0.1.47.0")
         self.assertEqual(operations["version"], "19.0.1.2.0")
         self.assertIn("views/product_quality_views.xml", parts["data"])
+
+    def test_hourly_priority_cron_is_bounded_and_active(self):
+        root = ET.parse(ROOT / "southern_parts_intelligence" / "data" / "quality_cron.xml").getroot()
+        hourly = root.find("./record[@id='ir_cron_southern_product_quality_queue_v3']")
+        self.assertIsNotNone(hourly)
+        fields = {field.get("name"): (field.text or "").strip() for field in hourly.findall("field")}
+        self.assertEqual(fields["interval_type"], "hours")
+        self.assertEqual(fields["active"], "True")
+        self.assertEqual(fields["code"], "model.cron_refresh_quality_queue()")
 
 
 if __name__ == "__main__":

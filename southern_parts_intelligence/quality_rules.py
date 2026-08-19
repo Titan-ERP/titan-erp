@@ -37,6 +37,22 @@ BLOCKER_WHEN_PUBLISHED = frozenset(
 )
 
 MIN_CUSTOMER_READY_PRICE = 1.49
+QUALITY_BATCH_LIMIT = 500
+QUALITY_PRIORITY_PUBLISHED_LIMIT = 200
+QUALITY_PRIORITY_OPEN_LIMIT = 150
+
+NEXT_ACTIONS = {
+    "placeholder_price": "Correct the sale price on the product. Do not publish from this queue.",
+    "price_not_above_cost": "Raise retail above verified cost, or return the cost row to review.",
+    "missing_verified_supplier_cost": "Open Sparex Sourcing and complete dealer-cost approval.",
+    "missing_evidence": "Add an exact source URL or Parts Intelligence evidence.",
+    "taxonomy_review": "Assign a public website category. Leave publication to the approved release workflow.",
+    "duplicate_reference": "Keep one canonical internal reference and archive or recode the extras.",
+    "published_missing_image": "Add a product image before the next public check.",
+    "published_missing_description": "Add a customer-facing description without placeholder or script copy.",
+    "publication_gate_blocked": "Open Sparex Sourcing and clear the publication blockers.",
+    "publication_ready": "Queue an approved Sparex release batch. This row does not publish the product.",
+}
 
 
 @dataclass(frozen=True)
@@ -45,6 +61,34 @@ class QualityFinding:
     details: str
     severity: str
     work_lane: str
+    next_action: str
+
+
+def next_action_for(issue_type: str) -> str:
+    return NEXT_ACTIONS.get(issue_type, "Review the product facts and keep writes on the approved workflow.")
+
+
+def merge_quality_refresh_ids(published_ids, open_ids, cursor_ids, limit=QUALITY_BATCH_LIMIT):
+    """Dedupe product ids in live-first order without exceeding the batch bound."""
+    ordered = []
+    seen = set()
+    for product_id in (*published_ids, *open_ids, *cursor_ids):
+        if not product_id or product_id in seen:
+            continue
+        seen.add(product_id)
+        ordered.append(product_id)
+        if len(ordered) >= int(limit):
+            break
+    return ordered
+
+
+def dismissed_should_reopen(previous, finding):
+    """Reopen a dismissed row only when the underlying facts changed."""
+    return (
+        (previous.get("details") or "") != finding.details
+        or (previous.get("severity") or "") != finding.severity
+        or (previous.get("work_lane") or "") != finding.work_lane
+    )
 
 
 def severity_for(issue_type: str, published: bool) -> str:
@@ -102,6 +146,7 @@ def classify_product_quality(
                 details=details,
                 severity=severity_for(issue_type, published),
                 work_lane=work_lane_for(issue_type, published),
+                next_action=next_action_for(issue_type),
             )
         )
 
