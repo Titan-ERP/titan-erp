@@ -108,7 +108,7 @@ class ProductQualityQueueTests(unittest.TestCase):
 
     def test_dismissed_rows_reopen_only_when_facts_change(self):
         finding = self.classify(price=1.0, published=True, sparex_publication_eligible=False)[0]
-        self.assertFalse(
+        self.assertTrue(
             self.rules.dismissed_should_reopen(
                 {
                     "details": finding.details,
@@ -124,9 +124,26 @@ class ProductQualityQueueTests(unittest.TestCase):
                 finding,
             )
         )
-        self.assertFalse(
+        self.assertTrue(
             self.rules.dismissed_should_reopen(
                 {"details": "", "severity": "2_medium", "work_lane": "enrich"},
+                finding,
+            )
+        )
+        unpublished = next(
+            row
+            for row in self.classify(verified_supplier_cost=0, sparex_publication_eligible=False)
+            if row.issue_type == "missing_verified_supplier_cost"
+        )
+        self.assertFalse(
+            self.rules.dismissed_should_reopen(
+                {"details": "", "severity": unpublished.severity, "work_lane": unpublished.work_lane},
+                unpublished,
+            )
+        )
+        self.assertFalse(
+            self.rules.dismissed_should_reopen(
+                {"accepted_fact_key": self.rules.finding_fact_key(finding)},
                 finding,
             )
         )
@@ -170,6 +187,7 @@ class ProductQualityQueueTests(unittest.TestCase):
         self.assertIn("any(sourcing_rows.mapped(\"publication_eligible\"))", source)
         self.assertIn("_compute_lane_and_severity", source)
         self.assertIn("accepted_fact_key", source)
+        self.assertIn('accepted_fact_key": False', source)
         self.assertNotIn("for issue_type in self._issue_codes", source)
 
     def test_quality_views_expose_work_lanes_and_need_work_default(self):

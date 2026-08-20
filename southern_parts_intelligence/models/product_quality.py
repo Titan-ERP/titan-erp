@@ -218,7 +218,7 @@ class SouthernProductQualityIssue(models.Model):
         return True
 
     def action_reopen(self):
-        self.write({"state": "open", "resolved_at": False})
+        self.write({"state": "open", "resolved_at": False, "accepted_fact_key": False})
 
     def action_open_product(self):
         self.ensure_one()

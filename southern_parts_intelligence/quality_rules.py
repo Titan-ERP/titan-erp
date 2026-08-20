@@ -100,22 +100,21 @@ def finding_fact_key(finding):
 def dismissed_should_reopen(previous, finding):
     """Reopen a dismissed row only when stored facts changed.
 
-    Empty previous details and no accepted fact key means a pre-details
-    dismissal. Seed the snapshot on the next refresh instead of treating the
-    first backfill as a fact change.
+    Do not trust computed work_lane or severity on the issue. Those fields
+    update as soon as the product is published, so a missing accepted fact
+    key plus a live finding must reopen instead of seeding the live snapshot.
+    Unpublished rows with no snapshot are seeded and stay dismissed.
     """
     current = finding_fact_key(finding)
     accepted = (previous.get("accepted_fact_key") or "").strip()
     if accepted:
         return accepted != current
+    if finding.work_lane == "live_fix":
+        return True
     previous_details = (previous.get("details") or "").strip()
     if not previous_details:
         return False
-    return (
-        previous_details != finding.details
-        or (previous.get("severity") or "") != finding.severity
-        or (previous.get("work_lane") or "") != finding.work_lane
-    )
+    return previous_details != finding.details
 
 
 def severity_for(issue_type: str, published: bool) -> str:
