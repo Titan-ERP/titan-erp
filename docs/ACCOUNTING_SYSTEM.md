@@ -45,6 +45,8 @@ Each row stores a details sentence that says why it is in that lane.
 ### Bank coding
 
 Approved rules create candidates. They do not change accounts.
+The daily candidate cron evaluates Southern Equipment companies only, matching
+Daily Accounting Control.
 
 1. Review **Bank Coding Rules** and approve only rules with a real target
    account.

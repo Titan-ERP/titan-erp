@@ -1,6 +1,10 @@
 from odoo import _, api, fields, models
 
-from ..accounting_review import INVOICE_SOURCE_WORK_LANES
+from ..accounting_review import (
+    BANK_OPEN_WORK_LANES,
+    INVOICE_SOURCE_WORK_LANES,
+    SOUTHERN_COMPANY_NAME,
+)
 
 
 class SouthernAccountingDailyControl(models.Model):
@@ -168,7 +172,7 @@ class SouthernAccountingDailyControl(models.Model):
 
     @api.model
     def cron_refresh_daily_controls(self):
-        companies = self.env["res.company"].search([("name", "ilike", "Southern Equipment")])
+        companies = self.env["res.company"].search([("name", "ilike", SOUTHERN_COMPANY_NAME)])
         today = fields.Date.context_today(self)
         for company in companies:
             control = self.search([("company_id", "=", company.id), ("control_date", "=", today)], limit=1)
@@ -189,41 +193,53 @@ class SouthernAccountingDailyControl(models.Model):
         self.write({"state": "open"})
         return True
 
-    def action_view_bank_review(self):
+    def _southern_bank_review_action(self, name, extra_domain):
         self.ensure_one()
         return {
             "type": "ir.actions.act_window",
-            "name": _("Daily Bank Lines"),
+            "name": name,
             "res_model": "account.bank.statement.line",
             "view_mode": "list,form",
-            "domain": [("company_id", "=", self.company_id.id), ("date", "=", self.control_date)],
+            "search_view_id": self.env.ref(
+                "southern_accounting_guardrails.view_southern_bank_statement_line_review_search"
+            ).id,
+            "views": [
+                (
+                    self.env.ref(
+                        "southern_accounting_guardrails.view_southern_bank_statement_line_review_list"
+                    ).id,
+                    "list",
+                ),
+                (
+                    self.env.ref(
+                        "southern_accounting_guardrails.view_southern_bank_statement_line_review_form"
+                    ).id,
+                    "form",
+                ),
+            ],
+            "domain": [("company_id", "=", self.company_id.id)] + extra_domain,
         }
+
+    def action_view_bank_review(self):
+        return self._southern_bank_review_action(
+            _("Daily Bank Work"),
+            [
+                ("date", "=", self.control_date),
+                ("southern_review_lane", "in", BANK_OPEN_WORK_LANES),
+            ],
+        )
 
     def action_view_bank_blocked(self):
-        self.ensure_one()
-        return {
-            "type": "ir.actions.act_window",
-            "name": _("Blocked Bank Exceptions"),
-            "res_model": "account.bank.statement.line",
-            "view_mode": "list,form",
-            "domain": [
-                ("company_id", "=", self.company_id.id),
-                ("southern_review_lane", "=", "blocked"),
-            ],
-        }
+        return self._southern_bank_review_action(
+            _("Blocked Bank Exceptions"),
+            [("southern_review_lane", "=", "blocked")],
+        )
 
     def action_view_bank_merchant(self):
-        self.ensure_one()
-        return {
-            "type": "ir.actions.act_window",
-            "name": _("Open Merchant Settlements"),
-            "res_model": "account.bank.statement.line",
-            "view_mode": "list,form",
-            "domain": [
-                ("company_id", "=", self.company_id.id),
-                ("southern_review_lane", "=", "merchant"),
-            ],
-        }
+        return self._southern_bank_review_action(
+            _("Open Merchant Settlements"),
+            [("southern_review_lane", "=", "merchant")],
+        )
 
     def action_view_bank_coding_candidates(self):
         self.ensure_one()

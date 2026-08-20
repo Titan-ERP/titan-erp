@@ -20,7 +20,16 @@ COST_ACCOUNT_PREFIXES = {
 RESERVED_OPERATING_INCOME_PREFIXES = ("410", "420", "430")
 CROSS_POSTED_REVENUE_BUCKETS = frozenset({"freight", "fees"})
 INVOICE_SOURCE_WORK_LANES = ("source_review", "needs_review", "exception")
+BANK_OPEN_WORK_LANES = (
+    "blocked",
+    "merchant",
+    "payroll",
+    "check_payee",
+    "missing_partner",
+    "ordinary",
+)
 NATIVE_INVOICE_REVIEW_DETAILS = "Native Odoo invoice with no legacy source to verify."
+SOUTHERN_COMPANY_NAME = "Southern Equipment"
 
 
 def join_review_details(reasons):

@@ -63,10 +63,54 @@
         </field>
     </record>
 
+    <record id="view_southern_bank_statement_line_review_form" model="ir.ui.view">
+        <field name="name">southern.bank.statement.line.review.form</field>
+        <field name="model">account.bank.statement.line</field>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_southern_mark_reviewed" type="object" string="Reviewed" class="btn-primary"/>
+                    <button name="action_southern_mark_exception" type="object" string="Exception"/>
+                    <button name="action_southern_mark_needs_review" type="object" string="Needs Review"/>
+                    <field name="southern_review_status" widget="statusbar"
+                           statusbar_visible="needs_review,reviewed,exception"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="date"/>
+                            <field name="journal_id"/>
+                            <field name="partner_id"/>
+                            <field name="payment_ref"/>
+                            <field name="amount"/>
+                            <field name="is_reconciled"/>
+                        </group>
+                        <group>
+                            <field name="southern_review_lane" readonly="1"/>
+                            <field name="southern_review_details" readonly="1"/>
+                            <field name="southern_review_bucket"/>
+                            <field name="southern_manual_review_bucket"/>
+                            <field name="southern_is_merchant_settlement"/>
+                            <field name="southern_settlement_direct_revenue"/>
+                            <field name="southern_payroll_direct_expense"/>
+                            <field name="southern_missing_partner"/>
+                        </group>
+                    </group>
+                    <field name="southern_review_note" placeholder="Matching decision, payee, or exception reason."/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
     <record id="action_southern_bank_statement_line_review" model="ir.actions.act_window">
         <field name="name">Bank Matching Review</field>
         <field name="res_model">account.bank.statement.line</field>
         <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_southern_bank_statement_line_review_search"/>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_southern_bank_statement_line_review_list')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_southern_bank_statement_line_review_form')})]"/>
         <field name="domain">[('southern_review_lane', 'not in', ['reviewed', 'not_required'])]</field>
         <field name="context">{'search_default_work_needed': 1}</field>
     </record>
@@ -75,6 +119,10 @@
         <field name="name">Bank Blocked Exceptions</field>
         <field name="res_model">account.bank.statement.line</field>
         <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_southern_bank_statement_line_review_search"/>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_southern_bank_statement_line_review_list')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_southern_bank_statement_line_review_form')})]"/>
         <field name="domain">[('southern_review_lane', '=', 'blocked')]</field>
         <field name="context">{'search_default_blocked': 1}</field>
     </record>
@@ -83,6 +131,10 @@
         <field name="name">Merchant Settlements</field>
         <field name="res_model">account.bank.statement.line</field>
         <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_southern_bank_statement_line_review_search"/>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_southern_bank_statement_line_review_list')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_southern_bank_statement_line_review_form')})]"/>
         <field name="domain">[('southern_review_lane', '=', 'merchant')]</field>
         <field name="context">{'search_default_merchant': 1}</field>
     </record>

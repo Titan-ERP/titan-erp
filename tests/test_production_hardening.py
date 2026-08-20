@@ -68,7 +68,9 @@ class ProductionHardeningTests(unittest.TestCase):
         self.assertIn("def classify_product_accounting_review", rules)
         self.assertIn("def classify_revenue_line_review", rules)
         self.assertIn("INVOICE_SOURCE_WORK_LANES", rules)
+        self.assertIn("BANK_OPEN_WORK_LANES", rules)
         self.assertIn("NATIVE_INVOICE_REVIEW_DETAILS", rules)
+        self.assertIn("SOUTHERN_COMPANY_NAME", rules)
         policy = self.source("southern_accounting_guardrails/models/accounting_policy.py")
         self.assertIn("Transaction Processing Fee Income", policy)
 

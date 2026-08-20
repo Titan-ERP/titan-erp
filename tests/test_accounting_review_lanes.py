@@ -245,6 +245,31 @@ class InvoiceReviewMigrationTest(unittest.TestCase):
             accounting_review.NATIVE_INVOICE_REVIEW_DETAILS,
         )
 
+    def test_bank_coding_cron_is_limited_to_southern_equipment(self):
+        source = (
+            ROOT / "southern_accounting_guardrails" / "models" / "bank_coding.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("SOUTHERN_COMPANY_NAME", source)
+        self.assertIn("cron_prepare_candidates", source)
+        self.assertNotIn('search([])', source)
+
+    def test_daily_bank_action_uses_open_work_lanes(self):
+        daily = (
+            ROOT / "southern_accounting_guardrails" / "models" / "daily_control.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("BANK_OPEN_WORK_LANES", daily)
+        self.assertIn("view_southern_bank_statement_line_review_form", daily)
+        views = (
+            ROOT
+            / "southern_accounting_guardrails"
+            / "views"
+            / "bank_statement_line_views.xml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("view_southern_bank_statement_line_review_form", views)
+        self.assertIn("southern_review_details", views)
+        for lane in accounting_review.BANK_OPEN_WORK_LANES:
+            self.assertIn(f"'{lane}'", views)
+
     def test_daily_controls_use_the_same_invoice_work_lanes_as_the_menu(self):
         daily = (
             ROOT
