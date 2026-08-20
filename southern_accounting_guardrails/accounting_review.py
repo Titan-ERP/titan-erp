@@ -19,6 +19,8 @@ COST_ACCOUNT_PREFIXES = {
 }
 RESERVED_OPERATING_INCOME_PREFIXES = ("410", "420", "430")
 CROSS_POSTED_REVENUE_BUCKETS = frozenset({"freight", "fees"})
+INVOICE_SOURCE_WORK_LANES = ("source_review", "needs_review", "exception")
+NATIVE_INVOICE_REVIEW_DETAILS = "Native Odoo invoice with no legacy source to verify."
 
 
 def join_review_details(reasons):
@@ -66,7 +68,7 @@ def classify_invoice_review(
         )
     if review_status == "needs_review":
         return "needs_review", "Invoice remains in the generic review queue."
-    return "not_required", "Native Odoo invoice with no legacy source to verify."
+    return "not_required", NATIVE_INVOICE_REVIEW_DETAILS
 
 
 def classify_bank_review(

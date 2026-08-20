@@ -1,5 +1,7 @@
 from odoo import _, api, fields, models
 
+from ..accounting_review import INVOICE_SOURCE_WORK_LANES
+
 
 class SouthernAccountingDailyControl(models.Model):
     _name = "southern.accounting.daily.control"
@@ -149,7 +151,7 @@ class SouthernAccountingDailyControl(models.Model):
                             ("company_id", "=", control.company_id.id),
                             ("move_type", "in", ("out_invoice", "out_refund")),
                             ("state", "!=", "cancel"),
-                            ("southern_review_lane", "in", ("source_review", "exception")),
+                            ("southern_review_lane", "in", INVOICE_SOURCE_WORK_LANES),
                         ]
                     ),
                     "product_missing_bucket_count": Product.search_count(
@@ -247,7 +249,7 @@ class SouthernAccountingDailyControl(models.Model):
                 ("company_id", "=", self.company_id.id),
                 ("move_type", "in", ("out_invoice", "out_refund")),
                 ("state", "!=", "cancel"),
-                ("southern_review_lane", "in", ("source_review", "exception")),
+                ("southern_review_lane", "in", INVOICE_SOURCE_WORK_LANES),
             ],
         }
 

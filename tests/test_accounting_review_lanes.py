@@ -229,14 +229,38 @@ class RevenueLineReviewTest(unittest.TestCase):
 
 
 class InvoiceReviewMigrationTest(unittest.TestCase):
-    def test_migration_clears_native_invoice_review(self):
+    def test_migration_clears_native_invoice_status_and_lane(self):
         cursor = RecordingCursor()
         accounting_review_migration.migrate(cursor, "19.0.1.10.0")
         self.assertEqual(len(cursor.calls), 1)
-        query = cursor.calls[0][0]
+        query, params = cursor.calls[0]
         self.assertIn("southern_review_status = 'not_required'", query)
+        self.assertIn("southern_review_lane = 'not_required'", query)
+        self.assertIn("southern_review_details", query)
         self.assertIn("shop_boss", query)
         self.assertIn("out_invoice", query)
+        self.assertEqual(params, (accounting_review.NATIVE_INVOICE_REVIEW_DETAILS,))
+        self.assertEqual(
+            accounting_review_migration.NATIVE_INVOICE_REVIEW_DETAILS,
+            accounting_review.NATIVE_INVOICE_REVIEW_DETAILS,
+        )
+
+    def test_daily_controls_use_the_same_invoice_work_lanes_as_the_menu(self):
+        daily = (
+            ROOT
+            / "southern_accounting_guardrails"
+            / "models"
+            / "daily_control.py"
+        ).read_text(encoding="utf-8")
+        views = (
+            ROOT
+            / "southern_accounting_guardrails"
+            / "views"
+            / "account_move_views.xml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("INVOICE_SOURCE_WORK_LANES", daily)
+        for lane in accounting_review.INVOICE_SOURCE_WORK_LANES:
+            self.assertIn(f"'{lane}'", views)
 
 
 if __name__ == "__main__":
