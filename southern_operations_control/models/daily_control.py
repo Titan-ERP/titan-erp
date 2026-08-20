@@ -227,6 +227,36 @@ class SouthernOperationsDailyControl(models.Model):
                 control = self.create({"company_id": company.id, "control_date": today})
             control.action_refresh_counts()
 
+    def _action_open_quality(self, name, extra_domain):
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": name,
+            "res_model": "southern.product.quality.issue",
+            "view_mode": "list,kanban,form",
+            "domain": [
+                ("company_id", "=", self.company_id.id),
+                ("state", "in", ["open", "in_progress", "blocked"]),
+            ]
+            + list(extra_domain),
+            "context": {"allowed_company_ids": [self.company_id.id]},
+        }
+
+    def action_open_product_issues(self):
+        return self._action_open_quality(
+            _("Product Master Quality"),
+            [("issue_type", "!=", "publication_ready")],
+        )
+
+    def action_open_live_fixes(self):
+        return self._action_open_quality(_("Live Website Fixes"), [("work_lane", "=", "live_fix")])
+
+    def action_open_ready_products(self):
+        return self._action_open_quality(_("Ready to Publish"), [("work_lane", "=", "release")])
+
+    def action_open_product_blockers(self):
+        return self._action_open_quality(_("Product Blockers"), [("severity", "=", "4_blocker")])
+
     def action_mark_reviewed(self):
         self.write({"state": "reviewed"})
 

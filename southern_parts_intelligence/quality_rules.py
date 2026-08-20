@@ -83,9 +83,16 @@ def merge_quality_refresh_ids(published_ids, open_ids, cursor_ids, limit=QUALITY
 
 
 def dismissed_should_reopen(previous, finding):
-    """Reopen a dismissed row only when the underlying facts changed."""
+    """Reopen a dismissed row only when stored facts changed.
+
+    Empty previous details means a pre-details dismissal. Seed the snapshot on
+    the next refresh instead of treating the first backfill as a fact change.
+    """
+    previous_details = (previous.get("details") or "").strip()
+    if not previous_details:
+        return False
     return (
-        (previous.get("details") or "") != finding.details
+        previous_details != finding.details
         or (previous.get("severity") or "") != finding.severity
         or (previous.get("work_lane") or "") != finding.work_lane
     )

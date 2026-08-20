@@ -1,4 +1,5 @@
 from collections import Counter, defaultdict
+from datetime import timedelta
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
@@ -75,6 +76,11 @@ class SouthernProductQualityIssue(models.Model):
         "southern.sparex.discovery.item",
         compute="_compute_related_work",
     )
+    evidence_queue_id = fields.Many2one(
+        "southern.parts.evidence.queue",
+        compute="_compute_related_work",
+    )
+    is_stale = fields.Boolean(compute="_compute_is_stale")
 
     @api.depends(
         "product_tmpl_id",
@@ -103,9 +109,12 @@ class SouthernProductQualityIssue(models.Model):
     )
     def _compute_related_work(self):
         Discovery = self.env["southern.sparex.discovery.item"].sudo()
+        Evidence = self.env["southern.parts.evidence.queue"]
         for issue in self:
             product = issue.product_tmpl_id
-            issue.sourcing_queue_id = product.southern_sparex_sourcing_ids[:1]
+            issue.sourcing_queue_id = product.southern_sparex_sourcing_ids.filtered(
+                lambda row: row.company_id == issue.company_id
+            )[:1]
             normalized = normalized_sparex_sku(product.default_code)
             discovery = Discovery.browse()
             if normalized:
@@ -117,6 +126,23 @@ class SouthernProductQualityIssue(models.Model):
                     limit=1,
                 )
             issue.discovery_item_id = discovery
+            issue.evidence_queue_id = Evidence.search(
+                [
+                    ("product_tmpl_id", "=", product.id),
+                    ("status", "not in", ["applied", "rejected"]),
+                ],
+                order="priority desc, id desc",
+                limit=1,
+            )
+
+    @api.depends("last_detected_at", "state")
+    def _compute_is_stale(self):
+        cutoff = fields.Datetime.now() - timedelta(days=7)
+        open_states = {"open", "in_progress", "blocked"}
+        for issue in self:
+            issue.is_stale = issue.state in open_states and (
+                not issue.last_detected_at or issue.last_detected_at < cutoff
+            )
 
     def action_start(self):
         self.write({"state": "in_progress"})
@@ -126,16 +152,18 @@ class SouthernProductQualityIssue(models.Model):
         return True
 
     def action_resolve(self):
-        products = self.mapped("product_tmpl_id")
-        duplicate_counts = self._duplicate_counts_for(products)
         still_present = self.browse()
-        for issue in self:
-            codes = {
-                finding.issue_type
-                for finding in self._product_findings(issue.product_tmpl_id, duplicate_counts)
-            }
-            if issue.issue_type in codes:
-                still_present |= issue
+        for company in self.mapped("company_id"):
+            issues = self.filtered(lambda issue: issue.company_id == company)
+            queue = self.with_company(company)
+            duplicate_counts = queue._duplicate_counts_for(issues.mapped("product_tmpl_id"))
+            for issue in issues:
+                codes = {
+                    finding.issue_type
+                    for finding in queue._product_findings(issue.product_tmpl_id, duplicate_counts)
+                }
+                if issue.issue_type in codes:
+                    still_present |= issue
         if still_present:
             raise UserError(
                 _(
@@ -153,6 +181,10 @@ class SouthernProductQualityIssue(models.Model):
         if missing_note:
             raise UserError(_("Add a resolution note before dismissing a quality row."))
         self.write({"state": "dismissed", "resolved_at": fields.Datetime.now()})
+        return True
+
+    def action_block(self):
+        self.write({"state": "blocked"})
         return True
 
     def action_reopen(self):
@@ -192,12 +224,29 @@ class SouthernProductQualityIssue(models.Model):
             "res_id": self.discovery_item_id.id,
         }
 
+    def action_open_evidence(self):
+        self.ensure_one()
+        if not self.evidence_queue_id:
+            raise UserError(_("This product has no open evidence-queue row."))
+        return {
+            "type": "ir.actions.act_window",
+            "name": self.evidence_queue_id.display_name,
+            "res_model": "southern.parts.evidence.queue",
+            "view_mode": "form",
+            "res_id": self.evidence_queue_id.id,
+        }
+
     def action_refresh_selected_products(self):
-        product_ids = list(dict.fromkeys(self.mapped("product_tmpl_id").ids))
-        self.refresh_quality_queue(
-            limit=min(len(product_ids), QUALITY_BATCH_LIMIT) or 1,
-            product_ids=product_ids[:QUALITY_BATCH_LIMIT],
-        )
+        for company in self.mapped("company_id"):
+            product_ids = list(
+                dict.fromkeys(
+                    self.filtered(lambda issue: issue.company_id == company).mapped("product_tmpl_id").ids
+                )
+            )
+            self.with_company(company).refresh_quality_queue(
+                limit=min(len(product_ids), QUALITY_BATCH_LIMIT) or 1,
+                product_ids=product_ids[:QUALITY_BATCH_LIMIT],
+            )
         return {
             "type": "ir.actions.client",
             "tag": "reload",
@@ -210,7 +259,9 @@ class SouthernProductQualityIssue(models.Model):
         reference = "".join((product.default_code or "").upper().split())
         is_sparex = reference.startswith("S.")
         sourcing_rows = (
-            product.southern_sparex_sourcing_ids if is_sparex else self.env["southern.sparex.sourcing.queue"]
+            product.southern_sparex_sourcing_ids.filtered(lambda row: row.company_id == self.env.company)
+            if is_sparex
+            else self.env["southern.sparex.sourcing.queue"]
         )
         verified_supplier_costs = sourcing_rows.filtered(
             lambda row: row.supplier_price > 0
@@ -377,6 +428,7 @@ class SouthernProductQualityIssue(models.Model):
                     },
                     finding,
                 ):
+                    latest_dismissed.write(values)
                     skipped_dismissed += 1
                     continue
                 if latest_dismissed:

@@ -39,6 +39,20 @@
                     <field name="state" widget="statusbar" statusbar_visible="open,reviewed,exception"/>
                 </header>
                 <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_live_fixes" type="object" class="oe_stat_button" icon="fa-globe">
+                            <field name="product_live_fix_count" widget="statinfo" string="Live Fixes"/>
+                        </button>
+                        <button name="action_open_product_issues" type="object" class="oe_stat_button" icon="fa-check-square-o">
+                            <field name="open_product_issue_count" widget="statinfo" string="Needs Work"/>
+                        </button>
+                        <button name="action_open_ready_products" type="object" class="oe_stat_button" icon="fa-upload">
+                            <field name="product_ready_count" widget="statinfo" string="Ready"/>
+                        </button>
+                        <button name="action_open_product_blockers" type="object" class="oe_stat_button" icon="fa-exclamation-triangle">
+                            <field name="product_blocker_count" widget="statinfo" string="Blockers"/>
+                        </button>
+                    </div>
                     <div class="oe_title"><h1><field name="name"/></h1></div>
                     <group>
                         <group>

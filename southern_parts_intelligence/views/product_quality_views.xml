@@ -5,9 +5,10 @@
         <field name="model">southern.product.quality.issue</field>
         <field name="arch" type="xml">
             <list decoration-danger="severity == '4_blocker'"
-                  decoration-warning="severity == '3_high'"
+                  decoration-warning="severity == '3_high' or is_stale"
                   decoration-success="work_lane == 'release'"
                   decoration-muted="state in ['resolved', 'dismissed']">
+                <field name="is_stale" column_invisible="1"/>
                 <field name="work_lane"/>
                 <field name="severity"/>
                 <field name="issue_type"/>
@@ -76,9 +77,13 @@
                             invisible="not sourcing_queue_id"/>
                     <button name="action_open_discovery" type="object" string="Open Discovery"
                             invisible="not discovery_item_id" groups="base.group_system"/>
+                    <button name="action_open_evidence" type="object" string="Open Evidence"
+                            invisible="not evidence_queue_id"/>
                     <button name="action_refresh_selected_products" type="object" string="Refresh Product"/>
                     <button name="action_resolve" type="object" string="Resolve" class="btn-primary"
                             invisible="state in ['resolved', 'dismissed']"/>
+                    <button name="action_block" type="object" string="Blocked"
+                            invisible="state not in ['open', 'in_progress']"/>
                     <button name="action_dismiss" type="object" string="Dismiss"
                             invisible="state in ['resolved', 'dismissed']"/>
                     <button name="action_reopen" type="object" string="Reopen"
@@ -112,6 +117,8 @@
                         <field name="next_action" nolabel="1" readonly="1"/>
                         <field name="sourcing_queue_id" invisible="1"/>
                         <field name="discovery_item_id" invisible="1"/>
+                        <field name="evidence_queue_id" invisible="1"/>
+                        <field name="is_stale" invisible="1"/>
                     </group>
                     <group string="Resolution">
                         <field name="resolution_note" nolabel="1" placeholder="Required to dismiss. Resolve is blocked while the finding is still present."/>
@@ -143,6 +150,8 @@
                 <filter name="my_issues" string="My Issues" domain="[('assigned_to_id', '=', uid)]"/>
                 <filter name="missing_cost" string="Missing Verified Cost" domain="[('issue_type', '=', 'missing_verified_supplier_cost')]"/>
                 <filter name="placeholder_price" string="Placeholder Price" domain="[('issue_type', '=', 'placeholder_price')]"/>
+                <filter name="stale" string="Stale (7 days)"
+                        domain="[('state', 'in', ['open', 'in_progress', 'blocked']), ('last_detected_at', '&lt;', (context_today() - datetime.timedelta(days=7)).strftime('%Y-%m-%d 00:00:00'))]"/>
                 <separator/>
                 <filter name="group_lane" string="Work Lane" context="{'group_by': 'work_lane'}"/>
                 <filter name="group_issue" string="Issue" context="{'group_by': 'issue_type'}"/>

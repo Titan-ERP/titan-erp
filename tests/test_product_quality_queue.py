@@ -124,6 +124,12 @@ class ProductQualityQueueTests(unittest.TestCase):
                 finding,
             )
         )
+        self.assertFalse(
+            self.rules.dismissed_should_reopen(
+                {"details": "", "severity": "2_medium", "work_lane": "enrich"},
+                finding,
+            )
+        )
 
     def test_quality_refresh_batches_existing_issues(self):
         source = (ROOT / "southern_parts_intelligence" / "models" / "product_quality.py").read_text(
@@ -138,6 +144,9 @@ class ProductQualityQueueTests(unittest.TestCase):
         self.assertIn("dismissed_should_reopen", source)
         self.assertIn("_search_refresh_products", source)
         self.assertIn("action_refresh_selected_products", source)
+        self.assertIn("with_company(company)", source)
+        self.assertIn("latest_dismissed.write(values)", source)
+        self.assertIn("row.company_id == self.env.company", source)
         self.assertNotIn("for issue_type in self._issue_codes", source)
 
     def test_quality_views_expose_work_lanes_and_need_work_default(self):
@@ -156,7 +165,9 @@ class ProductQualityQueueTests(unittest.TestCase):
         )
         self.assertIn("needs_work", search_xml)
         self.assertIn("live_fix", search_xml)
+        self.assertIn("Stale (7 days)", search_xml)
         self.assertIn("Ready to Publish", "".join(root.itertext()))
+        self.assertIn("action_open_evidence", ET.tostring(root, encoding="unicode"))
 
     def test_daily_control_excludes_ready_rows_from_open_issue_count(self):
         source = (ROOT / "southern_operations_control" / "models" / "daily_control.py").read_text(
@@ -166,6 +177,9 @@ class ProductQualityQueueTests(unittest.TestCase):
         self.assertIn("product_ready_count", source)
         self.assertIn("product_live_fix_count", source)
         self.assertIn('("issue_type", "=", "publication_ready")', source)
+        self.assertIn("action_open_live_fixes", source)
+        self.assertIn("action_open_ready_products", source)
+        self.assertIn("action_open_product_blockers", source)
 
     def test_module_versions_were_bumped(self):
         parts = ast.literal_eval(
