@@ -16,6 +16,7 @@
                 <field name="bank_exception_count"/>
                 <field name="merchant_batch_needs_review_count"/>
                 <field name="revenue_line_needs_review_count"/>
+                <field name="revenue_line_open_count"/>
                 <field name="draft_invoice_count"/>
                 <field name="unverified_migration_invoice_count"/>
                 <field name="pending_coding_candidate_count"/>
@@ -58,7 +59,7 @@
                             <field name="invoice_source_review_count" widget="statinfo" string="Source Review"/>
                         </button>
                         <button class="oe_stat_button" type="object" name="action_view_revenue_review" icon="fa-list">
-                            <field name="revenue_line_needs_review_count" widget="statinfo" string="Revenue Review"/>
+                            <field name="revenue_line_open_count" widget="statinfo" string="Revenue Review"/>
                         </button>
                         <button class="oe_stat_button" type="object" name="action_view_product_account_review" icon="fa-tags">
                             <field name="product_account_needs_review_count" widget="statinfo" string="Products"/>
@@ -88,6 +89,7 @@
                             <field name="bank_merchant_open_count" readonly="1"/>
                             <field name="pending_coding_candidate_count" readonly="1"/>
                             <field name="invoice_source_review_count" readonly="1"/>
+                            <field name="revenue_line_open_count" readonly="1"/>
                             <field name="product_account_needs_review_count" readonly="1"/>
                             <field name="product_missing_bucket_count" readonly="1"/>
                         </group>

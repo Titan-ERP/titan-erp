@@ -31,6 +31,7 @@ class SouthernAccountingDailyControl(models.Model):
     bank_exception_count = fields.Integer(readonly=True)
     merchant_batch_needs_review_count = fields.Integer(readonly=True)
     revenue_line_needs_review_count = fields.Integer(readonly=True)
+    revenue_line_open_count = fields.Integer(readonly=True)
     product_account_needs_review_count = fields.Integer(readonly=True)
     draft_invoice_count = fields.Integer(readonly=True)
     unverified_migration_invoice_count = fields.Integer(readonly=True)
@@ -94,6 +95,16 @@ class SouthernAccountingDailyControl(models.Model):
                     ),
                     "revenue_line_needs_review_count": MoveLine.search_count(
                         line_day_domain + [("southern_revenue_bucket_review", "=", "needs_review")]
+                    ),
+                    "revenue_line_open_count": MoveLine.search_count(
+                        [
+                            ("company_id", "=", control.company_id.id),
+                            ("move_id.move_type", "in", ("out_invoice", "out_refund")),
+                            ("move_id.state", "!=", "cancel"),
+                            ("account_id.account_type", "=", "income"),
+                            ("display_type", "=", False),
+                            ("southern_revenue_bucket_review", "in", ("needs_review", "exception")),
+                        ]
                     ),
                     "product_account_needs_review_count": Product.search_count(
                         [
@@ -244,15 +255,16 @@ class SouthernAccountingDailyControl(models.Model):
         self.ensure_one()
         return {
             "type": "ir.actions.act_window",
-            "name": _("Daily Revenue Bucket Review"),
+            "name": _("Revenue Bucket Review"),
             "res_model": "account.move.line",
             "view_mode": "list,form",
             "domain": [
                 ("company_id", "=", self.company_id.id),
-                ("move_id.invoice_date", "=", self.control_date),
                 ("move_id.move_type", "in", ("out_invoice", "out_refund")),
+                ("move_id.state", "!=", "cancel"),
                 ("account_id.account_type", "=", "income"),
-                ("southern_revenue_bucket_review", "=", "needs_review"),
+                ("display_type", "=", False),
+                ("southern_revenue_bucket_review", "in", ("needs_review", "exception")),
             ],
         }
 

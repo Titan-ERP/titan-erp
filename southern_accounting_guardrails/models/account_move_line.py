@@ -2,6 +2,8 @@ import re
 
 from odoo import api, fields, models
 
+from ..accounting_review import classify_revenue_line_review
+
 
 RENTAL_RE = re.compile(r"\b(TX60|TX18|TX10|U35)\b|RENTAL|RENT\b", re.I)
 SERVICE_RE = re.compile(r"SERVICE|LABOR|REPAIR|DIAG|DIAGNOSTIC|SHOP SUPPL", re.I)
@@ -153,47 +155,29 @@ class AccountMoveLine(models.Model):
         "account_id",
         "account_id.code",
         "southern_revenue_bucket",
+        "southern_expected_income_account_id",
         "move_id.state",
         "southern_revenue_review_override",
         "southern_revenue_manual_note",
     )
     def _compute_southern_revenue_bucket_review(self):
-        expected_prefix = {
-            "parts": "410",
-            "service": "420",
-            "rental": "430",
-        }
         for line in self:
-            if line.southern_revenue_review_override == "accepted":
-                line.southern_revenue_bucket_review = "ok"
-                line.southern_revenue_bucket_note = line.southern_revenue_manual_note or "Accepted by accounting review."
-                continue
-            if line.southern_revenue_review_override == "exception":
-                line.southern_revenue_bucket_review = "exception"
-                line.southern_revenue_bucket_note = line.southern_revenue_manual_note or "Marked as accounting exception."
-                continue
-            if not line._southern_is_customer_revenue_line():
-                line.southern_revenue_bucket_review = "ok"
-                line.southern_revenue_bucket_note = False
-                continue
-            prefix = expected_prefix.get(line.southern_revenue_bucket)
-            code = line.account_id.code or ""
-            if line.southern_expected_income_account_id and line.account_id != line.southern_expected_income_account_id:
-                line.southern_revenue_bucket_review = "needs_review"
-                line.southern_revenue_bucket_note = (
-                    f"Expected {line.southern_expected_income_account_id.display_name}; currently {line.account_id.display_name}."
-                )
-            elif prefix and code and not code.startswith(prefix):
-                line.southern_revenue_bucket_review = "needs_review"
-                line.southern_revenue_bucket_note = (
-                    f"Expected {line.southern_revenue_bucket} revenue account; currently {code or line.account_id.display_name}."
-                )
-            elif line.southern_revenue_bucket == "other":
-                line.southern_revenue_bucket_review = "needs_review"
-                line.southern_revenue_bucket_note = "Revenue bucket could not be classified natively."
-            else:
-                line.southern_revenue_bucket_review = "ok"
-                line.southern_revenue_bucket_note = False
+            review, note = classify_revenue_line_review(
+                line._southern_is_customer_revenue_line(),
+                line.southern_revenue_bucket,
+                line.account_id.code,
+                override=line.southern_revenue_review_override,
+                manual_note=line.southern_revenue_manual_note,
+                expected_account_name=line.southern_expected_income_account_id.display_name,
+                current_account_name=line.account_id.display_name,
+                expected_account_mismatch=bool(
+                    line.southern_expected_income_account_id
+                    and line.account_id
+                    and line.account_id != line.southern_expected_income_account_id
+                ),
+            )
+            line.southern_revenue_bucket_review = review
+            line.southern_revenue_bucket_note = note
 
     def action_southern_open_revenue_lines(self):
         return {

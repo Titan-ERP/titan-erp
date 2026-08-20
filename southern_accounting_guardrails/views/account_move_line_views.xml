@@ -29,10 +29,37 @@
         </field>
     </record>
 
+    <record id="view_southern_revenue_bucket_line_search" model="ir.ui.view">
+        <field name="name">southern.revenue.bucket.line.search</field>
+        <field name="model">account.move.line</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="move_id"/>
+                <field name="partner_id"/>
+                <field name="product_id"/>
+                <field name="name"/>
+                <field name="southern_revenue_bucket_note"/>
+                <filter name="work_needed" string="Work Needed"
+                        domain="[('southern_revenue_bucket_review', 'in', ['needs_review', 'exception'])]"/>
+                <filter name="freight" string="Freight"
+                        domain="[('southern_revenue_bucket', '=', 'freight')]"/>
+                <filter name="fees" string="Fees"
+                        domain="[('southern_revenue_bucket', '=', 'fees')]"/>
+                <filter name="unclassified" string="Unclassified Other"
+                        domain="[('southern_revenue_bucket', '=', 'other')]"/>
+                <filter name="exceptions" string="Exceptions"
+                        domain="[('southern_revenue_bucket_review', '=', 'exception')]"/>
+                <separator/>
+                <filter name="group_bucket" string="Revenue Bucket" context="{'group_by': 'southern_revenue_bucket'}"/>
+            </search>
+        </field>
+    </record>
+
     <record id="action_southern_revenue_bucket_review" model="ir.actions.act_window">
         <field name="name">Revenue Bucket Review</field>
         <field name="res_model">account.move.line</field>
         <field name="view_mode">list,form</field>
         <field name="domain">[('move_id.move_type', 'in', ['out_invoice', 'out_refund']), ('account_id.account_type', '=', 'income'), ('display_type', '=', False), ('southern_revenue_bucket_review', 'in', ['needs_review', 'exception'])]</field>
+        <field name="context">{'search_default_work_needed': 1}</field>
     </record>
 </odoo>

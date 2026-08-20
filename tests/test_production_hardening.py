@@ -66,6 +66,9 @@ class ProductionHardeningTests(unittest.TestCase):
         self.assertIn("def classify_invoice_review", rules)
         self.assertIn("def classify_bank_review", rules)
         self.assertIn("def classify_product_accounting_review", rules)
+        self.assertIn("def classify_revenue_line_review", rules)
+        policy = self.source("southern_accounting_guardrails/models/accounting_policy.py")
+        self.assertIn("Transaction Processing Fee Income", policy)
 
     def test_apply_run_requires_idempotency_and_verified_artifact(self):
         source = self.source(

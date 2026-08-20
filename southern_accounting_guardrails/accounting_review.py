@@ -5,6 +5,21 @@ without the registry. The Odoo models store the resulting work lane and
 details sentence.
 """
 
+INCOME_ACCOUNT_PREFIXES = {
+    "parts": "410",
+    "service": "420",
+    "rental": "430",
+    "equipment": "44",
+}
+COST_ACCOUNT_PREFIXES = {
+    "equipment": "500",
+    "parts": "510",
+    "service": "520",
+    "rental": "530",
+}
+RESERVED_OPERATING_INCOME_PREFIXES = ("410", "420", "430")
+CROSS_POSTED_REVENUE_BUCKETS = frozenset({"freight", "fees"})
+
 
 def join_review_details(reasons):
     if not reasons:
@@ -138,3 +153,79 @@ def classify_product_accounting_review(
     if has_income:
         return "income", details
     return "cost", details
+
+
+def classify_revenue_line_review(
+    is_customer_revenue_line,
+    bucket,
+    account_code,
+    *,
+    override=None,
+    manual_note=None,
+    expected_account_name=None,
+    current_account_name=None,
+    expected_account_mismatch=False,
+):
+    """Return ``(review, details)`` for a customer income line."""
+    if override == "accepted":
+        return "ok", manual_note or "Accepted by accounting review."
+    if override == "exception":
+        return "exception", manual_note or "Marked as accounting exception."
+    if not is_customer_revenue_line:
+        return "ok", False
+    if expected_account_mismatch:
+        expected = expected_account_name or "the configured income account"
+        current = current_account_name or account_code or "the current account"
+        return "needs_review", f"Expected {expected}; currently {current}."
+    prefix = INCOME_ACCOUNT_PREFIXES.get(bucket)
+    code = account_code or ""
+    if prefix and code and not code.startswith(prefix):
+        return (
+            "needs_review",
+            f"Expected {bucket} revenue account; currently {code or current_account_name}.",
+        )
+    if bucket in CROSS_POSTED_REVENUE_BUCKETS and code.startswith(RESERVED_OPERATING_INCOME_PREFIXES):
+        return (
+            "needs_review",
+            f"{bucket.capitalize()} revenue is posted to an operating income account ({code}).",
+        )
+    if bucket == "other":
+        return "needs_review", "Revenue bucket could not be classified natively."
+    return "ok", False
+
+
+def product_income_needs_review(
+    sale_ok,
+    bucket,
+    account_code,
+    *,
+    require_product_bucket=True,
+    expected_mismatch=False,
+    has_account=True,
+):
+    if sale_ok and require_product_bucket and not bucket:
+        return True
+    if expected_mismatch and has_account:
+        return True
+    prefix = INCOME_ACCOUNT_PREFIXES.get(bucket)
+    code = account_code or ""
+    if prefix and has_account and code and not code.startswith(prefix):
+        return True
+    return bool(
+        bucket in CROSS_POSTED_REVENUE_BUCKETS
+        and code.startswith(RESERVED_OPERATING_INCOME_PREFIXES)
+    )
+
+
+def product_expense_needs_review(bucket, account_code, *, expected_mismatch=False, has_account=True):
+    prefix = COST_ACCOUNT_PREFIXES.get(bucket)
+    if not prefix:
+        return "not_required"
+    if not has_account:
+        return "needs_review"
+    if expected_mismatch:
+        return "needs_review"
+    code = account_code or ""
+    if code and not code.startswith(prefix):
+        return "needs_review"
+    return "ok"

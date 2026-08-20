@@ -172,6 +172,62 @@ class ProductAccountingLaneTest(unittest.TestCase):
         )
 
 
+class RevenueLineReviewTest(unittest.TestCase):
+    def test_freight_posted_to_parts_is_needs_review(self):
+        review, details = accounting_review.classify_revenue_line_review(
+            True,
+            "freight",
+            "410000",
+            current_account_name="410000 Parts Revenue",
+        )
+        self.assertEqual(review, "needs_review")
+        self.assertIn("410000", details)
+        self.assertIn("Freight", details)
+
+    def test_fees_posted_to_service_is_needs_review(self):
+        review, details = accounting_review.classify_revenue_line_review(
+            True,
+            "fees",
+            "420000",
+        )
+        self.assertEqual(review, "needs_review")
+        self.assertIn("Fees", details)
+
+    def test_parts_on_parts_account_is_ok(self):
+        self.assertEqual(
+            accounting_review.classify_revenue_line_review(True, "parts", "410000")[0],
+            "ok",
+        )
+
+    def test_expected_account_mismatch_wins(self):
+        review, details = accounting_review.classify_revenue_line_review(
+            True,
+            "freight",
+            "410000",
+            expected_account_name="Shipping / Freight Revenue",
+            current_account_name="Parts Revenue",
+            expected_account_mismatch=True,
+        )
+        self.assertEqual(review, "needs_review")
+        self.assertIn("Shipping / Freight Revenue", details)
+
+    def test_freight_product_on_parts_income_needs_review(self):
+        self.assertTrue(
+            accounting_review.product_income_needs_review(
+                True,
+                "freight",
+                "410000",
+            )
+        )
+        self.assertFalse(
+            accounting_review.product_income_needs_review(
+                True,
+                "parts",
+                "410000",
+            )
+        )
+
+
 class InvoiceReviewMigrationTest(unittest.TestCase):
     def test_migration_clears_native_invoice_review(self):
         cursor = RecordingCursor()

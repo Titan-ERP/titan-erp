@@ -69,7 +69,12 @@ Work needed means:
 
 Invoice income lines are classified from product, category, Revenue Rules,
 then a conservative text/account-code guess. A mismatch against Accounting
-Policies, or a leftover **Other** bucket, is needs-review.
+Policies, a leftover **Other** bucket, or freight/fee income posted to
+410/420/430 is needs-review. Daily Controls count the open backlog, not just
+today's invoices.
+
+Fill From Chart also looks up **Transaction Processing Fee Income** (the
+live Stripe fee account) before the older Card Processing Fee Income name.
 
 Apply Account is draft-only. Posted invoices stay visible for review and
 override; they are not rewritten.

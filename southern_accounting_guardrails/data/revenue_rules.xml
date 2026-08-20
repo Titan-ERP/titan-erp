@@ -40,4 +40,23 @@
         <field name="match_text">repair</field>
         <field name="revenue_bucket">service</field>
     </record>
+    <record id="revenue_rule_frt_freight" model="southern.accounting.revenue.rule">
+        <field name="name">Freight: FRT</field>
+        <field name="sequence">4</field>
+        <field name="match_text">FRT</field>
+        <field name="revenue_bucket">freight</field>
+        <field name="note">Stripe cleanup: FRT / hauling charges are freight, not parts or fee income.</field>
+    </record>
+    <record id="revenue_rule_freight" model="southern.accounting.revenue.rule">
+        <field name="name">Freight: Freight</field>
+        <field name="sequence">4</field>
+        <field name="match_text">freight</field>
+        <field name="revenue_bucket">freight</field>
+    </record>
+    <record id="revenue_rule_hauling_freight" model="southern.accounting.revenue.rule">
+        <field name="name">Freight: Hauling</field>
+        <field name="sequence">4</field>
+        <field name="match_text">hauling</field>
+        <field name="revenue_bucket">freight</field>
+    </record>
 </odoo>

@@ -1,6 +1,10 @@
 from odoo import api, fields, models
 
-from ..accounting_review import classify_product_accounting_review
+from ..accounting_review import (
+    classify_product_accounting_review,
+    product_expense_needs_review,
+    product_income_needs_review,
+)
 
 
 class ProductCategory(models.Model):
@@ -115,72 +119,55 @@ class ProductTemplate(models.Model):
         "sale_ok",
         "southern_revenue_bucket",
         "company_id",
+        "southern_expected_income_account_id",
         "property_account_income_id",
         "property_account_income_id.code",
         "categ_id.property_account_income_categ_id",
         "categ_id.property_account_income_categ_id.code",
     )
     def _compute_southern_income_account_review(self):
-        expected_prefix = {
-            "parts": "410",
-            "service": "420",
-            "rental": "430",
-        }
         Policy = self.env["southern.accounting.policy"]
         for template in self:
             company = template.company_id or self.env.company
             policy = Policy.find_company_policy(company)
             require_bucket = policy.require_product_bucket if policy else True
-            if template.sale_ok and require_bucket and not template.southern_revenue_bucket:
-                template.southern_income_account_review = "needs_review"
-                continue
-            prefix = expected_prefix.get(template.southern_revenue_bucket)
             account = template.property_account_income_id or template.categ_id.property_account_income_categ_id
-            code = account.code or ""
-            if (
-                template.southern_expected_income_account_id
-                and account
-                and account != template.southern_expected_income_account_id
-            ):
-                template.southern_income_account_review = "needs_review"
-            elif prefix and account and code and not code.startswith(prefix):
-                template.southern_income_account_review = "needs_review"
-            else:
-                template.southern_income_account_review = "ok"
+            needs_review = product_income_needs_review(
+                template.sale_ok,
+                template.southern_revenue_bucket,
+                account.code if account else "",
+                require_product_bucket=require_bucket,
+                expected_mismatch=bool(
+                    template.southern_expected_income_account_id
+                    and account
+                    and account != template.southern_expected_income_account_id
+                ),
+                has_account=bool(account),
+            )
+            template.southern_income_account_review = "needs_review" if needs_review else "ok"
 
     @api.depends(
         "southern_revenue_bucket",
         "company_id",
+        "southern_expected_expense_account_id",
         "property_account_expense_id",
         "property_account_expense_id.code",
         "categ_id.property_account_expense_categ_id",
         "categ_id.property_account_expense_categ_id.code",
     )
     def _compute_southern_expense_account_review(self):
-        expected_prefix = {
-            "equipment": "500",
-            "parts": "510",
-            "service": "520",
-            "rental": "530",
-        }
         for template in self:
-            prefix = expected_prefix.get(template.southern_revenue_bucket)
-            if not prefix:
-                template.southern_expense_account_review = "not_required"
-                continue
             account = template.property_account_expense_id or template.categ_id.property_account_expense_categ_id
-            code = account.code if account else ""
-            if not account:
-                template.southern_expense_account_review = "needs_review"
-            elif (
-                template.southern_expected_expense_account_id
-                and account != template.southern_expected_expense_account_id
-            ):
-                template.southern_expense_account_review = "needs_review"
-            elif code and not code.startswith(prefix):
-                template.southern_expense_account_review = "needs_review"
-            else:
-                template.southern_expense_account_review = "ok"
+            template.southern_expense_account_review = product_expense_needs_review(
+                template.southern_revenue_bucket,
+                account.code if account else "",
+                expected_mismatch=bool(
+                    template.southern_expected_expense_account_id
+                    and account
+                    and account != template.southern_expected_expense_account_id
+                ),
+                has_account=bool(account),
+            )
 
     @api.depends(
         "sale_ok",
