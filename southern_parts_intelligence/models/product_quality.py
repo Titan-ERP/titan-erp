@@ -12,8 +12,12 @@ from ..quality_rules import (
     WORK_LANES,
     classify_product_quality,
     dismissed_should_reopen,
+    fact_key,
+    finding_fact_key,
     merge_quality_refresh_ids,
     next_action_for,
+    severity_for,
+    work_lane_for,
 )
 from .catalog_agents import customer_description_ready, normalized_sparex_sku
 
@@ -39,11 +43,16 @@ class SouthernProductQualityIssue(models.Model):
         index=True,
     )
     issue_type = fields.Selection(ISSUE_TYPES, required=True, index=True, tracking=True)
-    work_lane = fields.Selection(WORK_LANES, required=True, default="enrich", index=True)
+    work_lane = fields.Selection(
+        WORK_LANES,
+        compute="_compute_lane_and_severity",
+        store=True,
+        index=True,
+    )
     severity = fields.Selection(
         [("1_low", "Low"), ("2_medium", "Medium"), ("3_high", "High"), ("4_blocker", "Blocker")],
-        default="2_medium",
-        required=True,
+        compute="_compute_lane_and_severity",
+        store=True,
         index=True,
     )
     state = fields.Selection(
@@ -64,6 +73,7 @@ class SouthernProductQualityIssue(models.Model):
     last_detected_at = fields.Datetime(default=fields.Datetime.now, required=True)
     resolved_at = fields.Datetime(readonly=True)
     details = fields.Text()
+    accepted_fact_key = fields.Char(readonly=True, copy=False)
     next_action = fields.Char(compute="_compute_next_action", store=True)
     resolution_note = fields.Text(tracking=True)
     product_published = fields.Boolean(related="product_tmpl_id.website_published", store=True)
@@ -95,6 +105,13 @@ class SouthernProductQualityIssue(models.Model):
                 labels.get(issue.issue_type, _("Quality Issue")),
                 issue.product_tmpl_id.display_name,
             )
+
+    @api.depends("issue_type", "product_published")
+    def _compute_lane_and_severity(self):
+        for issue in self:
+            published = bool(issue.product_published)
+            issue.work_lane = work_lane_for(issue.issue_type, published)
+            issue.severity = severity_for(issue.issue_type, published)
 
     @api.depends("issue_type")
     def _compute_next_action(self):
@@ -180,7 +197,20 @@ class SouthernProductQualityIssue(models.Model):
         missing_note = self.filtered(lambda issue: not (issue.resolution_note or "").strip())
         if missing_note:
             raise UserError(_("Add a resolution note before dismissing a quality row."))
-        self.write({"state": "dismissed", "resolved_at": fields.Datetime.now()})
+        now = fields.Datetime.now()
+        for issue in self:
+            issue.write(
+                {
+                    "state": "dismissed",
+                    "resolved_at": now,
+                    "accepted_fact_key": fact_key(
+                        issue.issue_type,
+                        issue.details,
+                        issue.severity,
+                        issue.work_lane,
+                    ),
+                }
+            )
         return True
 
     def action_block(self):
@@ -294,7 +324,7 @@ class SouthernProductQualityIssue(models.Model):
             has_website_category=bool(product.public_categ_ids),
             has_image=bool(product.image_128),
             description_ready=customer_description_ready(product),
-            sparex_publication_eligible=bool(product.southern_sparex_publication_eligible),
+            sparex_publication_eligible=any(sourcing_rows.mapped("publication_eligible")),
             reference=reference,
             duplicate_count=duplicate_counts.get(reference, 0),
         )
@@ -425,14 +455,19 @@ class SouthernProductQualityIssue(models.Model):
                         "details": latest_dismissed.details,
                         "severity": latest_dismissed.severity,
                         "work_lane": latest_dismissed.work_lane,
+                        "accepted_fact_key": latest_dismissed.accepted_fact_key,
                     },
                     finding,
                 ):
-                    latest_dismissed.write(values)
+                    latest_dismissed.write(
+                        dict(values, accepted_fact_key=finding_fact_key(finding))
+                    )
                     skipped_dismissed += 1
                     continue
                 if latest_dismissed:
-                    latest_dismissed.write(dict(values, state="open", resolved_at=False))
+                    latest_dismissed.write(
+                        dict(values, state="open", resolved_at=False, accepted_fact_key=False)
+                    )
                     updated += 1
                 else:
                     self.create(

@@ -137,8 +137,7 @@ class SouthernOperationsDailyControl(models.Model):
                     company_domain
                     + [
                         ("state", "in", ["open", "in_progress", "blocked"]),
-                        ("issue_type", "!=", "publication_ready"),
-                        ("product_published", "=", True),
+                        ("work_lane", "=", "live_fix"),
                     ]
                 ),
                 "product_ready_count": self.env[

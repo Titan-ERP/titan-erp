@@ -130,6 +130,26 @@ class ProductQualityQueueTests(unittest.TestCase):
                 finding,
             )
         )
+        unpublished_cost = next(
+            row
+            for row in self.classify(verified_supplier_cost=0, sparex_publication_eligible=False)
+            if row.issue_type == "missing_verified_supplier_cost"
+        )
+        live_cost = next(
+            row
+            for row in self.classify(
+                verified_supplier_cost=0,
+                sparex_publication_eligible=False,
+                published=True,
+            )
+            if row.issue_type == "missing_verified_supplier_cost"
+        )
+        self.assertTrue(
+            self.rules.dismissed_should_reopen(
+                {"accepted_fact_key": self.rules.finding_fact_key(unpublished_cost)},
+                live_cost,
+            )
+        )
 
     def test_quality_refresh_batches_existing_issues(self):
         source = (ROOT / "southern_parts_intelligence" / "models" / "product_quality.py").read_text(
@@ -145,8 +165,11 @@ class ProductQualityQueueTests(unittest.TestCase):
         self.assertIn("_search_refresh_products", source)
         self.assertIn("action_refresh_selected_products", source)
         self.assertIn("with_company(company)", source)
-        self.assertIn("latest_dismissed.write(values)", source)
+        self.assertIn("accepted_fact_key=finding_fact_key(finding)", source)
         self.assertIn("row.company_id == self.env.company", source)
+        self.assertIn("any(sourcing_rows.mapped(\"publication_eligible\"))", source)
+        self.assertIn("_compute_lane_and_severity", source)
+        self.assertIn("accepted_fact_key", source)
         self.assertNotIn("for issue_type in self._issue_codes", source)
 
     def test_quality_views_expose_work_lanes_and_need_work_default(self):
@@ -176,6 +199,8 @@ class ProductQualityQueueTests(unittest.TestCase):
         self.assertIn('("issue_type", "!=", "publication_ready")', source)
         self.assertIn("product_ready_count", source)
         self.assertIn("product_live_fix_count", source)
+        self.assertIn('("work_lane", "=", "live_fix")', source)
+        self.assertNotIn('("product_published", "=", True)', source)
         self.assertIn('("issue_type", "=", "publication_ready")', source)
         self.assertIn("action_open_live_fixes", source)
         self.assertIn("action_open_ready_products", source)

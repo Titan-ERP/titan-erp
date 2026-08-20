@@ -82,12 +82,32 @@ def merge_quality_refresh_ids(published_ids, open_ids, cursor_ids, limit=QUALITY
     return ordered
 
 
+def fact_key(issue_type, details, severity, work_lane):
+    return "\n".join(
+        [
+            issue_type or "",
+            details or "",
+            severity or "",
+            work_lane or "",
+        ]
+    )
+
+
+def finding_fact_key(finding):
+    return fact_key(finding.issue_type, finding.details, finding.severity, finding.work_lane)
+
+
 def dismissed_should_reopen(previous, finding):
     """Reopen a dismissed row only when stored facts changed.
 
-    Empty previous details means a pre-details dismissal. Seed the snapshot on
-    the next refresh instead of treating the first backfill as a fact change.
+    Empty previous details and no accepted fact key means a pre-details
+    dismissal. Seed the snapshot on the next refresh instead of treating the
+    first backfill as a fact change.
     """
+    current = finding_fact_key(finding)
+    accepted = (previous.get("accepted_fact_key") or "").strip()
+    if accepted:
+        return accepted != current
     previous_details = (previous.get("details") or "").strip()
     if not previous_details:
         return False

@@ -53,9 +53,11 @@ temporary migration flag is set.
 - `southern.parts.automation.run`
 - `southern.parts.order.refresh.queue`
 - `southern.product.quality.issue` with work lanes `live_fix`,
-  `enrich`, and `release`. The bounded refresh re-checks live products and
-  stale open rows first, keeps dismissed exceptions until the facts change,
-  and blocks Resolve while the finding is still present. Open Daily Control
+  `enrich`, and `release`. Lane and severity follow the product's current
+  website state. The bounded refresh re-checks live products and stale open
+  rows first, keeps dismissed exceptions until the accepted fact key changes,
+  and blocks Resolve while the finding is still present. Sparex readiness
+  uses the current company's sourcing row only. Open Daily Control
   product-issue counts exclude `publication_ready` rows; those appear as the
   ready-to-publish count.
 
