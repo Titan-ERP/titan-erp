@@ -63,6 +63,24 @@ run_internal_step() {
   fi
   cat "${output_file}" >&2
 
+  if [[ "${status}" -eq 76 ]]; then
+    if [[ -f "${retry_file}" ]]; then
+      retry_count="$(cat "${retry_file}")"
+    fi
+    if ! [[ "${retry_count}" =~ ^[0-9]+$ ]]; then
+      retry_count=0
+    fi
+    retry_count=$((retry_count + 1))
+    printf '%s\n' "${retry_count}" >"${retry_file}"
+    rm -f "${output_file}"
+    if [[ "${retry_count}" -lt "${internal_retry_limit}" ]]; then
+      echo "Transient media infrastructure failure in ${step_name}; keeping the timer active for retry ${retry_count}/${internal_retry_limit}." >&2
+      return 0
+    fi
+    echo "Transient media infrastructure failure limit reached in ${step_name}: ${retry_count}/${internal_retry_limit}." >&2
+    return "${status}"
+  fi
+
   if grep -Eqi \
     'Odoo JSON-2 request failed with HTTP (404|429|500|502|503|504)|timed out|TimeoutError|Temporary failure in name resolution|Connection reset|RemoteDisconnected' \
     "${output_file}"; then

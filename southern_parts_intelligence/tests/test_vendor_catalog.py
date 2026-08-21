@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import json
 
 from odoo.exceptions import UserError
 from odoo.tests.common import TransactionCase
@@ -199,3 +200,144 @@ class VendorCatalogTests(TransactionCase):
         self.assertFalse(product.website_published)
         self.assertFalse(product.southern_quote_only)
         self.assertEqual(product.list_price, 1.0)
+
+    def _create_media_item(self, sku, image_url):
+        Item = self.env["southern.vendor.catalog.item"]
+        Item.upsert_catalog_items(
+            "catalog-test-vendor",
+            [
+                {
+                    **self.payload,
+                    "vendor_sku": sku,
+                    "source_url": f"https://vendor.example/products/{sku.casefold()}",
+                    "image_url": image_url,
+                }
+            ],
+            f"s3://catalog/{sku}.jsonl",
+            HASH,
+        )
+        item = Item.search([("source_id", "=", self.source.id), ("normalized_sku", "=", sku)])
+        item.write({"dealer_cost_evidence_sha256": HASH, "vendor_cost": 10})
+        return item
+
+    def test_record_media_404_quarantines_without_changing_commercial_fields(self):
+        item = self._create_media_item("M-404", "https://cdn.example.com/m-404.jpg")
+        product = self.env["product.template"].create(
+            {
+                "name": "Existing image product",
+                "default_code": "CTV:M-404",
+                "image_1920": base64.b64encode(b"existing-verified-image"),
+                "list_price": 20,
+                "standard_price": 10,
+                "website_published": False,
+            }
+        )
+        item.write({"product_id": product.id, "match_state": "matched"})
+        before = {
+            "vendor_cost": item.vendor_cost,
+            "sales_price": item.sales_price,
+            "internal_reference": item.internal_reference,
+            "website_state": item.website_state,
+            "image": product.image_1920,
+            "list_price": product.list_price,
+            "standard_price": product.standard_price,
+            "published": product.website_published,
+        }
+        result = item.record_media_outcomes(
+            [{"item_id": item.id, "kind": "permanent", "failure_class": "image_http_404", "error_safe": "image_http_404"}],
+            "sparex-media-outcome-write",
+        )
+        item.invalidate_recordset()
+        product.invalidate_recordset()
+        self.assertEqual(result[0]["status"], "manual_review")
+        self.assertEqual(item.media_state, "manual_review")
+        self.assertEqual(item.media_failure_class, "image_http_404")
+        self.assertIn("media_manual_review", json.loads(item.readiness_blockers_json))
+        self.assertEqual(item.vendor_cost, before["vendor_cost"])
+        self.assertEqual(item.sales_price, before["sales_price"])
+        self.assertEqual(item.internal_reference, before["internal_reference"])
+        self.assertEqual(item.website_state, before["website_state"])
+        self.assertEqual(product.image_1920, before["image"])
+        self.assertEqual(product.list_price, before["list_price"])
+        self.assertEqual(product.standard_price, before["standard_price"])
+        self.assertFalse(product.website_published)
+        again = item.record_media_outcomes(
+            [{"item_id": item.id, "kind": "permanent", "failure_class": "image_http_404", "error_safe": "image_http_404"}],
+            "sparex-media-outcome-write",
+        )
+        self.assertEqual(again[0]["status"], "manual_review")
+        self.assertEqual(item.media_state, "manual_review")
+
+    def test_media_url_change_and_reviewer_reset_make_item_eligible_again(self):
+        item = self._create_media_item("M-RESET", "https://cdn.example.com/old.jpg")
+        item.record_media_outcomes(
+            [{"item_id": item.id, "kind": "permanent", "failure_class": "image_http_404", "error_safe": "image_http_404"}],
+            "sparex-media-outcome-write",
+        )
+        self.assertEqual(item.media_state, "manual_review")
+        item.action_reset_media_review()
+        item.invalidate_recordset()
+        self.assertEqual(item.media_state, "pending")
+        self.assertFalse(item.media_failure_class)
+        item.record_media_outcomes(
+            [{"item_id": item.id, "kind": "permanent", "failure_class": "image_http_404", "error_safe": "image_http_404"}],
+            "sparex-media-outcome-write",
+        )
+        self.env["southern.vendor.catalog.item"].upsert_catalog_items(
+            "catalog-test-vendor",
+            [
+                {
+                    **self.payload,
+                    "vendor_sku": "M-RESET",
+                    "source_url": "https://vendor.example/products/m-reset",
+                    "image_url": "https://cdn.example.com/new.jpg",
+                    "vendor_cost": 10,
+                    "sales_price": 20,
+                }
+            ],
+            "s3://catalog/m-reset-new.jsonl",
+            "c" * 64,
+        )
+        item.invalidate_recordset()
+        self.assertEqual(item.media_state, "pending")
+        self.assertFalse(item.media_failure_class)
+
+    def test_transient_503_schedules_retry_then_promotes_healthy_sibling(self):
+        blocked = self._create_media_item("M-503", "https://cdn.example.com/503.jpg")
+        healthy = self._create_media_item("M-OK", "https://cdn.example.com/ok.jpg")
+        blocked.record_media_outcomes(
+            [{"item_id": blocked.id, "kind": "transient", "failure_class": "image_http_503", "error_safe": "image_http_503"}],
+            "sparex-media-outcome-write",
+        )
+        blocked.invalidate_recordset()
+        self.assertEqual(blocked.media_state, "retry_wait")
+        self.assertTrue(blocked.media_next_attempt_at)
+        self._verify_media(healthy)
+        healthy.invalidate_recordset()
+        healthy.action_request_promotion()
+        self.source.automatic_promotion_enabled = True
+        plan = self.env["southern.vendor.catalog.item"].prepare_promotion_plan(
+            item_ids=[blocked.id, healthy.id], limit=200
+        )
+        plan_ids = [record["item_id"] for record in plan]
+        self.assertIn(healthy.id, plan_ids)
+        self.assertNotIn(blocked.id, plan_ids)
+
+    def test_staff_image_override_is_never_overwritten(self):
+        item = self._create_media_item("M-OV", "https://cdn.example.com/ov.jpg")
+        product = self.env["product.template"].create(
+            {
+                "name": "Override image product",
+                "default_code": "CTV:M-OV",
+                "image_1920": base64.b64encode(b"staff-owned-image"),
+                "southern_sparex_image_override": True,
+            }
+        )
+        item.write({"product_id": product.id, "match_state": "matched"})
+        result = self._verify_media(item)
+        product.invalidate_recordset()
+        item.invalidate_recordset()
+        self.assertEqual(result[0]["status"], "manual_override")
+        self.assertEqual(base64.b64decode(product.image_1920), b"staff-owned-image")
+        self.assertEqual(item.media_state, "manual_review")
+        self.assertEqual(item.media_failure_class, "staff_image_override")

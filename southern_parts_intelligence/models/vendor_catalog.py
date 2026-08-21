@@ -2,6 +2,7 @@ import hashlib
 import json
 import re
 import base64
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation, ROUND_CEILING
 from urllib.parse import urlsplit
 
@@ -21,6 +22,8 @@ MAX_PROMOTION_BATCH = 200
 PROMOTION_CONFIRMATION = "vendor-catalog-product-promotion"
 QUOTE_PUBLICATION_CONFIRMATION = "sparex-quote-only-publication"
 MEDIA_CONFIRMATION = "sparex-media-batch-write"
+MEDIA_OUTCOME_CONFIRMATION = "sparex-media-outcome-write"
+MEDIA_RETRY_LIMIT = 5
 OPERATIONAL_CONFIRMATION = "sparex-operational-batch-write"
 GROSS_MARGIN_DENOMINATOR = Decimal("0.65")
 PRICE_QUANTUM = Decimal("0.01")
@@ -217,6 +220,23 @@ class SouthernVendorCatalogItem(models.Model):
     image_artifact_uri = fields.Char(readonly=True)
     image_artifact_sha256 = fields.Char(readonly=True, index=True)
     image_write_verified = fields.Boolean(default=False, readonly=True, index=True)
+    media_state = fields.Selection(
+        [
+            ("pending", "Pending"),
+            ("retry_wait", "Retry Wait"),
+            ("verified", "Verified"),
+            ("manual_review", "Manual Review"),
+        ],
+        default="pending",
+        required=True,
+        readonly=True,
+        index=True,
+    )
+    media_failure_class = fields.Char(readonly=True, index=True)
+    media_last_error_safe = fields.Char(readonly=True)
+    media_attempt_count = fields.Integer(default=0, required=True, readonly=True)
+    media_last_attempt_at = fields.Datetime(readonly=True, index=True)
+    media_next_attempt_at = fields.Datetime(readonly=True, index=True)
     validated_image_1920 = fields.Binary(readonly=True, attachment=True)
     pricing_basis = fields.Selection(
         [("none", "Not Set"), ("cost_plus_35_margin", "35% Gross Margin Cost Plus")],
@@ -334,6 +354,8 @@ class SouthernVendorCatalogItem(models.Model):
             blockers.append("missing_image_artifact")
         if not values.get("image_write_verified"):
             blockers.append("image_write_unverified")
+        if values.get("media_state") == "manual_review":
+            blockers.append("media_manual_review")
         if not source.default_category_id:
             blockers.append("category_unmapped")
         sales_price = _decimal_value(values.get("sales_price"), "Sales price")
@@ -348,6 +370,7 @@ class SouthernVendorCatalogItem(models.Model):
             "missing_cost": "missing_cost",
             "missing_image_artifact": "missing_image",
             "image_write_unverified": "missing_image",
+            "media_manual_review": "missing_image",
             "category_unmapped": "missing_category",
             "pricing_error": "price_below_cost",
         }
@@ -370,6 +393,7 @@ class SouthernVendorCatalogItem(models.Model):
                 "dealer_currency_code": item.dealer_currency_code,
                 "image_artifact_sha256": item.image_artifact_sha256,
                 "image_write_verified": item.image_write_verified,
+                "media_state": item.media_state,
             }
             promotion_state, blocker_code, catalog_state, blockers = item._readiness(
                 item.source_id, values, item.match_state
@@ -482,6 +506,21 @@ class SouthernVendorCatalogItem(models.Model):
                         "image_write_verified": True,
                     }
                 )
+            if item and item.image_source_sha256 != values.get("image_source_sha256"):
+                values.update(
+                    {
+                        "media_state": "pending",
+                        "media_failure_class": False,
+                        "media_last_error_safe": False,
+                        "media_attempt_count": 0,
+                        "media_last_attempt_at": False,
+                        "media_next_attempt_at": False,
+                    }
+                )
+            elif item:
+                values["media_state"] = item.media_state
+            else:
+                values["media_state"] = "pending"
             match_state, product = product_matches[values["internal_reference"]]
             promotion_state, blocker_code, catalog_state, readiness_blockers = self._readiness(source, values, match_state)
             if item and item.promotion_requested and promotion_state == "ready":
@@ -757,7 +796,16 @@ class SouthernVendorCatalogItem(models.Model):
                 blockers = json.loads(item.readiness_blockers_json or "[]")
                 if "image_write_unverified" not in blockers:
                     blockers.append("image_write_unverified")
-                item.write({"readiness_blockers_json": json.dumps(blockers, separators=(",", ":"))})
+                item.write(
+                    {
+                        "readiness_blockers_json": json.dumps(blockers, separators=(",", ":")),
+                        "media_state": "manual_review",
+                        "media_failure_class": "staff_image_override",
+                        "media_last_error_safe": "staff_image_override",
+                        "media_last_attempt_at": fields.Datetime.now(),
+                        "media_next_attempt_at": False,
+                    }
+                )
                 results.append({"item_id": item.id, "product_id": product.id, "status": "manual_override"})
                 continue
             item.write(
@@ -779,6 +827,11 @@ class SouthernVendorCatalogItem(models.Model):
             item.write(
                 {
                     "image_write_verified": verified,
+                    "media_state": "verified" if verified else item.media_state,
+                    "media_failure_class": False if verified else item.media_failure_class,
+                    "media_last_error_safe": False if verified else item.media_last_error_safe,
+                    "media_next_attempt_at": False if verified else item.media_next_attempt_at,
+                    "media_last_attempt_at": fields.Datetime.now(),
                 }
             )
             item._recompute_readiness()
@@ -786,6 +839,93 @@ class SouthernVendorCatalogItem(models.Model):
                 {"item_id": item.id, "product_id": product.id if product else False, "status": "verified" if verified else "failed"}
             )
         return results
+
+    @api.model
+    def record_media_outcomes(self, records, confirmation):
+        records = list(records or [])
+        if confirmation != MEDIA_OUTCOME_CONFIRMATION:
+            raise UserError(_("Sparex media outcomes require explicit confirmation."))
+        if not 1 <= len(records) <= 25:
+            raise UserError(_("Sparex media outcome batches must contain between 1 and 25 records."))
+        from .sparex_manifest import acquire_sparex_catalog_lock
+
+        acquire_sparex_catalog_lock(self.env)
+        now = fields.Datetime.now()
+        results = []
+        for prepared in records:
+            item = self.sudo().browse(int(prepared.get("item_id") or 0)).exists()
+            if not item:
+                raise UserError(_("The media outcome catalog item is unavailable."))
+            kind = str(prepared.get("kind") or "").strip()
+            failure_class = str(prepared.get("failure_class") or prepared.get("error_safe") or "unexpected_media_failure")[:80]
+            error_safe = str(prepared.get("error_safe") or failure_class)[:80]
+            if "://" in error_safe or "<" in error_safe:
+                error_safe = failure_class
+            attempt_count = int(item.media_attempt_count or 0) + 1
+            if kind == "permanent" or (kind == "transient" and attempt_count >= MEDIA_RETRY_LIMIT):
+                values = {
+                    "media_state": "manual_review",
+                    "media_failure_class": failure_class,
+                    "media_last_error_safe": error_safe,
+                    "media_attempt_count": attempt_count,
+                    "media_last_attempt_at": now,
+                    "media_next_attempt_at": False,
+                }
+                status = "manual_review"
+            elif kind == "transient":
+                delay_minutes = min(60, 2 ** max(1, attempt_count))
+                values = {
+                    "media_state": "retry_wait",
+                    "media_failure_class": failure_class,
+                    "media_last_error_safe": error_safe,
+                    "media_attempt_count": attempt_count,
+                    "media_last_attempt_at": now,
+                    "media_next_attempt_at": now + timedelta(minutes=delay_minutes),
+                }
+                status = "retry_wait"
+            else:
+                raise UserError(_("Media outcomes must classify each record as permanent or transient."))
+            snapshot = {
+                "vendor_cost": item.vendor_cost,
+                "sales_price": item.sales_price,
+                "internal_reference": item.internal_reference,
+                "website_state": item.website_state,
+                "image_url": item.image_url,
+                "image_source_sha256": item.image_source_sha256,
+                "image_artifact_sha256": item.image_artifact_sha256,
+                "image_write_verified": item.image_write_verified,
+            }
+            item.write(values)
+            item._recompute_readiness()
+            item.invalidate_recordset(list(snapshot) + ["vendor_cost", "sales_price", "internal_reference", "website_state"])
+            if (
+                item.vendor_cost != snapshot["vendor_cost"]
+                or item.sales_price != snapshot["sales_price"]
+                or item.internal_reference != snapshot["internal_reference"]
+                or item.website_state != snapshot["website_state"]
+                or item.image_url != snapshot["image_url"]
+                or item.image_source_sha256 != snapshot["image_source_sha256"]
+                or item.image_artifact_sha256 != snapshot["image_artifact_sha256"]
+                or item.image_write_verified != snapshot["image_write_verified"]
+            ):
+                raise UserError(_("Media failure recording cannot change cost, price, identity, image evidence, or publication state."))
+            results.append({"item_id": item.id, "status": status, "failure_class": failure_class})
+        return results
+
+    def action_reset_media_review(self):
+        for item in self:
+            item.write(
+                {
+                    "media_state": "pending",
+                    "media_failure_class": False,
+                    "media_last_error_safe": False,
+                    "media_attempt_count": 0,
+                    "media_last_attempt_at": False,
+                    "media_next_attempt_at": False,
+                }
+            )
+            item._recompute_readiness()
+        return True
 
     @api.model
     def apply_dealer_cost_evidence_batch(self, records, artifact_uri, artifact_sha256, parser_version):
