@@ -27,6 +27,16 @@
               parent="menu_southern_operations_root"
               action="southern_parts_intelligence.action_southern_product_quality_issues"
               sequence="20"/>
+    <menuitem id="menu_southern_operations_product_live_fixes"
+              name="Live Website Fixes"
+              parent="menu_southern_operations_root"
+              action="southern_parts_intelligence.action_southern_product_quality_live_fixes"
+              sequence="21"/>
+    <menuitem id="menu_southern_operations_product_ready"
+              name="Ready to Publish"
+              parent="menu_southern_operations_root"
+              action="southern_parts_intelligence.action_southern_product_quality_ready"
+              sequence="22"/>
     <menuitem id="menu_southern_operations_automation"
               name="Product Automation Runs"
               parent="menu_southern_operations_root"

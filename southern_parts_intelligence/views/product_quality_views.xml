@@ -5,17 +5,61 @@
         <field name="model">southern.product.quality.issue</field>
         <field name="arch" type="xml">
             <list decoration-danger="severity == '4_blocker'"
-                  decoration-warning="severity == '3_high'"
+                  decoration-warning="severity == '3_high' or is_stale"
+                  decoration-success="work_lane == 'release'"
                   decoration-muted="state in ['resolved', 'dismissed']">
+                <field name="is_stale" column_invisible="1"/>
+                <field name="work_lane"/>
                 <field name="severity"/>
                 <field name="issue_type"/>
                 <field name="product_tmpl_id"/>
                 <field name="internal_reference"/>
                 <field name="product_published"/>
+                <field name="details" optional="show"/>
+                <field name="next_action" optional="show"/>
                 <field name="state"/>
                 <field name="assigned_to_id"/>
                 <field name="last_detected_at"/>
             </list>
+        </field>
+    </record>
+
+    <record id="southern_product_quality_issue_kanban" model="ir.ui.view">
+        <field name="name">southern.product.quality.issue.kanban</field>
+        <field name="model">southern.product.quality.issue</field>
+        <field name="arch" type="xml">
+            <kanban default_group_by="work_lane" default_order="severity desc, last_detected_at desc" class="o_kanban_small_column">
+                <field name="work_lane"/>
+                <field name="severity"/>
+                <field name="issue_type"/>
+                <field name="product_tmpl_id"/>
+                <field name="internal_reference"/>
+                <field name="product_published"/>
+                <field name="details"/>
+                <field name="next_action"/>
+                <field name="state"/>
+                <field name="assigned_to_id"/>
+                <templates>
+                    <t t-name="card">
+                        <div class="fw-bold"><field name="issue_type"/></div>
+                        <div><field name="product_tmpl_id"/></div>
+                        <div class="text-muted">
+                            <field name="internal_reference"/>
+                            <t t-if="record.product_published.raw_value"> · Live</t>
+                        </div>
+                        <div class="text-muted" t-if="record.details.raw_value">
+                            <field name="details"/>
+                        </div>
+                        <div class="text-muted" t-if="record.next_action.raw_value">
+                            <field name="next_action"/>
+                        </div>
+                        <div class="mt-2">
+                            <field name="severity"/> · <field name="state"/>
+                            <t t-if="record.assigned_to_id.raw_value"> · <field name="assigned_to_id"/></t>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
         </field>
     </record>
 
@@ -26,7 +70,21 @@
             <form>
                 <header>
                     <button name="action_start" type="object" string="Start" invisible="state != 'open'"/>
+                    <button name="action_assign_to_me" type="object" string="Assign to Me"
+                            invisible="state in ['resolved', 'dismissed']"/>
+                    <button name="action_open_product" type="object" string="Open Product"/>
+                    <button name="action_open_sourcing" type="object" string="Open Sourcing"
+                            invisible="not sourcing_queue_id"/>
+                    <button name="action_open_discovery" type="object" string="Open Discovery"
+                            invisible="not discovery_item_id" groups="base.group_system"/>
+                    <button name="action_open_evidence" type="object" string="Open Evidence"
+                            invisible="not evidence_queue_id"/>
+                    <button name="action_refresh_selected_products" type="object" string="Refresh Product"/>
                     <button name="action_resolve" type="object" string="Resolve" class="btn-primary"
+                            invisible="state in ['resolved', 'dismissed']"/>
+                    <button name="action_block" type="object" string="Blocked"
+                            invisible="state not in ['open', 'in_progress']"/>
+                    <button name="action_dismiss" type="object" string="Dismiss"
                             invisible="state in ['resolved', 'dismissed']"/>
                     <button name="action_reopen" type="object" string="Reopen"
                             invisible="state not in ['resolved', 'dismissed']"/>
@@ -40,7 +98,9 @@
                             <field name="product_tmpl_id"/>
                             <field name="internal_reference"/>
                             <field name="issue_type"/>
+                            <field name="work_lane"/>
                             <field name="severity"/>
+                            <field name="product_published"/>
                         </group>
                         <group>
                             <field name="company_id"/>
@@ -50,8 +110,19 @@
                             <field name="resolved_at"/>
                         </group>
                     </group>
-                    <field name="details"/>
-                    <field name="resolution_note"/>
+                    <group string="Why this is in the queue">
+                        <field name="details" nolabel="1"/>
+                    </group>
+                    <group string="Next action">
+                        <field name="next_action" nolabel="1" readonly="1"/>
+                        <field name="sourcing_queue_id" invisible="1"/>
+                        <field name="discovery_item_id" invisible="1"/>
+                        <field name="evidence_queue_id" invisible="1"/>
+                        <field name="is_stale" invisible="1"/>
+                    </group>
+                    <group string="Resolution">
+                        <field name="resolution_note" nolabel="1" placeholder="Required to dismiss. Resolve is blocked while the finding is still present."/>
+                    </group>
                 </sheet>
                 <chatter/>
             </form>
@@ -66,10 +137,23 @@
                 <field name="product_tmpl_id"/>
                 <field name="internal_reference"/>
                 <field name="assigned_to_id"/>
+                <field name="details"/>
+                <field name="next_action"/>
                 <filter name="open" string="Open" domain="[('state', 'in', ['open', 'in_progress', 'blocked'])]"/>
+                <filter name="needs_work" string="Needs Work" domain="[('issue_type', '!=', 'publication_ready')]"/>
+                <filter name="live_fix" string="Live Website Fixes" domain="[('work_lane', '=', 'live_fix')]"/>
+                <filter name="enrich" string="Unpublished Enrichment" domain="[('work_lane', '=', 'enrich')]"/>
+                <filter name="release" string="Ready to Publish" domain="[('work_lane', '=', 'release')]"/>
                 <filter name="blockers" string="Blockers" domain="[('severity', '=', '4_blocker')]"/>
                 <filter name="published" string="Published" domain="[('product_published', '=', True)]"/>
+                <filter name="unassigned" string="Unassigned" domain="[('assigned_to_id', '=', False)]"/>
+                <filter name="my_issues" string="My Issues" domain="[('assigned_to_id', '=', uid)]"/>
+                <filter name="missing_cost" string="Missing Verified Cost" domain="[('issue_type', '=', 'missing_verified_supplier_cost')]"/>
+                <filter name="placeholder_price" string="Placeholder Price" domain="[('issue_type', '=', 'placeholder_price')]"/>
+                <filter name="stale" string="Stale (7 days)"
+                        domain="[('state', 'in', ['open', 'in_progress', 'blocked']), ('last_detected_at', '&lt;', (context_today() - datetime.timedelta(days=7)).strftime('%Y-%m-%d 00:00:00'))]"/>
                 <separator/>
+                <filter name="group_lane" string="Work Lane" context="{'group_by': 'work_lane'}"/>
                 <filter name="group_issue" string="Issue" context="{'group_by': 'issue_type'}"/>
                 <filter name="group_assignee" string="Assignee" context="{'group_by': 'assigned_to_id'}"/>
                 <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
@@ -80,9 +164,26 @@
     <record id="action_southern_product_quality_issues" model="ir.actions.act_window">
         <field name="name">Product Master Quality</field>
         <field name="res_model">southern.product.quality.issue</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">kanban,list,form</field>
         <field name="search_view_id" ref="southern_product_quality_issue_search"/>
-        <field name="context">{'search_default_open': 1}</field>
+        <field name="context">{'search_default_open': 1, 'search_default_needs_work': 1, 'search_default_group_lane': 1}</field>
+    </record>
+
+    <record id="action_southern_product_quality_live_fixes" model="ir.actions.act_window">
+        <field name="name">Live Website Fixes</field>
+        <field name="res_model">southern.product.quality.issue</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="domain">[('state', 'in', ['open', 'in_progress', 'blocked']), ('work_lane', '=', 'live_fix')]</field>
+        <field name="search_view_id" ref="southern_product_quality_issue_search"/>
+        <field name="context">{'search_default_group_issue': 1}</field>
+    </record>
+
+    <record id="action_southern_product_quality_ready" model="ir.actions.act_window">
+        <field name="name">Ready to Publish</field>
+        <field name="res_model">southern.product.quality.issue</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="domain">[('state', 'in', ['open', 'in_progress', 'blocked']), ('work_lane', '=', 'release')]</field>
+        <field name="search_view_id" ref="southern_product_quality_issue_search"/>
     </record>
 
     <record id="action_southern_product_quality_refresh" model="ir.actions.server">
@@ -92,10 +193,42 @@
         <field name="state">code</field>
         <field name="code">action = model.action_refresh_quality_queue()</field>
     </record>
+    <record id="action_southern_product_quality_refresh_selected" model="ir.actions.server">
+        <field name="name">Refresh Selected Products</field>
+        <field name="model_id" ref="model_southern_product_quality_issue"/>
+        <field name="binding_model_id" ref="model_southern_product_quality_issue"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">action = records.action_refresh_selected_products()</field>
+    </record>
+
+    <record id="southern_parts_product_template_quality_buttons" model="ir.ui.view">
+        <field name="name">product.template.form.southern.quality.buttons</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_only_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_open_southern_quality_issues" type="object"
+                        class="oe_stat_button" icon="fa-check-square-o">
+                    <field name="southern_open_quality_issue_count" widget="statinfo" string="Quality Queue"/>
+                </button>
+            </xpath>
+        </field>
+    </record>
 
     <menuitem id="menu_southern_product_quality_issues"
               name="Product Master Quality"
               parent="menu_southern_parts_intelligence_root"
               action="action_southern_product_quality_issues"
-              sequence="6"/>
+              sequence="16"/>
+    <menuitem id="menu_southern_product_quality_live_fixes"
+              name="Live Website Fixes"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_product_quality_live_fixes"
+              sequence="17"/>
+    <menuitem id="menu_southern_product_quality_ready"
+              name="Ready to Publish"
+              parent="menu_southern_parts_intelligence_root"
+              action="action_southern_product_quality_ready"
+              sequence="18"/>
 </odoo>
