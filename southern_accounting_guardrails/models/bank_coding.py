@@ -3,6 +3,7 @@ import re
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
+from ..accounting_review import SOUTHERN_COMPANY_NAME
 from .merchant_guard import is_unsafe_merchant_target
 
 
@@ -335,7 +336,8 @@ class SouthernBankCodingRun(models.Model):
     @api.model
     def cron_prepare_candidates(self):
         today = fields.Date.context_today(self)
-        for company in self.env["res.company"].search([]):
+        companies = self.env["res.company"].search([("name", "ilike", SOUTHERN_COMPANY_NAME)])
+        for company in companies:
             run = self.create(
                 {
                     "name": _("Daily Bank Coding Evaluation - %s") % today,

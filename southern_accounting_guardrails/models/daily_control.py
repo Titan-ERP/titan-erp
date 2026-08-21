@@ -1,5 +1,11 @@
 from odoo import _, api, fields, models
 
+from ..accounting_review import (
+    BANK_OPEN_WORK_LANES,
+    INVOICE_SOURCE_WORK_LANES,
+    SOUTHERN_COMPANY_NAME,
+)
+
 
 class SouthernAccountingDailyControl(models.Model):
     _name = "southern.accounting.daily.control"
@@ -26,14 +32,21 @@ class SouthernAccountingDailyControl(models.Model):
         index=True,
     )
     bank_line_count = fields.Integer(readonly=True)
+    bank_open_today_count = fields.Integer(readonly=True)
     unreconciled_bank_line_count = fields.Integer(readonly=True)
     bank_needs_review_count = fields.Integer(readonly=True)
     bank_exception_count = fields.Integer(readonly=True)
     merchant_batch_needs_review_count = fields.Integer(readonly=True)
     revenue_line_needs_review_count = fields.Integer(readonly=True)
+    revenue_line_open_count = fields.Integer(readonly=True)
     product_account_needs_review_count = fields.Integer(readonly=True)
     draft_invoice_count = fields.Integer(readonly=True)
     unverified_migration_invoice_count = fields.Integer(readonly=True)
+    pending_coding_candidate_count = fields.Integer(readonly=True)
+    bank_blocked_count = fields.Integer(readonly=True)
+    bank_merchant_open_count = fields.Integer(readonly=True)
+    invoice_source_review_count = fields.Integer(readonly=True)
+    product_missing_bucket_count = fields.Integer(readonly=True)
     last_refreshed_at = fields.Datetime(readonly=True)
     review_note = fields.Text(tracking=True)
 
@@ -55,6 +68,7 @@ class SouthernAccountingDailyControl(models.Model):
         MoveLine = self.env["account.move.line"]
         Batch = self.env["southern.shop_boss.payment.batch"]
         Product = self.env["product.template"]
+        Candidate = self.env["southern.bank.coding.candidate"]
         for control in self:
             day_domain = [("company_id", "=", control.company_id.id), ("date", "=", control.control_date)]
             move_day_domain = [
@@ -72,6 +86,9 @@ class SouthernAccountingDailyControl(models.Model):
             control.write(
                 {
                     "bank_line_count": BankLine.search_count(day_domain),
+                    "bank_open_today_count": BankLine.search_count(
+                        day_domain + [("southern_review_lane", "in", BANK_OPEN_WORK_LANES)]
+                    ),
                     "unreconciled_bank_line_count": BankLine.search_count(day_domain + [("is_reconciled", "=", False)]),
                     "bank_needs_review_count": BankLine.search_count(
                         day_domain + [("southern_review_status", "=", "needs_review")]
@@ -88,6 +105,16 @@ class SouthernAccountingDailyControl(models.Model):
                     ),
                     "revenue_line_needs_review_count": MoveLine.search_count(
                         line_day_domain + [("southern_revenue_bucket_review", "=", "needs_review")]
+                    ),
+                    "revenue_line_open_count": MoveLine.search_count(
+                        [
+                            ("company_id", "=", control.company_id.id),
+                            ("move_id.move_type", "in", ("out_invoice", "out_refund")),
+                            ("move_id.state", "!=", "cancel"),
+                            ("account_id.account_type", "=", "income"),
+                            ("display_type", "=", False),
+                            ("southern_revenue_bucket_review", "in", ("needs_review", "exception")),
+                        ]
                     ),
                     "product_account_needs_review_count": Product.search_count(
                         [
@@ -109,6 +136,39 @@ class SouthernAccountingDailyControl(models.Model):
                             ("southern_shop_boss_verified", "=", False),
                         ]
                     ),
+                    "pending_coding_candidate_count": Candidate.search_count(
+                        [
+                            ("company_id", "=", control.company_id.id),
+                            ("state", "in", ("pending", "approved")),
+                        ]
+                    ),
+                    "bank_blocked_count": BankLine.search_count(
+                        [
+                            ("company_id", "=", control.company_id.id),
+                            ("southern_review_lane", "=", "blocked"),
+                        ]
+                    ),
+                    "bank_merchant_open_count": BankLine.search_count(
+                        [
+                            ("company_id", "=", control.company_id.id),
+                            ("southern_review_lane", "=", "merchant"),
+                        ]
+                    ),
+                    "invoice_source_review_count": Move.search_count(
+                        [
+                            ("company_id", "=", control.company_id.id),
+                            ("move_type", "in", ("out_invoice", "out_refund")),
+                            ("state", "!=", "cancel"),
+                            ("southern_review_lane", "in", INVOICE_SOURCE_WORK_LANES),
+                        ]
+                    ),
+                    "product_missing_bucket_count": Product.search_count(
+                        [
+                            ("sale_ok", "=", True),
+                            ("company_id", "in", [False, control.company_id.id]),
+                            ("southern_accounting_review_lane", "=", "missing_bucket"),
+                        ]
+                    ),
                     "last_refreshed_at": fields.Datetime.now(),
                 }
             )
@@ -116,7 +176,7 @@ class SouthernAccountingDailyControl(models.Model):
 
     @api.model
     def cron_refresh_daily_controls(self):
-        companies = self.env["res.company"].search([("name", "ilike", "Southern Equipment")])
+        companies = self.env["res.company"].search([("name", "ilike", SOUTHERN_COMPANY_NAME)])
         today = fields.Date.context_today(self)
         for company in companies:
             control = self.search([("company_id", "=", company.id), ("control_date", "=", today)], limit=1)
@@ -137,29 +197,96 @@ class SouthernAccountingDailyControl(models.Model):
         self.write({"state": "open"})
         return True
 
-    def action_view_bank_review(self):
+    def _southern_bank_review_action(self, name, extra_domain):
         self.ensure_one()
         return {
             "type": "ir.actions.act_window",
-            "name": _("Daily Bank Lines"),
+            "name": name,
             "res_model": "account.bank.statement.line",
             "view_mode": "list,form",
-            "domain": [("company_id", "=", self.company_id.id), ("date", "=", self.control_date)],
+            "search_view_id": self.env.ref(
+                "southern_accounting_guardrails.view_southern_bank_statement_line_review_search"
+            ).id,
+            "views": [
+                (
+                    self.env.ref(
+                        "southern_accounting_guardrails.view_southern_bank_statement_line_review_list"
+                    ).id,
+                    "list",
+                ),
+                (
+                    self.env.ref(
+                        "southern_accounting_guardrails.view_southern_bank_statement_line_review_form"
+                    ).id,
+                    "form",
+                ),
+            ],
+            "domain": [("company_id", "=", self.company_id.id)] + extra_domain,
+        }
+
+    def action_view_bank_review(self):
+        return self._southern_bank_review_action(
+            _("Daily Bank Work"),
+            [
+                ("date", "=", self.control_date),
+                ("southern_review_lane", "in", BANK_OPEN_WORK_LANES),
+            ],
+        )
+
+    def action_view_bank_blocked(self):
+        return self._southern_bank_review_action(
+            _("Blocked Bank Exceptions"),
+            [("southern_review_lane", "=", "blocked")],
+        )
+
+    def action_view_bank_merchant(self):
+        return self._southern_bank_review_action(
+            _("Open Merchant Settlements"),
+            [("southern_review_lane", "=", "merchant")],
+        )
+
+    def action_view_bank_coding_candidates(self):
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Pending Bank Coding"),
+            "res_model": "southern.bank.coding.candidate",
+            "view_mode": "list,form",
+            "domain": [
+                ("company_id", "=", self.company_id.id),
+                ("state", "in", ("pending", "approved")),
+            ],
+        }
+
+    def action_view_invoice_source_review(self):
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Invoice Source Review"),
+            "res_model": "account.move",
+            "view_mode": "list,form",
+            "domain": [
+                ("company_id", "=", self.company_id.id),
+                ("move_type", "in", ("out_invoice", "out_refund")),
+                ("state", "!=", "cancel"),
+                ("southern_review_lane", "in", INVOICE_SOURCE_WORK_LANES),
+            ],
         }
 
     def action_view_revenue_review(self):
         self.ensure_one()
         return {
             "type": "ir.actions.act_window",
-            "name": _("Daily Revenue Bucket Review"),
+            "name": _("Revenue Bucket Review"),
             "res_model": "account.move.line",
             "view_mode": "list,form",
             "domain": [
                 ("company_id", "=", self.company_id.id),
-                ("move_id.invoice_date", "=", self.control_date),
                 ("move_id.move_type", "in", ("out_invoice", "out_refund")),
+                ("move_id.state", "!=", "cancel"),
                 ("account_id.account_type", "=", "income"),
-                ("southern_revenue_bucket_review", "=", "needs_review"),
+                ("display_type", "=", False),
+                ("southern_revenue_bucket_review", "in", ("needs_review", "exception")),
             ],
         }
 
@@ -171,12 +298,22 @@ class SouthernAccountingDailyControl(models.Model):
             "res_model": "product.template",
             "view_mode": "list,form",
             "domain": [
-                "&",
-                "&",
                 ("sale_ok", "=", True),
                 ("company_id", "in", [False, self.company_id.id]),
-                "|",
-                ("southern_income_account_review", "=", "needs_review"),
-                ("southern_expense_account_review", "=", "needs_review"),
+                ("southern_accounting_review_lane", "!=", "ok"),
+            ],
+        }
+
+    def action_view_product_missing_bucket(self):
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Missing Revenue Buckets"),
+            "res_model": "product.template",
+            "view_mode": "list,form",
+            "domain": [
+                ("sale_ok", "=", True),
+                ("company_id", "in", [False, self.company_id.id]),
+                ("southern_accounting_review_lane", "=", "missing_bucket"),
             ],
         }

@@ -51,6 +51,16 @@
               parent="menu_southern_accounting_guardrails_root"
               action="action_southern_bank_statement_line_review"
               sequence="20"/>
+    <menuitem id="menu_southern_bank_blocked_review"
+              name="Bank Blocked Exceptions"
+              parent="menu_southern_accounting_guardrails_root"
+              action="action_southern_bank_blocked_review"
+              sequence="20"/>
+    <menuitem id="menu_southern_bank_merchant_review"
+              name="Merchant Settlements"
+              parent="menu_southern_accounting_guardrails_root"
+              action="action_southern_bank_merchant_review"
+              sequence="20"/>
     <menuitem id="menu_southern_bank_coding_candidates"
               name="Bank Coding Candidates"
               parent="menu_southern_accounting_guardrails_root"

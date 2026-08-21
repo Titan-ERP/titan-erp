@@ -19,7 +19,8 @@ Copy `odoo_connection.env.example` to the ignored
 API keys or AWS credentials. New external integrations use Odoo JSON-2; XML-RPC
 is available only behind an explicit temporary legacy flag.
 
-See [Odoo-native ownership](docs/ODOO_NATIVE_SYSTEMS.md) and the
+See [Odoo-native ownership](docs/ODOO_NATIVE_SYSTEMS.md), the
+[accounting system map](docs/ACCOUNTING_SYSTEM.md), and the
 [production runbook](docs/ODOO_PRODUCTION_RUNBOOK.md).
 
 See [Sparex sourcing control](docs/SPAREX_SOURCING_CONTROL.md) for the

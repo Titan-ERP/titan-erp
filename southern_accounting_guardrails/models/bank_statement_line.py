@@ -1,6 +1,7 @@
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
+from ..accounting_review import classify_bank_review
 from .bank_review_logic import (
     CHECK_RE,
     MERCHANT_RE,
@@ -104,6 +105,27 @@ class AccountBankStatementLine(models.Model):
         index=True,
         help="Merchant settlement is reconciled directly to revenue instead of a processor clearing batch.",
     )
+    southern_review_lane = fields.Selection(
+        [
+            ("blocked", "Blocked Exception"),
+            ("merchant", "Merchant Settlement"),
+            ("payroll", "Payroll"),
+            ("check_payee", "Check Payee"),
+            ("missing_partner", "Missing Partner"),
+            ("ordinary", "Ordinary Review"),
+            ("reviewed", "Reviewed"),
+            ("not_required", "Not Required"),
+        ],
+        string="Southern Review Lane",
+        compute="_compute_southern_review_lane",
+        store=True,
+        index=True,
+    )
+    southern_review_details = fields.Char(
+        string="Southern Review Details",
+        compute="_compute_southern_review_lane",
+        store=True,
+    )
 
     @api.depends(
         "payment_ref",
@@ -145,6 +167,31 @@ class AccountBankStatementLine(models.Model):
                 line.amount,
                 account_types,
             )
+
+    @api.depends(
+        "southern_review_status",
+        "is_reconciled",
+        "southern_is_merchant_settlement",
+        "southern_settlement_direct_revenue",
+        "southern_payroll_direct_expense",
+        "southern_review_bucket",
+        "southern_is_generic_check",
+        "southern_missing_partner",
+    )
+    def _compute_southern_review_lane(self):
+        for line in self:
+            lane, details = classify_bank_review(
+                line.southern_review_status,
+                is_reconciled=line.is_reconciled,
+                is_merchant_settlement=line.southern_is_merchant_settlement,
+                settlement_direct_revenue=line.southern_settlement_direct_revenue,
+                payroll_direct_expense=line.southern_payroll_direct_expense,
+                review_bucket=line.southern_review_bucket,
+                is_generic_check=line.southern_is_generic_check,
+                missing_partner=line.southern_missing_partner,
+            )
+            line.southern_review_lane = lane
+            line.southern_review_details = details
 
     def action_southern_mark_reviewed(self):
         for line in self:

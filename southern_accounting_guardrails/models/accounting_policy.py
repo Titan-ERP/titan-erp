@@ -186,15 +186,34 @@ class SouthernAccountingPolicy(models.Model):
             "check_review_account_id": "699998",
         }
         names = {
-            "parts_revenue_account_id": "Parts Revenue",
-            "service_revenue_account_id": "Service Revenue",
-            "rental_revenue_account_id": "Rental Revenue",
-            "freight_revenue_account_id": "Shipping / Freight Revenue",
-            "equipment_revenue_account_id": "Equipment Sales Revenue",
-            "fees_revenue_account_id": "Card Processing Fee Income",
-            "merchant_fee_account_id": "Bank Merchant Fees",
-            "payment_clearing_account_id": "Shop Boss Payment Clearing",
-            "check_review_account_id": "Checks Pending Payee Review",
+            "parts_revenue_account_id": (
+                "Parts Revenue",
+            ),
+            "service_revenue_account_id": (
+                "Service Revenue",
+            ),
+            "rental_revenue_account_id": (
+                "Rental Revenue",
+            ),
+            "freight_revenue_account_id": (
+                "Shipping / Freight Revenue",
+            ),
+            "equipment_revenue_account_id": (
+                "Equipment Sales Revenue",
+            ),
+            "fees_revenue_account_id": (
+                "Transaction Processing Fee Income",
+                "Card Processing Fee Income",
+            ),
+            "merchant_fee_account_id": (
+                "Bank Merchant Fees",
+            ),
+            "payment_clearing_account_id": (
+                "Shop Boss Payment Clearing",
+            ),
+            "check_review_account_id": (
+                "Checks Pending Payee Review",
+            ),
         }
         for policy in self:
             vals = {}
@@ -209,18 +228,22 @@ class SouthernAccountingPolicy(models.Model):
                     account = Account.search([("code", "=", code)], limit=1)
                 if account:
                     vals[field_name] = account.id
-            for field_name, name in names.items():
+            for field_name, aliases in names.items():
                 if policy[field_name] or field_name in vals:
                     continue
-                account = Account.search(
-                    [
-                        ("company_ids", "in", policy.company_id.id),
-                        ("name", "=", name),
-                    ],
-                    limit=1,
-                )
-                if account:
-                    vals[field_name] = account.id
+                for name in aliases:
+                    account = Account.search(
+                        [
+                            ("company_ids", "in", policy.company_id.id),
+                            ("name", "=", name),
+                        ],
+                        limit=1,
+                    )
+                    if not account:
+                        account = Account.search([("name", "=", name)], limit=1)
+                    if account:
+                        vals[field_name] = account.id
+                        break
             if vals:
                 policy.write(vals)
         return True

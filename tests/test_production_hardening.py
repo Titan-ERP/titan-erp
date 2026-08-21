@@ -11,6 +11,7 @@ class ProductionHardeningTests(unittest.TestCase):
 
     def test_changed_modules_have_release_metadata(self):
         for module in (
+            "southern_accounting_guardrails",
             "southern_customer_portal",
             "southern_equipment_brokerage",
             "southern_operations_control",
@@ -56,6 +57,22 @@ class ProductionHardeningTests(unittest.TestCase):
         source = self.source("southern_operations_control/models/contact_import.py")
         self.assertIn("from odoo.fields import Domain", source)
         self.assertNotIn("from odoo.osv", source)
+
+    def test_product_bucket_policy_is_enforced_in_review(self):
+        source = self.source("southern_accounting_guardrails/models/product_template.py")
+        self.assertIn("require_product_bucket", source)
+        self.assertIn("southern_accounting_review_lane", source)
+        rules = self.source("southern_accounting_guardrails/accounting_review.py")
+        self.assertIn("def classify_invoice_review", rules)
+        self.assertIn("def classify_bank_review", rules)
+        self.assertIn("def classify_product_accounting_review", rules)
+        self.assertIn("def classify_revenue_line_review", rules)
+        self.assertIn("INVOICE_SOURCE_WORK_LANES", rules)
+        self.assertIn("BANK_OPEN_WORK_LANES", rules)
+        self.assertIn("NATIVE_INVOICE_REVIEW_DETAILS", rules)
+        self.assertIn("SOUTHERN_COMPANY_NAME", rules)
+        policy = self.source("southern_accounting_guardrails/models/accounting_policy.py")
+        self.assertIn("Transaction Processing Fee Income", policy)
 
     def test_apply_run_requires_idempotency_and_verified_artifact(self):
         source = self.source(
