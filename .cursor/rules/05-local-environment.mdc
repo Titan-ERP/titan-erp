@@ -7,11 +7,12 @@ alwaysApply: true
 
 - The workspace root contains ignored local environment files:
   - `odoo_connection.env` for Odoo and existing supplier integration variables.
-  - `.env` as the conventional local dotenv entrypoint for the same Odoo integration environment.
+  - `.env` as the conventional local dotenv entrypoint for the Odoo, supplier, and approved Stripe integration environment.
   - `.env.local` for the OpenAI API credential used only by explicitly approved agent workflows.
 - Load credentials from these files at runtime. Never paste their values into chat, logs, source code, reports, commits, pull requests, screenshots, or tool output.
 - Use `AWS_PROFILE=cross-admin` or the currently approved least-privilege profile through the AWS credential manager. Never store AWS access keys in these files.
 - Keep `ODOO_WRITE_ENABLED` disabled or unset unless the user explicitly approves a bounded write and the production preflight, backup, non-overlap, evidence, and rollback gates pass.
 - Prefer `odoo_connection.env` when an existing repository script exposes an `--env` or `--odoo-env-file` option. Use `.env` only for tools that automatically load conventional dotenv files.
 - Treat missing or expired credentials as a blocker. Do not invent, replace, rotate, or expose secrets.
+- Stripe credentials must come from the approved Southern Equipment Stripe provider. Never create a second Stripe account or API key merely to satisfy a missing local variable.
 - Environment-file availability grants connectivity, not authorization to mutate production.

@@ -26,6 +26,11 @@ commit their values. AWS access continues through a named AWS CLI profile; AWS
 access keys do not belong in dotenv files. Environment availability does not
 authorize production writes.
 
+The ignored local `.env` may also contain the approved Stripe provider,
+webhook, Terminal reader, and location variables for read-only diagnostics and
+explicitly authorized payment workflows. Live Stripe values must never be
+committed or printed.
+
 See [Odoo-native ownership](docs/ODOO_NATIVE_SYSTEMS.md) and the
 [production runbook](docs/ODOO_PRODUCTION_RUNBOOK.md).
 
