@@ -1,6 +1,7 @@
 from datetime import datetime, time, timedelta
 
 from odoo import _, api, fields, models
+from odoo.addons.southern_parts_intelligence.quality_rules import QUALITY_STALE_DAYS
 
 
 class SouthernOperationsDailyControl(models.Model):
@@ -40,6 +41,7 @@ class SouthernOperationsDailyControl(models.Model):
     open_product_issue_count = fields.Integer(readonly=True)
     product_live_fix_count = fields.Integer(readonly=True)
     product_ready_count = fields.Integer(readonly=True)
+    product_stale_count = fields.Integer(readonly=True)
     product_blocker_count = fields.Integer(readonly=True)
     product_automation_failure_count = fields.Integer(readonly=True)
     equipment_review_count = fields.Integer(readonly=True)
@@ -63,6 +65,7 @@ class SouthernOperationsDailyControl(models.Model):
     def action_refresh_counts(self):
         today = fields.Date.context_today(self)
         stale_before = today - timedelta(days=14)
+        stale_quality_before = fields.Datetime.now() - timedelta(days=QUALITY_STALE_DAYS)
         failure_since = fields.Datetime.to_string(datetime.combine(today, time.min))
         for control in self:
             company_domain = [("company_id", "=", control.company_id.id)]
@@ -147,6 +150,16 @@ class SouthernOperationsDailyControl(models.Model):
                     + [
                         ("state", "in", ["open", "in_progress", "blocked"]),
                         ("issue_type", "=", "publication_ready"),
+                    ]
+                ),
+                "product_stale_count": self.env[
+                    "southern.product.quality.issue"
+                ].search_count(
+                    company_domain
+                    + [
+                        ("state", "in", ["open", "in_progress", "blocked"]),
+                        ("issue_type", "!=", "publication_ready"),
+                        ("last_detected_at", "<", stale_quality_before),
                     ]
                 ),
                 "product_blocker_count": self.env[
@@ -255,6 +268,16 @@ class SouthernOperationsDailyControl(models.Model):
 
     def action_open_product_blockers(self):
         return self._action_open_quality(_("Product Blockers"), [("severity", "=", "4_blocker")])
+
+    def action_open_stale_products(self):
+        cutoff = fields.Datetime.now() - timedelta(days=QUALITY_STALE_DAYS)
+        return self._action_open_quality(
+            _("Stale Product Quality"),
+            [
+                ("issue_type", "!=", "publication_ready"),
+                ("last_detected_at", "<", cutoff),
+            ],
+        )
 
     def action_mark_reviewed(self):
         self.write({"state": "reviewed"})

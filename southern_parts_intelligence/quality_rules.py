@@ -39,7 +39,9 @@ BLOCKER_WHEN_PUBLISHED = frozenset(
 MIN_CUSTOMER_READY_PRICE = 1.49
 QUALITY_BATCH_LIMIT = 500
 QUALITY_PRIORITY_PUBLISHED_LIMIT = 200
+QUALITY_PRIORITY_UNSEEN_PUBLISHED_LIMIT = 75
 QUALITY_PRIORITY_OPEN_LIMIT = 150
+QUALITY_STALE_DAYS = 7
 
 NEXT_ACTIONS = {
     "placeholder_price": "Correct the sale price on the product. Do not publish from this queue.",
@@ -80,6 +82,15 @@ def merge_quality_refresh_ids(published_ids, open_ids, cursor_ids, limit=QUALITY
         if len(ordered) >= int(limit):
             break
     return ordered
+
+
+def prioritize_published_refresh_ids(
+    unseen_ids,
+    recent_ids,
+    published_limit=QUALITY_PRIORITY_PUBLISHED_LIMIT,
+):
+    """Keep unseen published products first inside the published budget."""
+    return merge_quality_refresh_ids(unseen_ids, recent_ids, (), limit=published_limit)
 
 
 def fact_key(issue_type, details, severity, work_lane):

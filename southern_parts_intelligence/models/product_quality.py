@@ -9,6 +9,8 @@ from ..quality_rules import (
     QUALITY_BATCH_LIMIT,
     QUALITY_PRIORITY_OPEN_LIMIT,
     QUALITY_PRIORITY_PUBLISHED_LIMIT,
+    QUALITY_PRIORITY_UNSEEN_PUBLISHED_LIMIT,
+    QUALITY_STALE_DAYS,
     WORK_LANES,
     classify_product_quality,
     dismissed_should_reopen,
@@ -16,6 +18,7 @@ from ..quality_rules import (
     finding_fact_key,
     merge_quality_refresh_ids,
     next_action_for,
+    prioritize_published_refresh_ids,
     severity_for,
     work_lane_for,
 )
@@ -154,7 +157,7 @@ class SouthernProductQualityIssue(models.Model):
 
     @api.depends("last_detected_at", "state")
     def _compute_is_stale(self):
-        cutoff = fields.Datetime.now() - timedelta(days=7)
+        cutoff = fields.Datetime.now() - timedelta(days=QUALITY_STALE_DAYS)
         open_states = {"open", "in_progress", "blocked"}
         for issue in self:
             issue.is_stale = issue.state in open_states and (
@@ -353,14 +356,36 @@ class SouthernProductQualityIssue(models.Model):
         )
 
     @api.model
+    def _unseen_published_product_ids(self, Product, company_domain, limit):
+        """Published products with no quality row for the current company."""
+        if limit <= 0:
+            return []
+        seen_ids = self.search([("company_id", "=", self.env.company.id)]).mapped(
+            "product_tmpl_id"
+        ).ids
+        domain = company_domain + [("website_published", "=", True)]
+        if seen_ids:
+            domain = domain + [("id", "not in", seen_ids)]
+        return Product.search(domain, order="id desc", limit=limit).ids
+
+    @api.model
     def _search_refresh_products(self, limit, after_id):
         Product = self.env["product.template"].with_context(active_test=False, bin_size=True)
         limit = int(limit or QUALITY_BATCH_LIMIT)
         company_domain = self._product_company_domain()
-        published = Product.search(
+        published_budget = min(QUALITY_PRIORITY_PUBLISHED_LIMIT, limit)
+        unseen_published_ids = self._unseen_published_product_ids(
+            Product,
+            company_domain,
+            min(QUALITY_PRIORITY_UNSEEN_PUBLISHED_LIMIT, published_budget),
+        )
+        recent_published = Product.search(
             company_domain + [("website_published", "=", True)],
             order="write_date desc, id desc",
-            limit=min(QUALITY_PRIORITY_PUBLISHED_LIMIT, limit),
+            limit=published_budget,
+        )
+        published_ids = prioritize_published_refresh_ids(
+            unseen_published_ids, recent_published.ids, published_budget
         )
         open_issue_products = self.search(
             [
@@ -370,7 +395,7 @@ class SouthernProductQualityIssue(models.Model):
             order="last_detected_at, id",
             limit=QUALITY_PRIORITY_OPEN_LIMIT * 3,
         ).mapped("product_tmpl_id")
-        used = set(published.ids)
+        used = set(published_ids)
         stale_open_ids = []
         for product in open_issue_products:
             if product.id in used:
@@ -379,7 +404,7 @@ class SouthernProductQualityIssue(models.Model):
             stale_open_ids.append(product.id)
             if len(stale_open_ids) >= QUALITY_PRIORITY_OPEN_LIMIT:
                 break
-        remaining = max(limit - len(published) - len(stale_open_ids), 0)
+        remaining = max(limit - len(published_ids) - len(stale_open_ids), 0)
         cursor = Product.browse()
         if remaining:
             cursor = Product.search(
@@ -390,7 +415,7 @@ class SouthernProductQualityIssue(models.Model):
             if not cursor and after_id:
                 cursor = Product.search(company_domain, order="id", limit=remaining)
         product_ids = merge_quality_refresh_ids(
-            published.ids, stale_open_ids, cursor.ids, limit
+            published_ids, stale_open_ids, cursor.ids, limit
         )
         return Product.browse(product_ids), cursor[-1].id if cursor else int(after_id or 0)
 

@@ -106,6 +106,14 @@ class ProductQualityQueueTests(unittest.TestCase):
         ids = self.rules.merge_quality_refresh_ids([30, 10], [10, 40], [1, 2, 3, 40], limit=5)
         self.assertEqual(ids, [30, 10, 40, 1, 2])
 
+    def test_unseen_published_ids_stay_first_in_the_published_budget(self):
+        self.assertEqual(self.rules.QUALITY_PRIORITY_UNSEEN_PUBLISHED_LIMIT, 75)
+        self.assertEqual(self.rules.QUALITY_STALE_DAYS, 7)
+        ids = self.rules.prioritize_published_refresh_ids(
+            [501, 502], [30, 10, 501], published_limit=4
+        )
+        self.assertEqual(ids, [501, 502, 30, 10])
+
     def test_dismissed_rows_reopen_only_when_facts_change(self):
         finding = self.classify(price=1.0, published=True, sparex_publication_eligible=False)[0]
         self.assertTrue(
@@ -180,6 +188,9 @@ class ProductQualityQueueTests(unittest.TestCase):
         self.assertIn("issue_type", source)
         self.assertIn("dismissed_should_reopen", source)
         self.assertIn("_search_refresh_products", source)
+        self.assertIn("_unseen_published_product_ids", source)
+        self.assertIn("prioritize_published_refresh_ids", source)
+        self.assertIn("QUALITY_PRIORITY_UNSEEN_PUBLISHED_LIMIT", source)
         self.assertIn("action_refresh_selected_products", source)
         self.assertIn("with_company(company)", source)
         self.assertIn("accepted_fact_key=finding_fact_key(finding)", source)
@@ -223,6 +234,16 @@ class ProductQualityQueueTests(unittest.TestCase):
         self.assertIn("action_open_live_fixes", source)
         self.assertIn("action_open_ready_products", source)
         self.assertIn("action_open_product_blockers", source)
+        self.assertIn("product_stale_count", source)
+        self.assertIn("action_open_stale_products", source)
+        self.assertIn('("last_detected_at", "<", stale_quality_before)', source)
+        self.assertIn('("last_detected_at", "<", cutoff)', source)
+        self.assertIn("QUALITY_STALE_DAYS", source)
+        views = (ROOT / "southern_operations_control" / "views" / "daily_control_views.xml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("action_open_stale_products", views)
+        self.assertIn("product_stale_count", views)
 
     def test_module_versions_were_bumped(self):
         parts = ast.literal_eval(

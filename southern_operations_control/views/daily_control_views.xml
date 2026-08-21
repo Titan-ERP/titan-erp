@@ -16,6 +16,7 @@
                 <field name="product_blocker_count"/>
                 <field name="product_live_fix_count"/>
                 <field name="product_ready_count"/>
+                <field name="product_stale_count"/>
                 <field name="product_automation_failure_count"/>
                 <field name="equipment_review_count"/>
                 <field name="last_refreshed_at"/>
@@ -51,6 +52,9 @@
                         </button>
                         <button name="action_open_product_blockers" type="object" class="oe_stat_button" icon="fa-exclamation-triangle">
                             <field name="product_blocker_count" widget="statinfo" string="Blockers"/>
+                        </button>
+                        <button name="action_open_stale_products" type="object" class="oe_stat_button" icon="fa-clock-o">
+                            <field name="product_stale_count" widget="statinfo" string="Stale"/>
                         </button>
                     </div>
                     <div class="oe_title"><h1><field name="name"/></h1></div>
@@ -93,6 +97,7 @@
                                     <field name="open_product_issue_count"/>
                                     <field name="product_live_fix_count"/>
                                     <field name="product_ready_count"/>
+                                    <field name="product_stale_count"/>
                                 </group>
                                 <group>
                                     <field name="product_blocker_count"/>

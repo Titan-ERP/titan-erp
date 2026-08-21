@@ -54,12 +54,14 @@ temporary migration flag is set.
 - `southern.parts.order.refresh.queue`
 - `southern.product.quality.issue` with work lanes `live_fix`,
   `enrich`, and `release`. Lane and severity follow the product's current
-  website state. The bounded refresh re-checks live products and stale open
-  rows first, keeps dismissed exceptions until the accepted fact key changes,
-  and blocks Resolve while the finding is still present. Sparex readiness
-  uses the current company's sourcing row only. Open Daily Control
-  product-issue counts exclude `publication_ready` rows; those appear as the
-  ready-to-publish count.
+  website state. The bounded refresh re-checks unseen published products,
+  recently written live products, and stale open rows first, keeps dismissed
+  exceptions until the accepted fact key changes, and blocks Resolve while
+  the finding is still present. Sparex readiness uses the current company's
+  sourcing row only. Open Daily Control product-issue counts exclude
+  `publication_ready` rows; those appear as the ready-to-publish count. The
+  stale count is open needs-work rows whose last detection is older than
+  seven days.
 
 The shared disk safety floor is 2 GB. A catalog run can also be blocked by a
 cooldown, next-allowed time, pending approval, or another running workflow.
