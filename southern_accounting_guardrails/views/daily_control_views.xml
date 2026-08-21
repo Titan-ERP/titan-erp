@@ -11,6 +11,7 @@
                 <field name="company_id"/>
                 <field name="state"/>
                 <field name="bank_line_count"/>
+                <field name="bank_open_today_count"/>
                 <field name="unreconciled_bank_line_count"/>
                 <field name="bank_needs_review_count"/>
                 <field name="bank_exception_count"/>
@@ -44,7 +45,7 @@
                 <sheet>
                     <div class="oe_button_box" name="button_box">
                         <button class="oe_stat_button" type="object" name="action_view_bank_review" icon="fa-bank">
-                            <field name="bank_line_count" widget="statinfo" string="Bank Lines"/>
+                            <field name="bank_open_today_count" widget="statinfo" string="Bank Work"/>
                         </button>
                         <button class="oe_stat_button" type="object" name="action_view_bank_blocked" icon="fa-ban">
                             <field name="bank_blocked_count" widget="statinfo" string="Blocked"/>
@@ -76,6 +77,8 @@
                             <field name="last_refreshed_at" readonly="1"/>
                         </group>
                         <group string="Today">
+                            <field name="bank_line_count" readonly="1"/>
+                            <field name="bank_open_today_count" readonly="1"/>
                             <field name="unreconciled_bank_line_count" readonly="1"/>
                             <field name="bank_needs_review_count" readonly="1"/>
                             <field name="bank_exception_count" readonly="1"/>

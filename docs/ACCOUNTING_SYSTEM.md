@@ -14,6 +14,7 @@ Counts.
 
 | Lane | What it counts | Open this next |
 | --- | --- | --- |
+| Bank work | Today's statement lines still in an open matching lane | Daily Controls → Bank Work |
 | Blocked bank exceptions | Direct-to-revenue merchant settlements and payroll coded to expense | Bank Blocked Exceptions |
 | Merchant settlements | Card/net deposits that still need a processor clearing match | Merchant Settlements |
 | Pending bank coding | Approved-rule candidates waiting for review or apply | Bank Coding Candidates |

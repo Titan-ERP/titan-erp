@@ -258,7 +258,17 @@ class InvoiceReviewMigrationTest(unittest.TestCase):
             ROOT / "southern_accounting_guardrails" / "models" / "daily_control.py"
         ).read_text(encoding="utf-8")
         self.assertIn("BANK_OPEN_WORK_LANES", daily)
+        self.assertIn("bank_open_today_count", daily)
         self.assertIn("view_southern_bank_statement_line_review_form", daily)
+        views_daily = (
+            ROOT
+            / "southern_accounting_guardrails"
+            / "views"
+            / "daily_control_views.xml"
+        ).read_text(encoding="utf-8")
+        self.assertIn('name="action_view_bank_review"', views_daily)
+        self.assertIn('name="bank_open_today_count" widget="statinfo" string="Bank Work"', views_daily)
+        self.assertNotIn('name="bank_line_count" widget="statinfo"', views_daily)
         views = (
             ROOT
             / "southern_accounting_guardrails"

@@ -32,6 +32,7 @@ class SouthernAccountingDailyControl(models.Model):
         index=True,
     )
     bank_line_count = fields.Integer(readonly=True)
+    bank_open_today_count = fields.Integer(readonly=True)
     unreconciled_bank_line_count = fields.Integer(readonly=True)
     bank_needs_review_count = fields.Integer(readonly=True)
     bank_exception_count = fields.Integer(readonly=True)
@@ -85,6 +86,9 @@ class SouthernAccountingDailyControl(models.Model):
             control.write(
                 {
                     "bank_line_count": BankLine.search_count(day_domain),
+                    "bank_open_today_count": BankLine.search_count(
+                        day_domain + [("southern_review_lane", "in", BANK_OPEN_WORK_LANES)]
+                    ),
                     "unreconciled_bank_line_count": BankLine.search_count(day_domain + [("is_reconciled", "=", False)]),
                     "bank_needs_review_count": BankLine.search_count(
                         day_domain + [("southern_review_status", "=", "needs_review")]
