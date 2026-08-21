@@ -1,0 +1,203 @@
+---
+description: System-wide context and operating boundaries for Titan and Southern Equipment
+alwaysApply: true
+---
+
+# Titan / Southern Equipment system handoff
+
+Updated: 2026-08-21 America/Chicago.
+
+This is a curated operational handoff, not a transcript. Facts under **LAST-KNOWN** are historical evidence and must be re-verified before a write, deployment, payment, payroll action, publication, or external message.
+
+## 1. Business and system ownership
+
+- CROSS is the primary coordinator for Titan / Southern Equipment work.
+- Southern Equipment is the operating dealership. CROSS CAPITAL is a related company in the same broader Odoo environment.
+- Odoo is the system of record for operational state, accounting workflows, products, CRM, sales, purchasing, service, rental, payroll configuration, and website publication.
+- GitHub repository: `Titan-ERP/titan-erp`.
+- Odoo production URL: `https://titan-equip.odoo.com`.
+- Odoo.sh is the application deployment platform.
+- AWS hosts bounded catalog workers and immutable evidence infrastructure.
+- Shop Boss is retired and must not be used as an active dependency.
+
+## 2. Local workspaces
+
+- Original CROSS workspace: `C:\Users\cross\OneDrive\Documents\2.Titan\Odoo`.
+- Cursor handoff workspace: `C:\Users\cross\OneDrive\Documents\3.Cross_Co\2. TITAN`.
+- A separate product/catalog worktree has historically been used for isolated work. Never modify a sibling worktree unless it is explicitly placed in scope.
+- The Cursor handoff workspace did not contain `.git` when this rule was created. Verify Git metadata before any commit, branch, pull, or push. Do not initialize/reset it destructively without comparing the files to the remote repository.
+
+## 3. Repository and deployment model
+
+- Development and production promotion have historically used `main` and `main-production` plus short-lived `codex/*` branches.
+- GitHub validation and Odoo.sh builds are required gates. Do not bypass queued, failed, or unavailable checks.
+- Take a labeled Odoo.sh production backup before a module upgrade or risky database migration.
+- Preserve unrelated changes and inspect active PRs and deployment ownership before starting.
+- Never mutate production Git history with a force push, hard reset, or destructive checkout.
+
+## 4. Odoo application domains
+
+Important custom modules include:
+
+- `southern_parts_intelligence`: catalog staging, discovery, exact matching, evidence, readiness, recovery, agent/task state, and publication controls.
+- `southern_stripe_terminal`: terminal payments, MOTO/pay-by-phone, payment linkage, fee behavior, permissions, and reconciliation support.
+- `southern_accounting_guardrails`: sales, purchasing, invoice, and accounting assistance. Guardrails previously caused blocking PO behavior; keep controls helpful and lightweight, and do not reintroduce broad blocking validation without explicit approval.
+- `southern_service_operations`: integrated service workflow and related navigation.
+- `southern_operations_control`: shared operational controls and audit patterns.
+- `southern_customer_portal`, `southern_equipment_brokerage`, payroll localization, field-service, client-equipment, and rental modules support adjacent workflows.
+
+## 5. Product and Sparex workflow
+
+Business objective: get valid parts into Odoo and publish verified parts efficiently without unnecessary product-intelligence gates.
+
+Core publication requirements have evolved. The durable technical baseline is:
+
+- Exact active `S.%` SKU and exact Odoo product identity.
+- Positive matching supplier/dealer cost already stored with immutable evidence.
+- Positive usable sales price that is not a placeholder or below-cost unsafe value.
+- Exact source URL for the same SKU kept internal.
+- Valid image.
+- Current evidence hashes and exact-ID matching.
+- Hidden before publication, explicit plan, rollback snapshot, idempotent ledger, and no duplicate worker.
+
+Additional customer-facing safety added after a production audit:
+
+- Do not publish `$1` placeholder or below-cost products.
+- Do not publish placeholder catalog copy as customer-facing description.
+- Model-level publication vetoes and deterministic readiness checks are preferred to fragile mutable state.
+- Publication should change only publication flags after readiness is proven. Cost, price, standard cost, images, content, and accounting values must remain invariant during a publication-only run.
+
+Sparex access rules:
+
+- Keep supplier URLs and costs private.
+- Use throttled, bounded listing/search access; avoid individual detail pages when listing evidence is sufficient.
+- Pace requests and stop on real portal 429/5xx/login/CAPTCHA/warnings.
+- Preserve pointers and cooldowns. Never retry aggressively.
+- Do not create missing products or suppliers without an authoritative catalog manifest and an approved creation workflow.
+
+**LAST-KNOWN (2026-08-11):**
+
+- `southern_parts_intelligence` 19.0.1.52.0 was verified after PR133.
+- A circular dealer-cost readiness-state defect was repaired.
+- Ten exact canary products were repaired, published, and HTTP/SKU verified; other preview candidates were intentionally untouched.
+- Product/catalog services were inactive at the end of that exact publication run. Their current timer/service state is unknown and must be checked before any new worker or write.
+- Durable evidence reports live under `odoo_imports/product_master/automation_reports` in the original workspace and in versioned S3 artifacts.
+
+Before product work, check active Odoo ledgers, AWS services/timers, SSM commands, FIFO/DLQ depth, cooldowns, production build, backup freshness, and product-task ownership.
+
+## 6. Stripe Terminal, MOTO, and accounting linkage
+
+Target behavior:
+
+- `Pay with Terminal` sends the exact invoice balance to the configured Stripe reader.
+- Successful Stripe confirmation creates/links the Odoo payment, uses the configured clearing account, updates the invoice, and supports settlement reconciliation.
+- `Pay with Cash` and `Pay with ACH` are separate paths.
+- The user wants payment type selectable manually.
+- The customer processing fee should be tied only to the Stripe Terminal/card path, not cash, ACH, purchase orders, or unrelated vendor bills.
+- Current intended fee formula: 3.5% + $0.30 as a visible invoice line, with accounting routed to Transaction Processing Fee Income. Do not silently broaden the fee to every payment method.
+- Fee tax treatment must be explicit and tested; last-known configuration had no fee tax.
+- Avoid stale payment-type logic that conflicts with the actual button selected or breaks vendor-bill fields.
+
+MOTO/pay-by-phone:
+
+- Stripe Support explicitly approved MOTO for the Southern Stripe account; P2PE was not required.
+- Pay-by-phone access must use an explicit Odoo security group, not automatic inheritance from broad administrator groups.
+- Never perform a live card charge merely as a software test. Use test mode or a clearly authorized controlled charge.
+
+**LAST-KNOWN (2026-08-11):**
+
+- `southern_stripe_terminal` 19.0.1.6.0 was installed.
+- `SEC Laurel S710` was the active/default reader configuration and MOTO was enabled.
+- The Stripe Pay by Phone group had two explicitly assigned users: the Southern Equipment info account and the Odoo.sh administrator account.
+- The Stripe incoming method cleared to Outstanding Receipts; Bank Merchant Fees and processing-fee income accounts existed.
+- Preflight passed with MOTO enabled. No live MOTO charge was performed during rollout.
+
+Re-verify provider, journal, reader, location, webhook, payment method line, clearing account, fee product/account/tax, access group, company, and live/test mode before testing.
+
+## 7. Sales orders, purchase orders, invoices, and vendor bills
+
+- Keep invoicing easy. Prefer sensible defaults and nonblocking warnings over a wall of mandatory classifications.
+- Customers should default to Due on Receipt / Immediate Payment unless a deliberate customer term overrides it.
+- Sales orders should preserve product, revenue account, taxes, quantities, pricing, customer, and downstream invoice linkage.
+- Purchase orders should preserve vendor, vendor reference, taxes, product/expense/inventory account routing, receipt/bill linkage, and company.
+- Vendor bills must show the vendor and allow `Auto-Complete` / purchase-document linkage when the vendor and company match eligible POs.
+- A prior view regression hid vendor/PO fields on vendor bills. When editing invoice/payment views, regression-test customer invoices, vendor bills, receipts, refunds, and all companies.
+- Do not allow Stripe fee/payment-type UI logic to affect vendor bills or purchase-document lookup.
+- Broad accounting guardrails previously blocked PO confirmation for missing taxes and periodic-valuation expense configuration. The user asked not to remove everything after initially objecting, but the desired direction is lightweight assistance without breaking ordinary purchasing.
+
+## 8. Accounting and cash flow
+
+- Main concern has been cash-flow pressure from service growth, receivables timing, and funding the operating cycle—not merely reported profitability.
+- Focus analyses on actual bank transactions, A/R aging, collections timing, service WIP, inventory purchases, payroll, taxes, equipment/fuel spend, and Stripe settlement timing.
+- Do not "clean up" or reconcile by guessing. Match evidence, preserve audit trails, and keep unresolved items visible.
+- Expense account additions requested for vehicle fuel, equipment fuel, and shop tools. Verify the final chart-of-accounts names and codes before using them.
+- Mississippi sales/payroll tax mappings have required attention. Tax advice and filings are high-stakes; validate authoritative rules and accountant approval.
+- Stripe reconciliation should separately record gross customer receipt, processing-fee income charged to the customer, actual Stripe fee expense, clearing movement, and net bank settlement.
+
+## 9. Payroll
+
+Payroll scope is Southern Equipment only unless explicitly expanded.
+
+Business intent discussed:
+
+- Weekly payroll with Friday pay dates.
+- ACH/direct deposit using PPD where appropriate.
+- Employee tax status and Mississippi withholding must be correct.
+- Payslips should be computed and reviewed in draft before validation/posting/payment.
+- Never infer or expose employee bank details.
+
+**LAST-KNOWN configuration requiring verification:**
+
+- Lonnie Pitts: $1,250 weekly.
+- Daniel Shahan: $1,200 weekly.
+- Joshua McLain: $920 weekly.
+- Cody Pitts: $800 weekly, with a prior duplicate/out-of-contract zero payslip issue that required correction.
+- Colt Kittrell: $400 weekly.
+- Several employees were intended to start 2026-08-03.
+
+Do not validate payslips, post payroll entries, generate ACH/NACHA, or transmit a bank file without explicit authorization and a full preflight of contracts, tax status, periods, duplicates, bank readiness, totals, and rollback.
+
+## 10. CRM, contacts, social, and access
+
+- Contacts were intended to include a Synchrony account-number field/section. Treat the number as sensitive and restrict visibility appropriately.
+- Odoo Social was being connected to Southern Equipment Facebook and LinkedIn streams for BlueStar Communications. Verify stream ownership, company visibility, and Bryan/BlueStar access before assuming completion.
+- GitHub collaborator Tim was intended to have `Write` access as a developer, not Admin. Verify invitation acceptance and repository role.
+- Hide unnecessary Odoo apps and menus using groups, not ad-hoc destructive view changes.
+
+## 11. AWS and catalog infrastructure
+
+- Use least privilege. Do not create unlimited-access IAM users.
+- Prefer EC2 instance roles, SSM, scoped worker policies, versioned S3 artifacts, FIFO queues, DLQs, CloudWatch alarms, immutable releases, and rollback pointers.
+- Historical catalog worker instance: `i-01b70a90873010310` with a Southern parts worker role.
+- AWS commands historically used profile `cross-admin` for authorized supervised operations; verify identity and authorization every time.
+- Require EC2 running, expected role, SSM Online, no active overlapping command/worker, healthy disk, queue/DLQ state, and rollback release before a write-capable command.
+- Never put AWS credentials in repository files or Cursor rules.
+
+## 12. OpenAI/Cursor/Codespaces efficiency
+
+- Deterministic routines should not consume model calls.
+- Use one model call only for ambiguous cases, with hard caps and usage accounting.
+- Avoid duplicate Codex tasks and noisy two-minute heartbeats when server-side timers can do the work.
+- GitHub Codespaces was working, but Codex Cloud under the `LOKI` environment showed 0% usage and returned `Forbidden`. That was a ChatGPT/Codex allowance issue, not a GitHub repository permission issue.
+- Cursor should use this local workspace and its own authorized account. Do not assume GitHub Write permission grants Codex/OpenAI cloud usage.
+
+## 13. Immediate startup checklist for Cursor
+
+Before making changes:
+
+1. Read this file and `AGENTS.md`.
+2. Confirm whether this directory is an actual Git working tree. If `.git` is absent, stop before commits and ask whether to clone into an empty folder or reconnect safely.
+3. Fetch read-only repository/PR/CI state and identify active ownership.
+4. Inspect current module versions and production revision read-only.
+5. Check for active Odoo ledgers, deployments, SSM commands, workers, timers, crawls, payroll/payment runs, and publication tasks.
+6. Re-verify the relevant **LAST-KNOWN** facts.
+7. State the exact scope, proposed writes, rollback, and tests before production work.
+8. Keep supplier/private/customer/employee/credential data out of prompts, logs, commits, and reports.
+
+## 14. Communication contract
+
+- Lead with the outcome.
+- Keep routine updates concise.
+- For handoffs, report only the delta: outcome, material changes, writes, tests, current blocker, next action, production-window state, and one durable evidence path.
+- Do not claim completion without validation.
+- Do not claim the entire catalog is complete without an authoritative manifest.

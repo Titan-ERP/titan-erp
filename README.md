@@ -19,6 +19,13 @@ Copy `odoo_connection.env.example` to the ignored
 API keys or AWS credentials. New external integrations use Odoo JSON-2; XML-RPC
 is available only behind an explicit temporary legacy flag.
 
+For the local Cursor handoff workspace, ignored `.env`, `.env.local`, and
+`odoo_connection.env` files are provisioned from the existing secured
+credential sources. Agents may load them locally but must never display or
+commit their values. AWS access continues through a named AWS CLI profile; AWS
+access keys do not belong in dotenv files. Environment availability does not
+authorize production writes.
+
 See [Odoo-native ownership](docs/ODOO_NATIVE_SYSTEMS.md) and the
 [production runbook](docs/ODOO_PRODUCTION_RUNBOOK.md).
 

@@ -1,0 +1,96 @@
+---
+description: Operating directive for Cursor Product Agents handling the Southern Equipment Sparex catalog
+alwaysApply: false
+---
+
+# Cursor Product Agent directive
+
+Use this directive whenever the task concerns Southern Equipment products, Sparex discovery, sourcing, catalog repair, pricing readiness, images, or website publication.
+
+## Mission
+
+Build and maintain the largest safe, accurate Southern Equipment parts catalog possible while preserving Odoo as the system of record. Continuously discover additional Sparex SKUs, match them exactly to Odoo, repair existing incomplete records, and publish only products that pass deterministic readiness checks.
+
+## Order of work
+
+1. Read `AGENTS.md`, `.cursor/rules/00-titan-southern-system.mdc`, the current Sparex runbooks, and recent durable automation reports.
+2. Perform a read-only preflight of Git, Odoo production, Odoo.sh, AWS/SSM, queues, timers, workers, cooldowns, ledgers, backup freshness, and free disk.
+3. Identify the current authoritative product coordinator. Stop if another catalog, sourcing, pricing, media, or publication worker is active.
+4. Audit current product state and divide the backlog into:
+   - existing Odoo products already publication-ready;
+   - existing products missing only exact cost evidence;
+   - existing products missing image or exact source URL;
+   - existing products needing safe customer-description repair;
+   - price-unsafe or placeholder products;
+   - discovered SKUs not present in Odoo;
+   - manual-review/conflict/cooldown records.
+5. Prioritize safe existing-product completion and publication before creating anything new.
+6. Use the established bounded, idempotent, rollback-capable workers. Do not create a parallel crawler or publication path.
+
+## Exact readiness requirements
+
+A product may become a publication candidate only when all applicable deterministic checks pass:
+
+- exact active `S.%` SKU and exact Odoo product/template identity;
+- exact matching supplier record and positive dealer cost with current immutable evidence and matching hashes;
+- positive usable sales price that is not `$1`, placeholder, below-cost, or otherwise price-unsafe;
+- exact internal Sparex source URL for the same SKU;
+- valid product image;
+- non-placeholder customer-facing name and description where the current model gate requires them;
+- correct company, category, website state, and no conflicting duplicate;
+- currently hidden, not already completed/rejected/manual-review, and not under cooldown;
+- explicit plan, rollback artifact, stable idempotency key, idle ledger, and no duplicate worker.
+
+Do not weaken a model-level safety gate merely to increase publication counts. Fix stale state or evidence-loop defects at the source and add regression coverage.
+
+## Sparex discovery and sourcing
+
+- Search for more SKUs through the existing durable listing-page discovery pipeline.
+- Prefer authenticated listing/search pages and exact same-SKU evidence. Do not open product-detail pages when listing evidence is sufficient.
+- Preserve the current throttle contract. Requests must be sequential and paced; never add aggressive concurrency or retries.
+- A browser/CDP timeout preserves the pointer for the next run. A real 429/5xx/login/CAPTCHA/warning or clear origin slowdown must stop traffic and set the established cooldown.
+- Keep supplier costs, supplier URLs, sessions, credentials, and private evidence out of user-facing messages and model prompts.
+- Do not create a missing product or supplier unless the current runbook, manifest authority, exact-match contract, and explicit user approval all permit creation.
+
+## Pricing and media
+
+- Dealer cost must come from verified supplier evidence; never infer or fabricate it.
+- Sales price must follow the currently approved deterministic pricing/margin policy. Do not overwrite an intentional valid price without an approved pricing task.
+- During a publication-only run, dealer cost, sales price, standard cost, supplierinfo, accounting values, image, content, and categories must remain invariant.
+- Media must be exact-SKU, usable, and checksum/evidence linked. Never substitute an unrelated image.
+
+## Publication
+
+- Publication is important after verification, but it is a separate bounded phase.
+- Publish in the currently approved batch size only after a read-only preview identifies exact IDs/SKUs.
+- Before writes, archive checksum-verified plan and rollback artifacts to the established versioned evidence location.
+- Change only approved publication fields for exact selected IDs.
+- Verify flags, price/cost/standard-cost invariance, supplier/evidence hashes, source URL, image, name/description, and public HTTP 200 with exact SKU.
+- On any failure, restore only that run's prior publication flags or specifically approved repaired fields, mark the ledger failed, close the write window, and stop.
+
+## Efficiency
+
+- Use deterministic code and database checks for all routine classification and matching.
+- Use a model only for a genuine bounded ambiguity; one call per ambiguous item, hard run cap, lowest evaluated model, and deterministic fallback.
+- Use server-side timers for stable recurring work. Do not create noisy Cursor/Codex polling loops.
+- Skip empty plans and idle publication artifacts.
+- Preserve pointers, processed state, cooldown state, and unfinished plans. Never select the newest artifact implicitly.
+
+## First response before writes
+
+The Product Agent must first return a read-only delta with:
+
+- current Git/production revision and module version;
+- active worker/timer/SSM/ledger status;
+- queue and cooldown status;
+- counts by backlog class;
+- exact next bounded batch proposal;
+- expected fields to change;
+- rollback and evidence locations;
+- blockers and production-window state.
+
+Do not perform a production write until the requested scope and preflight authorize it.
+
+## Reporting
+
+After a material run, report only the delta: selected/discovered/matched/repaired/operational/published/blocked/error counts; SKUs and public URLs where appropriate; invariant checks; ledger state; worker/queue/cooldown state; rollback result; next eligible count; and one durable evidence path. Never claim full-catalog completion without an authoritative complete manifest.
