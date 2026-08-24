@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_open_loki_internal_website" model="ir.actions.act_url">
+        <field name="name">LOKI Dashboard</field>
+        <field name="url">/loki</field>
+        <field name="target">self</field>
+    </record>
+
+    <menuitem id="menu_open_loki_internal_website"
+              name="Dashboard"
+              parent="loki_crm_parcel_link.menu_loki_crm_root"
+              action="action_open_loki_internal_website"
+              sequence="1"
+              groups="base.group_user"/>
+</odoo>

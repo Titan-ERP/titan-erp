@@ -1,0 +1,240 @@
+.loki-internal-page {
+    --loki-ink: #14231c;
+    --loki-muted: #5d6c64;
+    --loki-green: #1f6d4b;
+    --loki-green-dark: #123d2c;
+    --loki-lime: #b7e06b;
+    --loki-line: #dce5df;
+    background: #f5f8f6;
+    color: var(--loki-ink);
+    min-height: 100vh;
+}
+
+.loki-hero {
+    background: linear-gradient(120deg, #102e24 0%, #1d6247 68%, #2f7858 100%);
+    color: #fff;
+    padding: clamp(3.5rem, 8vw, 6.5rem) 0;
+}
+
+.loki-hero h1 {
+    color: #fff;
+    font-size: clamp(2.75rem, 7vw, 5rem);
+    font-weight: 750;
+    letter-spacing: -0.045em;
+    line-height: 1;
+    margin: 0 0 1rem;
+}
+
+.loki-eyebrow,
+.loki-status-label {
+    color: var(--loki-green);
+    font-size: 0.78rem;
+    font-weight: 750;
+    letter-spacing: 0.12em;
+    margin: 0 0 0.65rem;
+    text-transform: uppercase;
+}
+
+.loki-hero .loki-eyebrow {
+    color: var(--loki-lime);
+}
+
+.loki-hero-copy {
+    color: #e8f0eb;
+    font-size: clamp(1.05rem, 2vw, 1.3rem);
+    margin: 0;
+    max-width: 44rem;
+}
+
+.loki-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 2rem;
+}
+
+.loki-actions .btn {
+    border-radius: 0.55rem;
+    font-weight: 700;
+    min-height: 2.75rem;
+    padding: 0.65rem 1.1rem;
+}
+
+.loki-actions .btn-primary {
+    background: var(--loki-lime);
+    border-color: var(--loki-lime);
+    color: #14231c;
+}
+
+.loki-actions .btn-primary:hover,
+.loki-actions .btn-primary:focus-visible {
+    background: #c6ea82;
+    border-color: #c6ea82;
+    color: #0b251a;
+}
+
+.loki-content {
+    padding-bottom: clamp(1.5rem, 4vw, 3rem);
+}
+
+.loki-content:first-of-type {
+    padding-top: clamp(2.5rem, 6vw, 5rem);
+}
+
+.loki-section-heading {
+    align-items: end;
+    display: flex;
+    gap: 2rem;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+}
+
+.loki-section-heading h2,
+.loki-panel h2 {
+    color: var(--loki-ink);
+    font-size: clamp(1.65rem, 3vw, 2.25rem);
+    font-weight: 720;
+    letter-spacing: -0.025em;
+    margin: 0;
+}
+
+.loki-section-heading > p,
+.loki-panel > div > p,
+.loki-ai-section .loki-panel > p:not(.loki-status-label):not(.loki-placeholder-note) {
+    color: var(--loki-muted);
+    margin: 0;
+    max-width: 38rem;
+}
+
+.loki-metric-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.loki-metric-card,
+.loki-panel {
+    background: #fff;
+    border: 1px solid var(--loki-line);
+    border-radius: 0.85rem;
+    box-shadow: 0 0.6rem 1.8rem rgba(20, 35, 28, 0.06);
+}
+
+.loki-metric-card {
+    padding: clamp(1.25rem, 3vw, 2rem);
+}
+
+.loki-metric-card p,
+.loki-metric-card span {
+    color: var(--loki-muted);
+    margin: 0;
+}
+
+.loki-metric-card strong {
+    color: var(--loki-green-dark);
+    display: block;
+    font-size: clamp(2.25rem, 6vw, 3.6rem);
+    line-height: 1.05;
+    margin: 0.55rem 0;
+}
+
+.loki-panel {
+    padding: clamp(1.5rem, 4vw, 2.5rem);
+}
+
+.loki-parcel-panel {
+    align-items: center;
+    display: grid;
+    gap: 2rem;
+    grid-template-columns: minmax(0, 1.6fr) minmax(15rem, 1fr);
+}
+
+.loki-parcel-panel h2,
+.loki-ai-section h2 {
+    margin-bottom: 0.75rem;
+}
+
+.loki-text-link {
+    color: var(--loki-green);
+    display: inline-block;
+    font-weight: 700;
+    margin-top: 1rem;
+    text-decoration: underline;
+    text-decoration-thickness: 0.08em;
+    text-underline-offset: 0.2em;
+}
+
+.loki-parcel-stats {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 0;
+}
+
+.loki-parcel-stats div {
+    background: #edf5f0;
+    border-radius: 0.65rem;
+    padding: 1.1rem;
+}
+
+.loki-parcel-stats dt {
+    color: var(--loki-muted);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.loki-parcel-stats dd {
+    color: var(--loki-green-dark);
+    font-size: 1.9rem;
+    font-weight: 750;
+    margin: 0.2rem 0 0;
+}
+
+.loki-ai-section {
+    padding-bottom: clamp(3.5rem, 8vw, 6rem);
+}
+
+.loki-placeholder-note {
+    background: #f1f4f2;
+    border-left: 0.25rem solid #708078;
+    color: #3f4e46;
+    font-weight: 650;
+    margin: 1.25rem 0 0;
+    padding: 0.85rem 1rem;
+}
+
+@media (max-width: 767.98px) {
+    .loki-section-heading {
+        align-items: start;
+        flex-direction: column;
+        gap: 0.6rem;
+    }
+
+    .loki-metric-grid,
+    .loki-parcel-panel {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 479.98px) {
+    .loki-actions {
+        flex-direction: column;
+    }
+
+    .loki-actions .btn {
+        width: 100%;
+    }
+
+    .loki-parcel-stats {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .loki-internal-page *,
+    .loki-internal-page *::before,
+    .loki-internal-page *::after {
+        scroll-behavior: auto !important;
+        transition: none !important;
+    }
+}
