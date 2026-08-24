@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_purchase_order_form_southern_reset_to_draft" model="ir.ui.view">
+        <field name="name">purchase.order.form.southern.reset.to.draft</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+            <button name="button_cancel" position="before">
+                <button name="action_southern_reset_to_draft"
+                        string="Set to Draft"
+                        type="object"
+                        groups="purchase.group_purchase_user,purchase.group_purchase_manager"
+                        invisible="state not in ('sent', 'to approve', 'purchase')"
+                        confirm="Set this purchase order back to draft? Odoo will first apply its normal cancellation checks for vendor bills and locked orders."/>
+            </button>
+        </field>
+    </record>
+
+    <record id="view_sale_order_form_southern_reset_to_draft" model="ir.ui.view">
+        <field name="name">sale.order.form.southern.reset.to.draft</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <button name="action_cancel" position="before">
+                <button name="action_southern_reset_to_draft"
+                        string="Set to Draft"
+                        type="object"
+                        groups="sales_team.group_sale_salesman,sales_team.group_sale_salesman_all_leads,sales_team.group_sale_manager"
+                        invisible="state not in ('sent', 'sale')"
+                        confirm="Set this sales order back to quotation? Odoo will first apply its normal cancellation checks for confirmed orders and related documents."/>
+            </button>
+        </field>
+    </record>
+</odoo>
