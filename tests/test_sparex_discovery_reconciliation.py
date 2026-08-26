@@ -73,6 +73,15 @@ class SparexDiscoveryReconciliationContractTests(unittest.TestCase):
         self.assertIn("_current_discovery_item", source)
         self.assertIn("missing_current_discovery_evidence", source)
 
+    def test_ready_products_prefer_cost_plus_unpublished_candidates(self):
+        source = (ROOT / "southern_parts_intelligence" / "models" / "catalog_agents.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("def _publication_ready_price_basis_domain", source)
+        self.assertIn('southern_price_basis", "in", ["cost_plus", "retail_evidence"]', source)
+        self.assertIn("preferred_discovery", source)
+        self.assertIn("sparex_publication_blockers", source)
+
     def test_listing_inventory_uses_bounded_bulk_database_matching(self):
         discovery = (ROOT / "southern_parts_intelligence" / "models" / "sparex_discovery.py").read_text(
             encoding="utf-8"

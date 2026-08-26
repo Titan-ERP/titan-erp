@@ -491,3 +491,59 @@ class TestCatalogAgents(TransactionCase):
         historical_task.write({"state": "completed", "publication_state": "verified"})
 
         self.assertIn(product, self.env["southern.catalog.agent.task"]._ready_products(limit=1))
+
+    def test_ready_products_prefers_cost_plus_over_older_unpriced_candidates(self):
+        stale = self.env["product.template"].create(
+            {
+                "name": "Older unpriced Sparex part",
+                "default_code": "S.880030",
+                "active": True,
+                "list_price": 15.39,
+                "standard_price": 10.0,
+                "southern_price_basis": "none",
+                "southern_source_url": "https://us.sparex.com/example-880030.html",
+                "image_1920": base64.b64encode(b"older-unpriced-image"),
+                "public_categ_ids": [(6, 0, self.website_category.ids)],
+                "description_ecommerce": "Customer-ready older unpriced replacement part.",
+                "website_published": False,
+            }
+        )
+        ready = self.env["product.template"].create(
+            {
+                "name": "Later cost-plus Sparex part",
+                "default_code": "S.880031",
+                "active": True,
+                "list_price": 15.39,
+                "standard_price": 10.0,
+                "southern_price_basis": "cost_plus",
+                "southern_cost_plus_margin_percent": 35.0,
+                "southern_source_url": "https://us.sparex.com/example-880031.html",
+                "image_1920": base64.b64encode(b"later-cost-plus-image"),
+                "public_categ_ids": [(6, 0, self.website_category.ids)],
+                "description_ecommerce": "Customer-ready later cost-plus replacement part.",
+                "website_published": False,
+            }
+        )
+        supplier = self.env["res.partner"].create({"name": "Sparex", "supplier_rank": 1})
+        for product in (stale, ready):
+            self.env["product.supplierinfo"].create(
+                {"partner_id": supplier.id, "product_tmpl_id": product.id, "price": 10.0, "min_qty": 1.0}
+            )
+        self._record_current_dealer_evidence(stale, "https://us.sparex.com/example-880030.html")
+        self._record_current_dealer_evidence(ready, "https://us.sparex.com/example-880031.html")
+        stale_item = self.env["southern.sparex.discovery.item"].search(
+            [("matched_product_id", "=", stale.id), ("reconciliation_state", "=", "current")], limit=1
+        )
+        ready_item = self.env["southern.sparex.discovery.item"].search(
+            [("matched_product_id", "=", ready.id), ("reconciliation_state", "=", "current")], limit=1
+        )
+        stale_item.write(
+            {
+                "publication_candidate": True,
+                "readiness_refreshed_at": "2026-08-01 00:00:00",
+            }
+        )
+        ready_item.write({"readiness_refreshed_at": "2026-08-20 00:00:00"})
+        selected = self.env["southern.catalog.agent.task"]._ready_products(limit=1)
+        self.assertIn(ready, selected)
+        self.assertNotIn(stale, selected)
