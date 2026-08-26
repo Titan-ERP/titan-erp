@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import requests
 
+from scripts.odoo_runtime.client import OdooError
 from scripts.sparex_catalog_media_worker import (
     MEDIA_TRANSIENT_EXIT,
     MEDIA_UNKNOWN_EXIT,
@@ -56,6 +57,16 @@ class SparexCatalogMediaWorkerTests(unittest.TestCase):
         self.assertEqual(classify_media_failure(_http_error(503)), ("transient", "image_http_503"))
         self.assertEqual(classify_media_failure(requests.Timeout("timed out")), ("transient", "image_network_timeout"))
         self.assertEqual(classify_media_failure(RuntimeError("contract exploded")), ("unknown", "unexpected_media_failure"))
+        self.assertEqual(
+            classify_media_failure(OdooError("Odoo JSON-2 503 ValueError: database timeout")),
+            ("transient", "odoo_transient"),
+        )
+        self.assertEqual(
+            classify_media_failure(OdooError("Odoo request failed: TimeoutError")),
+            ("transient", "odoo_transient"),
+        )
+        client_error = type("ClientError", (Exception,), {})("s3 unavailable")
+        self.assertEqual(classify_media_failure(client_error), ("transient", "media_infrastructure_transient"))
 
     def test_media_domain_skips_manual_review_and_future_retries(self):
         domain = media_candidate_domain()

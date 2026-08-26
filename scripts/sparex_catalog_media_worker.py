@@ -130,8 +130,27 @@ def classify_media_failure(error: BaseException) -> tuple[str, str]:
     if error_name in {"EndpointConnectionError", "ConnectTimeoutError", "ReadTimeoutError", "ClientError"}:
         return "transient", "media_infrastructure_transient"
     if isinstance(error, OdooError):
-        message = str(error)
-        if any(token in message for token in ("HTTP 404", "HTTP 429", "HTTP 500", "HTTP 502", "HTTP 503", "HTTP 504", "timed out")):
+        message = str(error).casefold()
+        if any(
+            token in message
+            for token in (
+                "http 404",
+                "http 429",
+                "http 500",
+                "http 502",
+                "http 503",
+                "http 504",
+                "json-2 404",
+                "json-2 429",
+                "json-2 500",
+                "json-2 502",
+                "json-2 503",
+                "json-2 504",
+                "timed out",
+                "timeout",
+                "timeouterror",
+            )
+        ):
             return "transient", "odoo_transient"
         return "unknown", "odoo_contract_failure"
     return "unknown", "unexpected_media_failure"
@@ -221,6 +240,7 @@ def main() -> int:
     prepared = []
     outcomes = []
     last_request = 0.0
+    infrastructure_failure = None
     for row in rows:
         item_id = int(row["id"])
         try:
@@ -254,8 +274,9 @@ def main() -> int:
         except Exception as error:  # noqa: BLE001 - classify, then fail closed only for unknown
             last_request = time.monotonic()
             kind, code = classify_media_failure(error)
-            if kind == "unknown" and code == "media_infrastructure_transient":
-                kind = "transient"
+            if code == "media_infrastructure_transient":
+                infrastructure_failure = code
+                break
             outcomes.append(_outcome(item_id, kind, code))
     applied = []
     try:
@@ -330,6 +351,8 @@ def main() -> int:
     print(json.dumps(payload, sort_keys=True))
     if unknown:
         return MEDIA_UNKNOWN_EXIT
+    if infrastructure_failure:
+        return MEDIA_TRANSIENT_EXIT
     return 0
 
 
