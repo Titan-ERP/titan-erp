@@ -1,3 +1,5 @@
+import shutil
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -28,6 +30,9 @@ class SparexDurableDiscoveryServiceTests(unittest.TestCase):
         self.assertIn("run_internal_step promotion", launcher)
         self.assertIn("SPAREX_INTERNAL_RETRY_LIMIT:-5", launcher)
         self.assertIn("Transient Odoo failure in", launcher)
+        self.assertIn("Transient media infrastructure failure in", launcher)
+        self.assertIn('if [[ "${status}" -eq 76 ]]', launcher)
+        self.assertNotIn('if [[ "${status}" -eq 75 ]] && [[ "${step_name}" = media ]]', launcher)
         self.assertIn("Odoo JSON-2 request failed with HTTP (404|429|500|502|503|504)", launcher)
         self.assertIn('[[ "${retry_count}" -lt "${internal_retry_limit}" ]]', launcher)
         self.assertNotIn("-m scripts.sparex_catalog_agents.orchestrator", launcher)
@@ -65,6 +70,20 @@ class SparexDurableDiscoveryServiceTests(unittest.TestCase):
             "/opt/southern-parts/catalog-agent/current/scripts/run_sparex_website_publication.sh",
             service,
         )
+
+    def test_durable_wrapper_has_valid_bash_syntax(self):
+        bash = shutil.which("bash")
+        if not bash:
+            self.skipTest("bash is not available on this host")
+        completed = subprocess.run(
+            [bash, "-n", str(ROOT / "scripts" / "run_sparex_durable_discovery.sh")],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if "execvpe" in (completed.stderr or "") or "WSL" in (completed.stderr or ""):
+            self.skipTest("host bash is a broken WSL shim")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
 
 
 if __name__ == "__main__":

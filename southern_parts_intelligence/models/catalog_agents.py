@@ -604,9 +604,40 @@ class SouthernCatalogAgentTask(models.Model):
         return task.id
 
     @api.model
+    def _publication_ready_price_basis_domain(self, product_field):
+        return [
+            (f"{product_field}.website_published", "=", False),
+            (f"{product_field}.southern_price_basis", "in", ["cost_plus", "retail_evidence"]),
+        ]
+
+    @api.model
     def _ready_products(self, limit=MAX_AGENT_BATCH):
         bounded = max(1, min(int(limit or MAX_AGENT_BATCH), MAX_AGENT_BATCH))
         scan_limit = max(500, bounded * 20)
+        preferred_catalog = self.env["southern.vendor.catalog.item"].sudo().search(
+            [
+                ("company_id", "=", self.env.company.id),
+                ("source_id.code", "=", "sparex"),
+                ("catalog_state", "=", "operational"),
+                ("match_state", "=", "matched"),
+                ("product_id", "!=", False),
+                ("active", "=", True),
+            ]
+            + self._publication_ready_price_basis_domain("product_id"),
+            order="last_seen_at desc, id",
+            limit=scan_limit,
+        )
+        preferred_discovery = self.env["southern.sparex.discovery.item"].search(
+            [
+                ("company_id", "=", self.env.company.id),
+                ("reconciliation_state", "=", "current"),
+                ("publication_candidate", "=", True),
+                ("matched_product_id", "!=", False),
+            ]
+            + self._publication_ready_price_basis_domain("matched_product_id"),
+            order="readiness_refreshed_at, last_seen_at desc, id",
+            limit=scan_limit,
+        )
         catalog_items = self.env["southern.vendor.catalog.item"].sudo().search(
             [
                 ("company_id", "=", self.env.company.id),
@@ -631,7 +662,12 @@ class SouthernCatalogAgentTask(models.Model):
         )
         ready = self.env["product.template"]
         publication_fields = self._publication_fields()
-        product_ids = catalog_items.mapped("product_id").ids + discovery_items.mapped("matched_product_id").ids
+        product_ids = (
+            preferred_catalog.mapped("product_id").ids
+            + preferred_discovery.mapped("matched_product_id").ids
+            + catalog_items.mapped("product_id").ids
+            + discovery_items.mapped("matched_product_id").ids
+        )
         candidates = self.env["product.template"].sudo().browse(list(dict.fromkeys(product_ids)))
         for product in candidates:
             product = product.sudo()
